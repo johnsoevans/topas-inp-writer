@@ -18,24 +18,29 @@ what the skill does). This repo exists to back up the skill and to serve version
 
 ## Cutting a new release
 
-1. Make your changes, commit and push to `master` as normal.
-2. Bump `VERSION` (semver: `MAJOR.MINOR.PATCH`) and add an entry at the top of
-   `CHANGELOG.md` describing what changed. Commit that:
-   ```
-   git add VERSION CHANGELOG.md
-   git commit -m "Bump version to X.Y.Z"
-   git push
-   ```
-3. Tag the commit and push the tag:
-   ```
-   git tag -a vX.Y.Z -m "vX.Y.Z"
-   git push origin vX.Y.Z
-   ```
-4. Go to `https://github.com/johnsoevans/topas-inp-writer/releases/new`, pick the
-   tag you just pushed, title it `vX.Y.Z`, paste the CHANGELOG entry as the
-   description, and click **Publish release**.
+Releases are automated by `.github/workflows/release.yml`. It runs on every push
+to `master` that touches `VERSION`:
 
-That's it — no build step, no CI. The `.zip` GitHub generates from the tag *is* the
+1. For most day-to-day edits, just commit and push (or hit **Sync** in VS Code)
+   as normal — nothing gets released, since `VERSION` didn't change.
+2. When you want to cut a new version: bump `VERSION` (semver:
+   `MAJOR.MINOR.PATCH`) and add an entry at the top of `CHANGELOG.md` describing
+   what changed, then commit and push both files together (in VS Code: stage
+   both, commit, Sync):
+   ```
+   ## X.Y.Z — YYYY-MM-DD
+   Summary of what changed.
+   ```
+3. That's it. The push triggers the workflow, which reads `VERSION`, tags the
+   commit `vX.Y.Z`, creates a GitHub Release using the top `CHANGELOG.md` entry
+   as the release notes, and GitHub auto-attaches the `.zip`. No web UI visit
+   needed.
+
+If you forget to bump `VERSION` on a given push, the workflow finds the tag
+already exists and silently does nothing — safe to push freely without
+worrying about accidentally re-releasing.
+
+No build step, no other CI. The `.zip` GitHub generates from the tag *is* the
 release artifact.
 
 ## Access model
