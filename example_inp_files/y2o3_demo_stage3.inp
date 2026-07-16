@@ -1,0 +1,108 @@
+' This input file is from the Y2O3 tutorial https://topas.webspace.durham.ac.uk/tutorial_y2o3riet/
+' It fits a simulated laboratory PXRD pattern using the fundamental parameters approach
+' Preferred orientation is modelled using the March-Dollase approach.
+' Stephens' model is used to account for anisotropic peak broadening.
+' A detector spike is excluded from the fit.
+
+' R-factors and goodness of fit
+r_wp  10.3215283 r_exp  10.0886011 r_p  7.10082635 weighted_Durbin_Watson  1.98433763 gof  1.02308815
+iters 100
+chi2_convergence_criteria 0.001
+do_errors
+
+' Section describing the data file to be fitted (xdd)
+' Things belonging to this xdd are tabbed in for neatness, but this is not required by TOPAS.
+' Background is modelled using a Chebyshev polynomial or order 1, a One_on_X function and a broad peak.
+' The Insert_Peak macro can be found in John's .inc file distributed with topas-editor or from the topas wiki https://topas.awh.durham.ac.uk/doku.php?id=insert_peak
+xdd y2o3_demo.xye
+	x_calculation_step = Yobs_dx_at(Xo); convolution_step 4
+	bkg @  23.767976`_0.115940695
+	One_on_X(@, 505.623591`_2.66906063)
+	' Bragg Brentano Ge(111) mono Cu Ka1 PSD
+	LP_Factor(!th2_monochromator, 27.26)
+	CuKa1(0.0001)
+	Specimen_Displacement(height, 0.100070208`_0.000361483623)
+	Insert_Peak(tth, 10.030636`_0.0380794411,!lor, 0,fwhm, 4.97386418`_0.0956895153 min 0.01 max 10,int, 0.991795152`_0.0190612231)
+	exclude 67.3 67.5
+   ' Information on the fundamental parameters peak shape description
+	Radius(217) 
+	Divergence(1) 
+	axial_conv 
+		filament_length         12 
+		sample_length           15 
+		receiving_slit_length   12 
+		primary_soller_angle    5 
+		secondary_soller_angle  5 
+	Slit_Width(0.1) 
+
+	' Structural information from c:\Users\dch0jse\data_sabbatical\talks\stuttgart_school_2025\interactive_refinement\y2o3_start.cif
+	' the str belongs to the xdd so is one tab in, all its information is two tabs in for neatness
+	str
+		phase_name "Y2O3"
+		local !CIF_PHASE_ID 1
+		a lpa  10.598107`_0.000035
+		b lpa  10.598107`_0.000035
+		c lpa  10.598107`_0.000035
+		al 90       
+		be 90       
+		ga 90       
+		volume  1190.378`_0.012
+
+		space_group "Ia-3"
+		site Y1     x 0.25          y 0.25          z 0.25          occ Y+3  1          beq @  0.24348`_0.01664
+		site Y2     x @  0.96772`_0.00003 y 0             z 0.25          occ Y+3  1          beq @  0.19934`_0.00913
+		site O1     x @  0.39045`_0.00025 y @  0.15205`_0.00024 z @  0.37967`_0.00027 occ O-2  1          beq @  0.24919`_0.05306
+		scale @  9.96071318e-06`_2.174e-08
+		r_bragg  0.716834363
+		Phase_Density_g_on_cm3( 5.03996424`_4.94573024e-05)
+
+		' Commented out section for spherical harmonics which can be used to infer the direction used in the March-Dollase approach
+		/*
+		PO_Spherical_Harmonics(sh, 8 load sh_Cij_prm {
+			k00   !sh_c00  1.00000
+			k41   sh_c41  -0.11229
+			k61   sh_c61   0.04862
+			k62   sh_c62  -0.01483
+			k81   sh_c81  -0.00007
+			} )
+		normals_plot = sh;
+		*/
+		' March Dollase preferred orientation model, with the direction inferred from the spherical harmonics above
+		Preferred_Orientation(@, 0.749873451`_0.00185827167,, 1 1 1)
+		' Stephens' model for anisotropic peak broadening, with the s400c and s22oc parameters being refined
+		Stephens_cubic( eta, 0.926140308`_0.18220196, s400c,-0.16425917`_0.0732013447, s22oc, 9.72736466`_3.6851168 val_on_continue = 0.1; min 0.001 max 100) 
+		' Sample size/microstrain broadening terms which get convoluted with the fundamental parameters peak shape
+		CS_L(size_lor, 345.404434`_8.0512677) 
+		Strain_L(strain_lor, 0.0537876016`_0.00223373972)
+
+' Save a cif file at the end of the refinement
+' This needs the pdfCIF module to be installed, which is available from the topas wiki https://topas.awh.durham.ac.uk/doku.php?id=pdfcif
+' Or using the "VS Code ++ TOPAS setup/Install macro libraries" menu item
+Out_pdCIF(y2o3_demo.cif)
+
+'The correlation matrix should be checked to see if any parameters are highly correlated.
+C_matrix_normalized
+{
+                             1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19  20  21
+bkg_rec2BFAAEFA050_    1:  100 -59   1 -15  12  15   4   2 -25  31 -32 -30 -29   0  28  11  48  -5  -4  -1   9
+m6a509e65_14           2:  -59 100  -1  25 -44 -58 -10  -3   7  -9   9  18  14   0 -13  -1 -24   4  -0   2  -4
+height                 3:    1  -1 100   0   0   0   1   0  -7   9  -9  -4   0 -80   0  -0   1   0   0  -0   0
+tth                    4:  -15  25   0 100 -23 -25  -2  -1   2  -2   2   5   3  -0  -3  -0  -6   1  -0   1  -1
+fwhm                   5:   12 -44   0 -23 100  65   4   1   2  -2   1  -4  -2  -0   2  -2   4  -0  -0   0   1
+int                    6:   15 -58   0 -25  65 100   6   2   3  -3   3  -5  -2  -0   2  -2   4  -1   1  -1   1
+scale2BFAAD7D7E0_      7:    4 -10   1  -2   4   6 100  54   5  -5   4 -11  -0  -0  32  -0  54   5   2   6  17
+m6a509e65_1a           8:    2  -3   0  -1   1   2  54 100   2  -0  -1  -4   6  -0  20   6  26   3   0  14   7
+s400c                  9:  -25   7  -7   2   2   3   5   2 100 -82  83  -5 -14   5  -8  -7 -14   2   1  -2  -4
+s22oc                 10:   31  -9   9  -2  -2  -3  -5  -0 -82 100-100 -20 -23  -7  12   4  17  -1  -2   1   6
+eta                   11:  -32   9  -9   2   1   3   4  -1  83-100 100  21  18   7 -12  -4 -18   1   2  -0  -6
+size_lor              12:  -30  18  -4   5  -4  -5 -11  -4  -5 -20  21 100  66   1 -16   0 -25   2   3   2  -8
+strain_lor            13:  -29  14   0   3  -2  -2  -0   6 -14 -23  18  66 100  -2 -15  -0 -17   3   3   1  -5
+lpa                   14:    0   0 -80  -0  -0  -0  -0  -0   5  -7   7   1  -2 100   0   0  -0   0  -0   0   0
+beq2BFAAD7DAB0_       15:   28 -13   0  -3   2   2  32  20  -8  12 -12 -16 -15   0 100  23  -4 -12   6  -1  16
+x2BFAAD7DB40_         16:   11  -1  -0  -0  -2  -2  -0   6  -7   4  -4   0  -0   0  23 100  -2 -15   2  -5   3
+beq2BFAAD7DD80_       17:   48 -24   1  -6   4   4  54  26 -14  17 -18 -25 -17  -0  -4  -2 100   8  -2   6   5
+x2BFAAD7DE10_         18:   -5   4   0   1  -0  -1   5   3   2  -1   1   2   3   0 -12 -15   8 100 -39  20  -4
+y2BFAAD7DEA0_         19:   -4  -0   0  -0  -0   1   2   0   1  -2   2   3   3  -0   6   2  -2 -39 100 -22 -32
+z2BFAAD7DF30_         20:   -1   2  -0   1   0  -1   6  14  -2   1  -0   2   1   0  -1  -5   6  20 -22 100  -0
+beq2BFAAD7E050_       21:    9  -4   0  -1   1   1  17   7  -4   6  -6  -8  -5   0  16   3   5  -4 -32  -0 100
+}

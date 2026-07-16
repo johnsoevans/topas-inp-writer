@@ -1,0 +1,59 @@
+'-------------------------------------------------------------- 
+' File for peak fitting for tutorial https://topas.webspace.durham.ac.uk/tutorial_tio2peakfit/
+' Developed from the template for Peak Fitting with a single overall peak shape 
+' Either use a TCHz function
+' Or a single Gaussian/Lorentzian/PV fwhm for all peaks
+' Or broaden PV peaks with 2-theta using size/strain
+' 
+' To search peaks in TOPAS
+'	1. load scan data into TOPAS 
+'	2. Use View/Search Peaks then "Add Peaks" 
+' Copy peak positions to this INP file by: 
+'   1. Click on plus sign by scan file name in parameters window (F2 if not visible) 
+'   2. Click on "Peaks Phase" 
+'   3. Highlight Position and Area columns, right click to "Copy All/Selection" then paste below 
+'   4. Use right-click/"Align Columns" to line up columns on tabs (copy a tab and paste into dialog box) 
+'   5. Delete the "Position Area" line 
+'-------------------------------------------------------------- 
+
+r_wp  14.7653519 r_exp  10.8296269 r_p  INP940401199.87247009 r_wp_dash  18.0982948 r_p_dash  13.3320817 r_exp_dash  13.2741692 weighted_Durbin_Watson  1.18247342 gof  1.36342203
+iters 100000 
+chi2_convergence_criteria 0.001 
+'do_errors 
+ 
+xdd d5_05005.raw
+	x_calculation_step = Yobs_dx_at(Xo);  
+	' Emission profile and axial broadening description
+	CuKa2_analyt(0.0001) 
+	Simple_Axial_Model(axial, 10.8586116`) 
+	bkg @  26.1703264` -21.0024653`  6.91087804` -2.08879474`  0.255362495`  0.44395834`
+ 
+	xo_Is 
+		' Use a TCHZ peak for all reflections, this helps you spot if you aren't describing e.g. two almost overlapped peaks
+		TCHZ_Peak_Type(pku, 0.0246538873`,pkv, -0.0353704467`,pkw,  0.0120744826`,!pkz, 0.0000,pkx, 0.179469093`,!pky, 0.0000)
+
+		load xo I  { 
+			@  27.4908907`	@  1482.62121`
+			@  36.1398007`	@  601.764098`
+			@  39.2475509`	@  86.8453412`
+			@  41.2986196`	@  294.979995`
+			@  44.0960651`	@  113.068681`
+			@  54.3778817`	@  854.168784`
+			@  56.6781604`	@  263.060011`
+			@  62.8179941`	@  115.655707`
+			@  64.0972945`	@  126.976463`
+			@  65.5730195`	@  11.1520503`
+			@  69.0537888`	@  312.785142`
+			@  69.8586089`	@  143.644722`
+			@  72.4702546`	@  16.8944492`
+			@  76.5940078`	@  32.526797`
+			@  79.8820911`	@  17.2426777`
+			@  82.3809171`	@  68.7867946`
+			@  84.293942`	@  48.6985336`
+			@  87.5158451`	@  17.9093995`
+			@  89.5986433`	@  115.226471`
+		} 
+	
+ 
+ 
+ 

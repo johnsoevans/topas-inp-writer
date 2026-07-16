@@ -1,0 +1,211 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Parameter dependency trees -- simple.inp</title>
+<style>
+  :root {
+    --bg: #f7f5f1;
+    --panel: #ffffff;
+    --ink: #2a2622;
+    --ink-muted: #6b6459;
+    --border: #e2ddd2;
+    --accent: #b5502f;
+    --independent: #3b7a4a;
+    --independent-bg: rgba(59, 122, 74, 0.10);
+    --dependent: #3b6ea5;
+    --dependent-bg: rgba(59, 110, 165, 0.09);
+    --fixed: #8a8072;
+    --fixed-bg: rgba(138, 128, 114, 0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1a18;
+      --panel: #242220;
+      --ink: #ece7de;
+      --ink-muted: #a39a8c;
+      --border: #38342c;
+      --accent: #e8875f;
+      --independent: #7fc492;
+      --independent-bg: rgba(127, 196, 146, 0.13);
+      --dependent: #7ba9e0;
+      --dependent-bg: rgba(123, 169, 224, 0.12);
+      --fixed: #b3a894;
+      --fixed-bg: rgba(179, 168, 148, 0.14);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+  h1 { font-size: 1.05rem; font-weight: 600; margin: 0 0 2px; }
+  .meta { color: var(--ink-muted); font-size: 0.82rem; margin-bottom: 16px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  input#search { flex: 1; min-width: 220px; padding: 7px 10px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--ink); font: inherit; }
+  button { padding: 6px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--panel);
+    color: var(--ink); font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab { padding: 7px 14px; border-radius: 7px 7px 0 0; border: 1px solid var(--border); border-bottom: none;
+    background: var(--panel); color: var(--ink-muted); cursor: pointer; font-size: 0.86rem; }
+  .tab.active { color: var(--ink); font-weight: 600; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px 18px; }
+  .panel.hidden { display: none; }
+  code, .mono { font-family: "SF Mono", Consolas, Menlo, monospace; font-size: 0.82rem; }
+  ul.tree { list-style: none; margin: 0; padding-left: 20px; }
+  ul.tree.root { padding-left: 0; }
+  li { margin: 2px 0; }
+  li.hidden { display: none; }
+  .node-toggle { cursor: pointer; user-select: none; font-family: "SF Mono", Consolas, Menlo, monospace;
+    font-size: 0.82rem; border-radius: 5px; padding: 1px 7px; display: inline-block; }
+  .node-toggle::before { content: "\25B8 "; display: inline-block; transition: transform 0.1s; }
+  .node-toggle.open::before { transform: rotate(90deg); }
+  .node-toggle.leaf::before { content: "\2022 "; }
+  .node-toggle.independent { color: var(--independent); background: var(--independent-bg); font-weight: 600; }
+  .node-toggle.fixed { color: var(--fixed); background: var(--fixed-bg); }
+  .node-toggle.dependent, .node-toggle.dependent_fixed { color: var(--dependent); background: var(--dependent-bg); }
+  .node-toggle.note { color: var(--ink-muted); font-style: italic; }
+  .line { color: var(--ink-muted); font-size: 0.74rem; }
+  .expr { color: var(--ink-muted); font-size: 0.78rem; font-family: "SF Mono", Consolas, Menlo, monospace; }
+  .cycle-note { color: var(--ink-muted); font-style: italic; font-size: 0.78rem; }
+  .children { display: none; }
+  .children.open { display: block; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; font-size: 0.78rem; color: var(--ink-muted); }
+  .legend span.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Parameter dependency trees -- simple.inp</h1>
+  <div class="meta">9 dependent roots &middot; 12 independent roots &middot; c:\w\test_examples\simple.inp</div>
+  <div class="toolbar">
+    <input id="search" type="text" placeholder="Filter by name...">
+    <button id="expandAll">Expand all</button>
+    <button id="collapseAll">Collapse all</button>
+  </div>
+  <div class="legend">
+    <div><span class="swatch" style="background:var(--independent)"></span>independent/refined</div>
+    <div><span class="swatch" style="background:var(--dependent)"></span>dependent (equation)</div>
+    <div><span class="swatch" style="background:var(--fixed)"></span>fixed</div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-panel="tree1">Tree 1 &middot; dependent &rarr; independent</div>
+    <div class="tab" data-panel="tree2">Tree 2 &middot; independent &rarr; dependent</div>
+  </div>
+  <div class="panel" id="tree1"><div id="tree1Root"></div></div>
+  <div class="panel hidden" id="tree2"><div id="tree2Root"></div></div>
+</div>
+<script>
+const TREE1 = [{"display": "b", "tag": "dependent", "expr": "Get(a)", "line": 24, "cycle": false, "unresolved": false, "children": [{"display": "a", "tag": "independent", "expr": null, "line": 61, "cycle": false, "unresolved": false, "children": []}]}, {"display": "c", "tag": "dependent", "expr": "Get(a)", "line": 24, "cycle": false, "unresolved": false, "children": [{"display": "a", "tag": "independent", "expr": null, "line": 61, "cycle": false, "unresolved": false, "children": []}]}, {"display": "beq", "tag": "dependent", "expr": "b1", "line": 26, "cycle": false, "unresolved": false, "children": [{"display": "b1", "tag": "fixed", "expr": null, "line": 25, "cycle": false, "unresolved": false, "children": []}]}, {"display": "beq", "tag": "dependent", "expr": "b1", "line": 27, "cycle": false, "unresolved": false, "children": [{"display": "b1", "tag": "fixed", "expr": null, "line": 25, "cycle": false, "unresolved": false, "children": []}]}, {"display": "beq", "tag": "dependent", "expr": "b1", "line": 28, "cycle": false, "unresolved": false, "children": [{"display": "b1", "tag": "fixed", "expr": null, "line": 25, "cycle": false, "unresolved": false, "children": []}]}, {"display": "beq", "tag": "dependent", "expr": "b2", "line": 31, "cycle": false, "unresolved": false, "children": [{"display": "b2", "tag": "independent", "expr": null, "line": 30, "cycle": false, "unresolved": false, "children": []}]}, {"display": "z", "tag": "dependent", "expr": "Get(x) + 0.1625", "line": 31, "cycle": false, "unresolved": false, "children": []}, {"display": "b", "tag": "dependent", "expr": "Get(a)", "line": 61, "cycle": false, "unresolved": false, "children": [{"display": "a", "tag": "independent", "expr": null, "line": 61, "cycle": false, "unresolved": false, "children": []}]}, {"display": "c", "tag": "dependent", "expr": "Get(a)", "line": 61, "cycle": false, "unresolved": false, "children": [{"display": "a", "tag": "independent", "expr": null, "line": 61, "cycle": false, "unresolved": false, "children": []}]}];
+const TREE2 = [{"display": "a", "tag": "independent", "expr": null, "line": 61, "cycle": false, "unresolved": false, "children": [{"display": "b", "tag": "dependent", "expr": "Get(a)", "line": 24, "cycle": false, "unresolved": false, "children": []}, {"display": "b", "tag": "dependent", "expr": "Get(a)", "line": 61, "cycle": false, "unresolved": false, "children": []}, {"display": "c", "tag": "dependent", "expr": "Get(a)", "line": 24, "cycle": false, "unresolved": false, "children": []}, {"display": "c", "tag": "dependent", "expr": "Get(a)", "line": 61, "cycle": false, "unresolved": false, "children": []}]}, {"display": "b2", "tag": "independent", "expr": null, "line": 30, "cycle": false, "unresolved": false, "children": [{"display": "beq", "tag": "dependent", "expr": "b2", "line": 31, "cycle": false, "unresolved": false, "children": []}]}, {"display": "bkg[0]", "tag": "independent", "expr": null, "line": 56, "cycle": false, "unresolved": false, "children": []}, {"display": "bkg[1]", "tag": "independent", "expr": null, "line": 56, "cycle": false, "unresolved": false, "children": []}, {"display": "bkg[2]", "tag": "independent", "expr": null, "line": 56, "cycle": false, "unresolved": false, "children": []}, {"display": "bkg[3]", "tag": "independent", "expr": null, "line": 56, "cycle": false, "unresolved": false, "children": []}, {"display": "bkg[4]", "tag": "independent", "expr": null, "line": 56, "cycle": false, "unresolved": false, "children": []}, {"display": "csl", "tag": "independent", "expr": null, "line": 33, "cycle": false, "unresolved": false, "children": []}, {"display": "m370e89e0_1", "tag": "independent", "expr": null, "line": 67, "cycle": false, "unresolved": false, "children": []}, {"display": "scale", "tag": "independent", "expr": null, "line": 66, "cycle": false, "unresolved": false, "children": []}, {"display": "th2_offset (m370e89e0_0)", "tag": "independent", "expr": null, "line": 54, "cycle": false, "unresolved": false, "children": []}, {"display": "th2_offset (m370e89e0_2)", "tag": "independent", "expr": null, "line": 20, "cycle": false, "unresolved": false, "children": []}];
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+let uid = 0;
+function renderNode(node) {
+  const li = document.createElement('li');
+  const hasChildren = node.children && node.children.length > 0;
+  const toggle = document.createElement('span');
+  toggle.className = 'node-toggle ' + node.tag + (hasChildren ? '' : ' leaf');
+  let label = node.display;
+  if (node.unresolved) label += ' [unresolved reference]';
+  toggle.appendChild(document.createTextNode(label));
+  if (node.line) {
+    const lineSpan = document.createElement('span');
+    lineSpan.className = 'line';
+    lineSpan.textContent = '  (line ' + node.line + ')';
+    toggle.appendChild(lineSpan);
+  }
+  if (node.cycle) {
+    const cycleSpan = document.createElement('span');
+    cycleSpan.className = 'cycle-note';
+    cycleSpan.textContent = '  (cycle, stopping)';
+    toggle.appendChild(cycleSpan);
+  }
+  li.appendChild(toggle);
+  if (node.expr) {
+    const exprDiv = document.createElement('div');
+    exprDiv.className = 'expr';
+    exprDiv.style.marginLeft = '18px';
+    exprDiv.textContent = '= ' + node.expr;
+    li.appendChild(exprDiv);
+  }
+  li.dataset.searchText = node.display.toLowerCase();
+  if (hasChildren) {
+    const childWrap = document.createElement('div');
+    childWrap.className = 'children';
+    const ul = document.createElement('ul');
+    ul.className = 'tree';
+    for (const child of node.children) {
+      ul.appendChild(renderNode(child));
+    }
+    childWrap.appendChild(ul);
+    toggle.addEventListener('click', () => {
+      toggle.classList.toggle('open');
+      childWrap.classList.toggle('open');
+    });
+    li.appendChild(childWrap);
+  }
+  return li;
+}
+
+function renderRoots(container, roots) {
+  const ul = document.createElement('ul');
+  ul.className = 'tree root';
+  for (const root of roots) {
+    ul.appendChild(renderNode(root));
+  }
+  container.appendChild(ul);
+}
+
+renderRoots(document.getElementById('tree1Root'), TREE1);
+renderRoots(document.getElementById('tree2Root'), TREE2);
+
+for (const tab of document.querySelectorAll('.tab')) {
+  tab.addEventListener('click', () => {
+    for (const t of document.querySelectorAll('.tab')) t.classList.remove('active');
+    for (const p of document.querySelectorAll('.panel')) p.classList.add('hidden');
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.panel).classList.remove('hidden');
+  });
+}
+
+document.getElementById('expandAll').addEventListener('click', () => {
+  for (const t of document.querySelectorAll('.node-toggle')) t.classList.add('open');
+  for (const c of document.querySelectorAll('.children')) c.classList.add('open');
+});
+document.getElementById('collapseAll').addEventListener('click', () => {
+  for (const t of document.querySelectorAll('.node-toggle')) t.classList.remove('open');
+  for (const c of document.querySelectorAll('.children')) c.classList.remove('open');
+});
+
+document.getElementById('search').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  const allLis = document.querySelectorAll('li');
+  if (!q) {
+    for (const li of allLis) li.classList.remove('hidden');
+    return;
+  }
+  for (const li of allLis) {
+    const matches = li.dataset.searchText && li.dataset.searchText.includes(q);
+    li.classList.toggle('hidden', !matches);
+    if (matches) {
+      let p = li.parentElement;
+      while (p) {
+        if (p.classList && p.classList.contains('children')) {
+          p.classList.add('open');
+          const sib = p.previousElementSibling;
+          if (sib && sib.classList.contains('node-toggle')) sib.classList.add('open');
+        }
+        if (p.tagName === 'LI') p.classList.remove('hidden');
+        p = p.parentElement;
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+/*
+Bragg-Brentano (reflection-geometry) lab X-ray instrument TEMPLATE --
+a fundamental-parameters (FP) description of a standard powder
+diffractometer, NOT a real fit result. Every value below is a
+plausible starting placeholder, not measured/refined data -- adapted
+from this skill's own curated `example_inp_files/y2o3_demo_stage3.inp`
+(a real Durham-tutorial Y2O3 fit on exactly this Ge(111)-monochromator
+Cu Ka1 PSD Bragg-Brentano setup; see that file for the same instrument
+block fully refined against real data, plus preferred orientation and
+anisotropic broadening added on top). See
+references/06-macros-and-include-files.md's "Instrument and instrument
+convolutions"/"Intensity Corrections" sections for the exact meaning
+of every macro used below.
+
+WHAT TO CHANGE for a real refinement:
+  1. xdd's file path -- your own data file.
+  2. The wavelength macro (`CuKa1`) -- match your tube (CuKa5 for the
+     full Ka1/Ka2 doublet if unmonochromated; Co/Cr/Mo-target
+     equivalents if not Cu).
+  3. LP_Factor's monochromator 2-theta angle (27.26 here is Ge(111) for
+     Cu Ka radiation) -- 0 if there's no diffracted-beam monochromator
+     at all (a PSD/solid-state detector alone needs no LP_Factor
+     monochromator-angle correction beyond the default).
+  4. Radius/Divergence/axial_conv/Slit_Width -- these five numbers
+     describe YOUR physical instrument geometry, not the sample. Get
+     them from the instrument's own datasheet/manual, or fit them ONCE
+     against a certified standard (e.g. NIST SRM 660 LaB6, or exactly
+     the Y2O3 standard `y2o3_demo_stage3.inp` was built from) and reuse
+     them fixed for every later sample measured on the same instrument.
+  5. The str block's space_group/cell/site content -- your actual
+     sample's structure.
+*/
+
+r_wp 0                            ' placeholder -- TOPAS overwrites this with the real value after refinement
+iters 100
+
+xdd your_data_file.xye
+   x_calculation_step = Yobs_dx_at(Xo);
+
+   ' Background -- a Chebyshev polynomial (one @-flagged coefficient
+   ' per term; add/remove to match your data) plus a broad One_on_X
+   ' term for amorphous/air-scatter rise at low angle.
+   bkg @ 0 0 0
+   One_on_X(@, 100)
+
+   ' --- Radiation / intensity corrections ---
+   CuKa1(0.0001)                       ' wavelength -- change tube/line as needed (see note 2 above)
+   LP_Factor(!th2_monochromator, 27.26)  ' Lorentz + Lorentz-polarization factor; 27.26 = Ge(111) monochromator 2-theta for Cu Ka (see note 3 above)
+
+   ' --- Bragg-Brentano instrument geometry (fundamental parameters) ---
+   ' These five describe the DIFFRACTOMETER itself, not the sample --
+   ' see note 4 above.
+   Radius(217)                         ' goniometer radius, mm (primary = secondary for a standard reflection-geometry instrument)
+   Divergence(1)                       ' horizontal beam divergence, degrees
+   axial_conv
+      filament_length         12       ' tube filament length, mm
+      sample_length           15       ' illuminated sample length in the axial direction, mm
+      receiving_slit_length   12       ' receiving (detector) slit length, mm
+      primary_soller_angle    5        ' primary Soller slit aperture, degrees
+      secondary_soller_angle  5        ' secondary Soller slit aperture, degrees
+   Slit_Width(0.1)                     ' receiving slit aperture in the equatorial plane, mm
+
+   ' --- 2-theta corrections ---
+   Specimen_Displacement(height, 0)    ' sample-height offset error, mm -- refine this, don't fix it at 0, unless the sample is confirmed flush with the goniometer axis
+
+   str
+      phase_name "Phase1"                              ' <-- replace with your sample's real name
+      space_group P1                                   ' <-- replace with your sample's real space group
+      a 10 b 10 c 10 al 90 be 90 ga 90                  ' <-- replace with your sample's real cell (or a Cubic()/Tetragonal()/... macro)
+
+      site Atom1 x 0 y 0 z 0 occ Element 1 beq @ 0.5    ' <-- replace with your sample's real sites
+
+      scale @ 1e-05
+
+      ' Optional additions, common on a Bragg-Brentano fit but not part
+      ' of the base instrument template -- uncomment and adapt as needed:
+      ' Preferred_Orientation(@, 1,, 1 1 1)                        ' March-Dollase PO along hkl 1 1 1
+      ' Stephens_cubic(eta, 1, s400c, 0, s22oc, 0)                 ' anisotropic (Stephens) peak broadening -- cubic; other crystal systems have their own Stephens_* macro
+      ' CS_L(size_lor, 1000)                                       ' Lorentzian crystallite-size broadening
+      ' Strain_L(strain_lor, 0.01)                                 ' Lorentzian microstrain broadening

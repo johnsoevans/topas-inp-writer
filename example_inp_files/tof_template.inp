@@ -1,0 +1,68 @@
+/*
+TOF Rietveld refinement TEMPLATE -- neutron time-of-flight powder data.
+
+Adapted from this skill's own curated corpus (c:\w\tcinps-2.bat's
+tof\tof_bank2_1.inp / tof\tof_bank2_2.inp -- CeO2 calibration-standard
+fits against GSAS-generated TOF data, data courtesy of John Evans /
+Kevin Knight). Macro semantics below are quoted/paraphrased from
+references/06-macros-and-include-files.md's "Neutron TOF" section --
+read that section for the full detail on any of these.
+
+WHAT TO CHANGE for a real refinement, in the order you'll usually touch them:
+  1. TOF_XYE's file path -- your own .xye TOF data file.
+  2. TOF_x_axis_calibration's t0/t1/t2 VALUES -- these are the
+     instrument's own DIFC/DIFA/T0-style calibration constants. They're
+     normally determined ONCE, from a fit to a calibration standard
+     (exactly the CeO2 fit this template is adapted from), then reused
+     fixed (or only lightly refined) for every later sample measured on
+     the same instrument/bank -- don't try to refine these from scratch
+     on a new sample's own data.
+  3. The str block's space_group/cell/site content -- replace with your
+     actual sample's structure.
+  4. bkg's coefficient count and finish_X (add start_X if needed) --
+     match your data's real x-axis range and background complexity.
+*/
+
+r_wp 0                          ' placeholder -- TOPAS overwrites this with the real value after refinement
+
+TOF_XYE(your_data_file.xye, = Yobs_dx_at(Xo) .5;)   ' data file + calculation step size (tied to the data's own local x-axis spacing via Yobs_dx_at)
+
+   ' A simple TOF-specific emission-profile width -- NOT the same thing
+   ' as a lab-source wavelength lam { } block.
+   TOF_LAM(0.0001)
+
+   ' Instrument calibration constants (d-spacing -> TOF x-axis, i.e.
+   ' pk_xo). Determine these ONCE from a standard (see note 2 above),
+   ' then reuse unchanged for every sample on this instrument/bank.
+   TOF_x_axis_calibration(t0, 4.54166, t1, 6172.60684, t2, -2.15711)
+
+   ' Peak-shape convolutions: back-to-back exponentials are the
+   ' standard TOF peak-shape choice (a fast rise, slower decay). Two
+   ' calls here model a short-range (a0/a1) and a longer-range (b0/b1)
+   ' component; the trailing '-'/'+' selects which side of the peak
+   ' each acts on -- refine these per-sample.
+   TOF_Exponential(a0, 100, a1, 0, 1, t1, -)
+   TOF_Exponential(b0, 100, b1, 100, 4, t1, +)
+
+   bkg @ 0 0 0 0 0 0 0 0 0 0 0     ' Chebyshev background -- add/remove @-flagged coefficients to match your data's complexity
+
+   finish_X 21000                  ' match your data's real usable x-axis range (add start_X too if the low end needs excluding)
+
+   ' TOF's own Lorentz-type intensity scaling (the TOF analogue of
+   ' LP_Factor for lab X-ray data) -- this exact D_spacing^4 form is the
+   ' standard TOF convention, confirmed in both curated examples this
+   ' template is built from.
+   scale_pks = D_spacing^4;
+
+   str
+      space_group P1                                   ' <-- replace with your sample's real space group
+      a 10 b 10 c 10                                    ' <-- replace with your sample's real cell (or a Cubic()/Tetragonal()/... macro)
+
+      site Atom1 x 0 y 0 z 0 occ Element 1 beq @ 0.5    ' <-- replace with your sample's real sites
+
+      scale @ 1
+      TOF_PV(@, 100, @, .5, t1)      ' instrumental broadening (pseudo-Voigt fwhm + lorentzian fraction, refined per-sample); t1 is the calibration constant from TOF_x_axis_calibration above
+
+      ' Optional: crystallite-size broadening, uncomment if the sample needs it
+      ' TOF_CS_L(@, 1000, t1)
+      ' TOF_CS_G(@, 1000, t1)

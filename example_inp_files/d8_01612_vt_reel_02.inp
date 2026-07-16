@@ -1,0 +1,351 @@
+'----------------------------------------------------------------------------------------------------------------  
+'Reel Output Version
+'
+'4 phase variable temperature Rietveld fitting of d8_01612 
+'The data were recorded to optimise the synthesis of cubic ZrMo2O8 which forms by the topotactic transition sequence:
+'  ZrMo2O7(OH)2.2H2O -> LT-ZrMo2O8 -> Cubic-ZrMo2O8 -> Trigonal-ZrMo2O8 -> Decomposition
+'See tutorial online and file d8_01612_vt_02.inp
+'https://topas.webspace.durham.ac.uk/tutorial_zrmo2o8_vt/
+'
+'This INP file includes output syntax for reel which lets you plot results and scan through the fits
+'
+'Minor modification to standard file d8_01612_vt_02.inp:
+'	a. The results file name and directory name are set in section 0
+'	b. The xdd section contains instructions to write the Rietveld fit to a .xyd file for Reel
+'   c. It's useful to keep the same column names for Reel, with xye files it's useful to also ouput SigmaYobs as a final column
+'   d. The .xyd file is appended with the calculated contribution from each phase (excluding background)
+'   e. There is an instruction to run "to_Reel_v1.py" to convert the .xyd files to .xyy ready for Reel
+'   f. to_Reel_v1.py will assume that the total bkg (e.g. bkg @ 0 0 0 and any peaks in TOPAS) is ycalc_total - all the output phases
+'   g. to_Reel_v1.py has options for saving these background-subtracted files.
+'
+'You must create a folder called "results" in your working folder for the .xyd and .xyy files before running
+'
+'The inp file should execute the command "python .\to_Reel_v1.py .\results\" to produce .xyy files automatically
+'This needs you to have to_Reel_v1.py in the same directory as the INP file
+'If this fails then run the same command from a dos prompt  
+'Note that the final .xyd file may not be processed in topas v7, if this happens run the to_Reel_v1.py command from a dos prompt
+'
+'John and Anders May 2026
+'----------------------------------------------------------------------------------------------------------------  
+
+'{{{ 0. Enter folder and filenames
+macro dataFolderName {  } 'add folder name (with final /) if needed e.g. D:/data/topas_workshop/zrmo2o8_vt/    
+macro resultsFile { results.txt }
+'}}}
+
+'{{{ 1. General refinement information
+r_exp  7.2469838 r_exp_dash  17.2361058 r_wp  8.22037357 r_wp_dash  19.5511998 r_p  6.29300097 r_p_dash  20.6693895 weighted_Durbin_Watson  1.58858918 gof  1.13431654
+no_LIMIT_warnings
+'continue_after_convergence 
+'}}}
+
+'{{{ 2. Information on file names and temperatures to analyse 
+
+#prm pattern_count = 68; 'set the number of separate patterns to analyse here so can be used in equations
+num_runs = #out pattern_count ; 'define num_runs based on pattern_count
+#if (#out pattern_count > 1) 
+	out_file = Concat(String(INP_File), ".INP"); 'explicitly copy .out to .inp for > 1 pattern
+#endif
+#list File_Name Range_Num Temperature { 
+	d8_01612  1 309.5 
+	d8_01612  2 315.7 
+	d8_01612  3 328.0 
+	d8_01612  4 340.3 
+	d8_01612  5 352.4 
+	d8_01612  6 364.5 
+	d8_01612  7 376.5 
+	d8_01612  8 388.4 
+	d8_01612  9 400.3 
+	d8_01612 10 412.0 
+	d8_01612 11 423.7 
+	d8_01612 12 435.3 
+	d8_01612 13 446.8 
+	d8_01612 14 458.2 
+	d8_01612 15 469.6 
+	d8_01612 16 480.9 
+	d8_01612 17 492.1 
+	d8_01612 18 503.3 
+	d8_01612 19 514.4 
+	d8_01612 20 525.4 
+	d8_01612 21 536.4 
+	d8_01612 22 547.2 
+	d8_01612 23 558.0 
+	d8_01612 24 568.8 
+	d8_01612 25 579.5 
+	d8_01612 26 590.1 
+	d8_01612 27 600.7 
+	d8_01612 28 611.2 
+	d8_01612 29 621.6 
+	d8_01612 30 632.0 
+	d8_01612 31 642.3 
+	d8_01612 32 652.5 
+	d8_01612 33 662.7 
+	d8_01612 34 672.9 
+	d8_01612 35 683.0 
+	d8_01612 36 693.0 
+	d8_01612 37 703.0 
+	d8_01612 38 712.9 
+	d8_01612 39 722.8 
+	d8_01612 40 732.6 
+	d8_01612 41 742.4 
+	d8_01612 42 752.2 
+	d8_01612 43 761.9 
+	d8_01612 44 771.5 
+	d8_01612 45 781.1 
+	d8_01612 46 790.6 
+	d8_01612 47 800.1 
+	d8_01612 48 809.6 
+	d8_01612 49 819.0 
+	d8_01612 50 828.4 
+	d8_01612 51 837.8 
+	d8_01612 52 847.1 
+	d8_01612 53 856.3 
+	d8_01612 54 865.6 
+	d8_01612 55 874.8 
+	d8_01612 56 883.9 
+	d8_01612 57 893.1 
+	d8_01612 58 902.2 
+	d8_01612 59 911.2 
+	d8_01612 60 920.3 
+	d8_01612 61 929.3 
+	d8_01612 62 938.2 
+	d8_01612 63 947.2 
+	d8_01612 64 956.1 
+	d8_01612 65 965.0 
+	d8_01612 66 973.9 
+	d8_01612 67 982.7 
+	d8_01612 68 991.5 
+	}
+
+macro filename { File_Name(Run_Number)##.raw } 
+macro filename_reel { File_Name(Run_Number)##_##Range_Num(Run_Number) }
+macro xydFileName { dataFolderName##Results##/##File_Name(Run_Number)##_##Range_Num(Run_Number)##.xyd}
+
+#if (Run_Number == 0)   
+	system_before_save_OUT  { copy INP_File##.inp INP_File##_start.inp }
+#endif  
+'}}} 
+
+'{{{ 3. Information for each refinement
+xdd filename  
+	range Range_Num(Run_Number) 'sets the range to analyse from the #list above
+	start_X 14  '10
+	finish_X 70  '70
+	x_calculation_step = Yobs_dx_at(Xo);
+	bkg @  159.381379` -151.113674`  79.3040969` -19.764994` -10.609985`  12.4384167` -2.26099996` -8.54426139`  11.9950539` -11.7682044`  8.89803688` -2.89111757`
+	Simple_Axial_Model(axial, 3.23420516`)
+	'Bragg Brentano Cu Ka1 Ge(111) mono PSD
+	LP_Factor(!th2_monochromator, 27.26)
+	CuKa1(0.0001)
+	Specimen_Displacement(height, 0.0177190455`)  
+	prm boverall  1.8612633` min 0 max 10 'use a single overall temperature factor for each phase
+
+	Write_Rietveld_xyd
+
+	str  
+		phase_name ZrMo2O7(OH)2.2H2O
+ 		a lpa1  11.454109` min =11.40; max =11.50; 
+ 		b lpa1  11.454109` min =11.40; max =11.50; 
+ 		c lpc1  12.489326` min =12.45; max =12.55; 
+		space_group "I 41 C D" 
+		site Zr1    x 0             y 0             z 0             occ Zr   1          beq = boverall;:1.86126`
+		site Mo1    x 0.03391775    y 0.1691334     z 0.2416708     occ Mo   0.5        beq = boverall;:1.86126`
+		site Mo1a   x 0.003686806   y 0.1598679     z 0.228842      occ Mo   0.5        beq = boverall;:1.86126`
+		site O1     x 0.17407       y 0.16613       z 0.24634       occ O    1          beq = boverall;:1.86126`
+		site H11    x 0.23373       y 0.10253       z 0.24361       occ H    0.5        beq = boverall;:1.86126`
+		site H12    x 0.22075       y 0.23968       z 0.25028       occ H    0.5        beq = boverall;:1.86126`
+		site O2     x 0.8262        y 0.16282       z 0.2241        occ O    1          beq = boverall;:1.86126`
+		site H21    x 0.80193       y 0.12322       z 0.2917        occ H    0.5        beq = boverall;:1.86126`
+		site H22    x 0.79043       y 0.24227       z 0.2287        occ H    0.5        beq = boverall;:1.86126`
+		site O3     x 0.1833032     y 0.9924415     z 1.003331      occ O    1          beq = boverall;:1.86126`
+		site O4     x -0.01596552   y 0.1428519     z 0.8578038     occ O    1          beq = boverall;:1.86126`
+		site O5     x 0.00143       y 0.16804       z 0.06435       occ O    1          beq = boverall;:1.86126`
+		site H51    x 0.94221       y 0.22885       z 0.04601       occ H    0.5        beq = boverall;:1.86126`
+		site H52    x 0.04634       y 0.2398        z 0.04515       occ H    0.5        beq = boverall;:1.86126`
+		site O6     x 0             y 0             z 0.2013219     occ O    1          beq = boverall;:1.86126`
+
+		scale scale1  4.65481028e-06` min 1e-14 max 1.e+14
+		MVW(mass1  3721.160, vol1  1638.557`,perc1  99.271`)
+		prm scaleZMV1 = scale1 * mass1 * vol1 ;:28.3819331`
+		r_bragg  3.33244524
+		local CIF_PHASE_ID  1`
+		LVol_FWHM_CS_G_L(1, 70.1692222`, 0.89, 66.6905904`, csgc1, 75.2624109` min 30 max 9999, !cslc1, 9999)
+		e0_from_Strain( 0.000217918606`, !sgc1, 0.001, slc1, 0.1` min 1e-9 max 0.1)
+
+	str 
+		phase_name LT-ZrMo2O8
+ 		a  lpa2  5.800158` min =5.80; max =5.90; 
+ 		b  lpb2  7.330000` min =7.33; max =7.43; 
+ 		c  lpc2  9.040000` min =9.04; max =9.15; 
+ 		space_group Pmn21 
+		site Zr1    x 0.5           y 0.2673        z 0.5           occ Zr   1          beq = boverall;:1.86126`
+		site Mo1    x 0.5           y 0.94076       z 0.17613       occ Mo   1          beq = boverall;:1.86126`
+		site O11    x 0.5           y 0.16302       z 0.28555       occ O    1          beq = boverall;:1.86126`
+		site O12    x 0.5           y 0.82229       z 0.31791       occ O    1          beq = boverall;:1.86126`
+		site O13    x 0.76046       y 0.93215       z 0.08231       occ O    1          beq = boverall;:1.86126`
+		site Mo2    x 0.5           y 0.43252       z 0.8935        occ Mo   1          beq = boverall;:1.86126`
+		site O21    x 0.5           y 0.24468       z 0.00257       occ O    1          beq = boverall;:1.86126`
+		site O22    x 0.5           y 0.40496       z 0.69087       occ O    1          beq = boverall;:1.86126`
+		site O23    x 0.75167       y 0.55746       z 0.9406        occ O    1          beq = boverall;:1.86126`
+
+ 		scale scale2  1.00007622e-14` min 1e-14 max 1.e+14
+		MVW(mass2  822.198, vol2  384.337`,perc2  0.000`)
+		prm scaleZMV2 = scale2 * mass2 * vol2 ;:3.16025375e-09`
+		r_bragg  0.658601463
+ 
+		LVol_FWHM_CS_G_L(1, 59.8044809`, 0.89, 56.8118902`, csgc2, 64.0730689` min 30 max 9999, !cslc2, 9999)
+		'hkl-dependent strain broadening from Ch4 P124
+		prm !zeta  1 min 0 max 1
+		prm slc2_average  10000` min 0 max 10000
+		spherical_harmonics_hkl ahkl
+		'spharm fixed coefficients from range 22
+		sh_order  4 load sh_Cij_prm { y00   !ahkl_c00  1.00000 y20   !ahkl_c20  0.34006 y22p  !ahkl_c22p -1.20685 y40   !ahkl_c40  1.75359 y42p  !ahkl_c42p  0.96829 y44p  !ahkl_c44p  0.47733 } 
+		prm !sc = 10^-3;
+		prm ee_e_scsc = slc2_average ahkl; 
+		prm ee_2Th = sc^2 (180/Pi)^2 (-2 Tan(Th))^2 ee_e_scsc;
+		gauss_fwhm = (1-zeta) Max(ee_2Th,0)^.5;
+		lor_fwhm = zeta Max(ee_2Th,0)^.5;	
+	
+	str  
+		phase_name cubic-ZrMo2O8
+ 		a lpa3  9.050000` min =9.05; max =9.15; 
+ 		b lpa3  9.050000` min =9.05; max =9.15; 
+ 		c lpa3  9.050000` min =9.05; max =9.15; 
+		space_group P213 
+		site ZR1    x 0.00087       y 0.00087       z 0.00087       occ Zr   1          beq = boverall;:1.86126`
+		site Mo1    x 0.32968       y 0.32968       z 0.32968       occ Mo   0.5        beq = boverall;:1.86126`
+		site Mo11   x 0.67032       y 0.67032       z 0.67032       occ Mo   0.5        beq = boverall;:1.86126`
+		site Mo2    x 0.61145       y 0.61145       z 0.61145       occ Mo   0.5        beq = boverall;:1.86126`
+		site Mo21   x 0.38855       y 0.38855       z 0.38855       occ Mo   0.5        beq = boverall;:1.86126`
+		site O1     x 0.20703       y 0.43946       z 0.44627       occ O    1          beq = boverall;:1.86126`
+		site O2     x 0.78715       y 0.56768       z 0.55563       occ O    1          beq = boverall;:1.86126`
+		site O3     x 0.49035       y 0.49035       z 0.49035       occ O    0.5        beq = boverall;:1.86126`
+		site O31    x 0.50073       y 0.50073       z 0.50073       occ O    0.5        beq = boverall;:1.86126`
+		site O4     x 0.23288       y 0.23288       z 0.23288       occ O    0.5        beq = boverall;:1.86126`
+		site O41    x 0.76592       y 0.76592       z 0.76592       occ O    0.5        beq = boverall;:1.86126`
+		
+ 		scale scale3  6.07454771e-08` min 1e-14 max 1.e+14
+		MVW(mass3  1644.397, vol3  741.218`,perc3  0.259`)
+		prm scaleZMV3 = scale3 * mass3 * vol3 ;:0.0740399826`
+		r_bragg  2.49527134
+		LVol_FWHM_CS_G_L(1, 82.3573477`, 0.89, 78.3201296`, csgc3, 88.4527145` min 30 max 9999, !cslc3, 9999)
+		e0_from_Strain( 2.18166283e-06`, !sgc3, 0.001, slc3, 1.00072433e-09` min 1e-9 max 0.1)
+  
+	str  
+		phase_name trigonal-ZrMo2O8
+		a lpa4  10.105349` min =10.05; max =10.15; 
+		b lpa4  10.105349` min =10.05; max =10.15; 
+		c lpc4  12.134642` min =12.08; max =12.18; 
+		al  90 
+		be  90 
+		ga  120 
+		space_group P-31c 
+		site Zr1    x 0             y 0             z 0             occ Zr   1          beq = boverall;:1.86126`
+		site Zr2    x =1/3;         y =2/3;         z 0.98132       occ Zr   1          beq = boverall;:1.86126`
+		site Mo1    x 0.32871       y 0.33891       z 0.149         occ Mo   1          beq = boverall;:1.86126`
+		site O1     x 0.1731        y 0.1664        z 0.1008        occ O    1          beq = boverall;:1.86126`
+		site O2     x 0.3323        y 0.4959        z 0.0814        occ O    1          beq = boverall;:1.86126`
+		site O3     x 0.4979        y 0.3364        z 0.1178        occ O    1          beq = boverall;:1.86126`
+		site O4     x 0.3189        y 0.3522        z 0.2923        occ O    1          beq = boverall;:1.86126`
+
+ 		scale scale4  5.07533165e-08` min 1e-14 max 1.e+14
+		MVW(mass4  2466.595, vol4  1073.150`,perc4  0.470`)
+		prm scaleZMV4 = scale4 * mass4 * vol4 ;:0.134345322`
+		r_bragg  2.07925925
+		LVol_FWHM_CS_G_L(1, 28.5014305`, 0.89, 27.0363151`, csgc4, 30.4324782` min 30 max 9999, !cslc4, 9999)
+		e0_from_Strain( 0.000217066722`, !sgc4, 0.001, slc4, 0.099609375` min 1e-9 max 0.1)
+
+	for strs {
+		'Instrumental resolution function from d8_00497
+		TCHZ_Peak_Type(!pku, 0.00659249534_0.00441957787,!pkv, -0.00957469221_0.00471305525,!pkw,  0.00297466875_0.00120982108,!pkz, 0.0000,!pkx, 0.0465714453_0.00534879623, !pky, 0.0635882971_0.00235706876)
+		'Write out phase contribution to .xyd file
+		Writephase
+	}
+'}}}
+  
+'{{{ 4. Output lines here 
+'Note that reel needs R_wp, Temperature (K) and Wavelength (A) entries to read file
+'Column names for these entries in to_Reel.py must match
+
+#define write_out_resultsfile 'Traditional results in wide format for plotting, also read by to_Reel_v1.py
+
+#if (Run_Number == 0)   
+	'no append on first output so old file gets deleted  
+	'update the headings with right-click/toopas-editor/create column headings
+	out resultsFile  ' results file for plotting. Out_String() is file column headers  
+	Out_String("Run_Number Temperature lam esd_lam filename_reel filename r_wp gof perc1 esd_perc1 perc2 esd_perc2 perc3 esd_perc3 perc4 esd_perc4 scaleZMV1 esd_scaleZMV1 scaleZMV2 esd_scaleZMV2 scaleZMV3 esd_scaleZMV3 scaleZMV4 esd_scaleZMV4 sum_scaleZMV esd_sum_scaleZMV boverall esd_boverall axial esd_axial height esd_height lpa1 esd_lpa1 lpc1 esd_lpc1 scale1 esd_scale1 csgc1 esd_csgc1 slc1 esd_slc1 lpa2 esd_lpa2 lpb2 esd_lpb2 lpc2 esd_lpc2 scale2 esd_scale2 csgc2 esd_csgc2 slc2_average esd_slc2_average lpa3 esd_lpa3 scale3 esd_scale3 csgc3 esd_csgc3 slc3 esd_slc3 lpa4 esd_lpa4 lpc4 esd_lpc4 scale4 esd_scale4 csgc4 esd_csgc4 slc4 esd_slc4 phase_name \n")
+#endif  
+
+#ifdef write_out_resultsfile
+		prm sum_scaleZMV = scaleZMV1 + scaleZMV2 + scaleZMV3 + scaleZMV4;:28.5903184`
+		out resultsFile append  'append so file retains header
+		Out(Run_Number, " %5.0f ") 
+		Out(Temperature(Run_Number), "%11.5f ") 
+		Out(Get(lam), " %11.9f", " %11.9f ")
+		Out_String(filename_reel) 
+		Out_String(" ") 
+		Out_String(filename) 
+		Out(Get(r_wp), " %11.5f") 
+		Out(Get(gof), " %11.5f") 
+		Out(perc1,        " %18.9f", " %18.9f")  
+		Out(perc2,        " %18.9f", " %18.9f")  
+		Out(perc3,        " %18.9f", " %18.9f")  
+		Out(perc4,        " %18.9f", " %18.9f")  
+		Out(scaleZMV1,    " %18.9f", " %18.9f")  
+		Out(scaleZMV2,    " %18.9f", " %18.9f")  
+		Out(scaleZMV3,    " %18.9f", " %18.9f")  
+		Out(scaleZMV4,    " %18.9f", " %18.9f")  
+		Out(sum_scaleZMV, " %18.9f", " %18.9f")  
+		Out(boverall,     " %18.9f", " %18.9f") 
+		Out(axial, " %18.9f", " %18.9f")
+		Out(height, " %18.9f", " %18.9f")
+		Out(lpa1, " %18.9f", " %18.9f")
+		Out(lpc1, " %18.9f", " %18.9f")
+		Out(scale1, " %18.9f", " %18.9f")
+		Out(csgc1, " %18.9f", " %18.9f")
+		Out(slc1, " %18.9f", " %18.9f")
+		Out(lpa2, " %18.9f", " %18.9f")
+		Out(lpb2, " %18.9f", " %18.9f")
+		Out(lpc2, " %18.9f", " %18.9f")
+		Out(scale2, " %18.9f", " %18.9f")
+		Out(csgc2, " %18.9f", " %18.9f")
+		Out(slc2_average, " %18.9f", " %18.9f")
+		Out(lpa3, " %18.9f", " %18.9f")
+		Out(scale3, " %18.9f", " %18.9f")
+		Out(csgc3, " %18.9f", " %18.9f")
+		Out(slc3, " %18.9f", " %18.9f")
+		Out(lpa4, " %18.9f", " %18.9f")
+		Out(lpc4, " %18.9f", " %18.9f")
+		Out(scale4, " %18.9f", " %18.9f")
+		Out(csgc4, " %18.9f", " %18.9f")
+		Out(slc4, " %18.9f", " %18.9f")
+		Out_String("\n")
+#endif
+
+'{{{ autoclean the .xyd files on last run
+'This assumes you have to_Reel_v1.py in the same directory as the INP file
+#if (Run_Number == #out pattern_count - 1)
+	system_after_save_OUT  { python to_Reel_v1.py results }
+#endif
+'}}}
+
+'macro to append calculated pattern for individual phases to .xyd file for Reel
+macro Writephase 
+	{
+		out xydFileName append  
+		Out(Get(phase_name), "%s\n")
+		phase_out_X xydFileName append load out_record out_fmt out_eqn {
+			" %11.5f" = X; " %11.5f\n" = Get(phase_ycalc); }
+		out xydFileName append  
+		Out_String("END\n")
+	}
+
+'macro to write Rietveld fit for Reel
+macro Write_Rietveld_xyd
+	{
+		out xydFileName 'write the rietveld fit to .xyd file
+		Out_String("tth Y_obs Y_calc Y_res Background\n")
+		xdd_out xydFileName append load out_record out_fmt out_eqn { " %11.5f  " = X; " %11.5f  " = Yobs; " %11.5f  " = Ycalc; " %11.5f" = Yobs-Ycalc; "%11.5f\n" = Get(bkg);} 
+		out xydFileName append
+		Out_String("END OF PHASE\n")
+	}

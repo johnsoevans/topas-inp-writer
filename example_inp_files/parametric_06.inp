@@ -1,0 +1,412 @@
+'-------------------------------------------------------------- 
+'This file describes how to do a parametric Rietveld fit to PXRD patterns of WO3 collected on cooling from
+'room temperature to 90 K as the sample changes from the P21/n phase to the P-1 phase and then to the Pc phase.
+'Its use is described in the tutorial https://topas.webspace.durham.ac.uk/tutorial-surface-3/
+'
+'November 2020
+'file developed from wo3_t0000_04.inp from the surface_new tutorial and gave Rwp 12.649%
+'Set up with #list, for xdds and strs in a format for surface fitting for topas v8 onwards with .sv output
+'With TCHz included gives identical 12.469% to parametric_04.inp for 188 parameters (11 data sets)
+'With TCHz excluded much faster and 12.873% for 184 parameters (11 data sets)
+'Rwp 12.874% in topas v8 2/10/2023 for  11 data sets  184 parameters
+'Rwp 12.805% in topas v8 2/10/2023 for 100 data sets 1163 parameters
+'
+'21/5/2024 switched to using an fn function for cell parameters
+'Rwp 12.873% in topas v8 21/5/2024 for  11 data sets  184 parameters with convolution step 2
+'Rwp 12.807% in topas v8 2/10/2023 for 100 data sets 1163 parameters 100 iters in 651 seconds
+'-------------------------------------------------------------- 
+ 
+r_wp  12.8073436 r_exp  8.94673 r_p  9.93074443 r_wp_dash  18.9317847 r_p_dash  16.4142711 r_exp_dash  13.225035 weighted_Durbin_Watson  100.739622 gof  1.43151113
+ 
+'{{{ 1. Refinement choices, iters, output, backup, etc 
+iters 200 
+chi2_convergence_criteria 0.001 
+continue_after_convergence 
+'do_errors 
+no_LIMIT_warnings 
+load_save_locals 
+out_refinement_stats
+'#define riet_out 'to write various files to separate folders 
+#define write_out  'write results file 
+#define param_cell 'use this to parametrically fit cell parameter 
+ 
+'create backup in first cycle and remove old results.txt file
+#if (Run_Number == 0) 
+ Backup_INP 
+ system_before_save_OUT  { del results.txt } 
+ out "results.txt" append  
+ Out_String("   Temp(K)      Rwp(%)     Perc_P21n    Esd      Scale_P21n  Esd            a_P21n      Esd         b_P21n      Esd         c_P21n      Esd        alpha_P21n   ESD        beta_P21n    Esd        gamma_P21n   Esd       Vol_P21n      Esd        Perc_Pb1     Esd      Scale_Pb1   Esd            a_Pb1       Esd         b_Pb1       Esd         c_Pb1       Esd        alpha_Pb1    ESD        beta_Pb1     Esd        gamma_Pb1    Esd       Vol_Pb1       Esd        Perc_Pc      Esd      Scale_Pc    Esd            a_Pc        Esd         b_Pc        Esd         c_Pc        Esd        alpha_Pc     ESD        beta_Pc      Esd        gamma_Pc     Esd       Vol_Pc        Esd")  
+#endif 
+'}}} 
+ 
+'{{{ 2. Define filenames, temperatures and other metadata for fitting; this format is v8 forwards only 
+'with refine_some just 11 data sets fitted, comment this line out to fit all 100
+'#define refine_some
+#ifdef refine_some 'fit just 11 data sets
+	#list Files T_val Range_val
+		{ 
+			"d9_02592.raw" 300    1
+			"d9_02592.raw" 278   11
+			"d9_02592.raw" 257   21
+			"d9_02592.raw" 236   31
+			"d9_02592.raw" 214   41
+			"d9_02592.raw" 193   51
+			"d9_02592.raw" 172   61
+			"d9_02592.raw" 151   71
+			"d9_02592.raw" 130   81
+			"d9_02592.raw" 109   91
+			"d9_02592.raw"  90  100
+		}
+#else 'fit all 100 data sets
+	'{{{ 100 filenames and related information folded away here
+	#list Files T_val Range_val
+		{ 
+			"d9_02592.raw" 300    1   
+			"d9_02592.raw" 297    2 
+			"d9_02592.raw" 295    3 
+			"d9_02592.raw" 293    4 
+			"d9_02592.raw" 290    5 
+			"d9_02592.raw" 288    6 
+			"d9_02592.raw" 286    7 
+			"d9_02592.raw" 284    8 
+			"d9_02592.raw" 282    9 
+			"d9_02592.raw" 280   10 
+			"d9_02592.raw" 278   11 
+			"d9_02592.raw" 276   12 
+			"d9_02592.raw" 274   13 
+			"d9_02592.raw" 271   14 
+			"d9_02592.raw" 269   15 
+			"d9_02592.raw" 267   16 
+			"d9_02592.raw" 265   17 
+			"d9_02592.raw" 263   18 
+			"d9_02592.raw" 261   19 
+			"d9_02592.raw" 259   20 
+			"d9_02592.raw" 257   21 
+			"d9_02592.raw" 255   22 
+			"d9_02592.raw" 252   23 
+			"d9_02592.raw" 250   24 
+			"d9_02592.raw" 248   25 
+			"d9_02592.raw" 246   26 
+			"d9_02592.raw" 244   27 
+			"d9_02592.raw" 242   28 
+			"d9_02592.raw" 240   29 
+			"d9_02592.raw" 238   30 
+			"d9_02592.raw" 236   31 
+			"d9_02592.raw" 233   32 
+			"d9_02592.raw" 231   33 
+			"d9_02592.raw" 229   34 
+			"d9_02592.raw" 227   35 
+			"d9_02592.raw" 225   36 
+			"d9_02592.raw" 223   37 
+			"d9_02592.raw" 221   38 
+			"d9_02592.raw" 219   39 
+			"d9_02592.raw" 216   40 
+			"d9_02592.raw" 214   41 
+			"d9_02592.raw" 212   42 
+			"d9_02592.raw" 210   43 
+			"d9_02592.raw" 208   44 
+			"d9_02592.raw" 206   45 
+			"d9_02592.raw" 204   46 
+			"d9_02592.raw" 202   47 
+			"d9_02592.raw" 200   48 
+			"d9_02592.raw" 197   49 
+			"d9_02592.raw" 195   50 
+			"d9_02592.raw" 193   51 
+			"d9_02592.raw" 191   52 
+			"d9_02592.raw" 189   53 
+			"d9_02592.raw" 187   54 
+			"d9_02592.raw" 185   55 
+			"d9_02592.raw" 183   56 
+			"d9_02592.raw" 181   57 
+			"d9_02592.raw" 178   58 
+			"d9_02592.raw" 176   59 
+			"d9_02592.raw" 174   60 
+			"d9_02592.raw" 172   61 
+			"d9_02592.raw" 170   62 
+			"d9_02592.raw" 168   63 
+			"d9_02592.raw" 166   64 
+			"d9_02592.raw" 164   65 
+			"d9_02592.raw" 162   66 
+			"d9_02592.raw" 159   67 
+			"d9_02592.raw" 157   68 
+			"d9_02592.raw" 155   69 
+			"d9_02592.raw" 153   70 
+			"d9_02592.raw" 151   71 
+			"d9_02592.raw" 149   72 
+			"d9_02592.raw" 147   73 
+			"d9_02592.raw" 145   74 
+			"d9_02592.raw" 143   75 
+			"d9_02592.raw" 140   76 
+			"d9_02592.raw" 138   77 
+			"d9_02592.raw" 136   78 
+			"d9_02592.raw" 134   79 
+			"d9_02592.raw" 132   80 
+			"d9_02592.raw" 130   81 
+			"d9_02592.raw" 128   82 
+			"d9_02592.raw" 126   83 
+			"d9_02592.raw" 124   84 
+			"d9_02592.raw" 121   85 
+			"d9_02592.raw" 119   86 
+			"d9_02592.raw" 117   87 
+			"d9_02592.raw" 115   88 
+			"d9_02592.raw" 113   89 
+			"d9_02592.raw" 111   90 
+			"d9_02592.raw" 109   91 
+			"d9_02592.raw" 107   92 
+			"d9_02592.raw" 105   93 
+			"d9_02592.raw" 102   94 
+			"d9_02592.raw" 100   95 
+			"d9_02592.raw"  98   96 
+			"d9_02592.raw"  96   97 
+			"d9_02592.raw"  94   98 
+			"d9_02592.raw"  92   99 
+			"d9_02592.raw"  90  100    
+		}
+		'}}}
+#endif
+
+'here's the magic: set up a counting variable for xdds and create the xdd set for each file in #list
+'i set at this top level (before xdds) - necessary for existing_prm to work
+prm i = 0;	
+Create_XDDs(#list_n T_val) 
+'New_XDDs(#list_n T_val) 'old syntax command
+'}}} 
+
+'{{{ 3. Overall parameters describing parametric fitting and macros feeding into each of the 3 phases
+#ifdef param_cell 
+'equations describing cell parameter vs T and angle vs T
+	fn cell_fT(a0,grad,theta,te) = a0 + (grad/(Exp(theta/te)-1));
+	fn angle_fT(a0,a1,a2,te) = a0 * (1 + a1 * 1e-6 * te + a2 * 1e-9 * te^2 );
+
+'cell edge description refineable parameters for Pc, P-1 and P21/n phases
+   prm zero_ma   7.29874518` prm   grad_ma  0.000500349748` val_on_continue = Val*Rand(0.99,1.01); prm  theta_ma  60.0205569`
+   prm zero_mb   7.49912737` prm   grad_mb  0.00888545488` val_on_continue = Val*Rand(0.99,1.01); prm !theta_mb  =theta_ma;:60.0205569`
+   prm zero_mc   7.65354657` prm   grad_mc  0.00864660405` val_on_continue = Val*Rand(0.99,1.01); prm !theta_mc  =theta_ma;:60.0205569`
+   prm zero_ta   7.30989963` prm   grad_ta -5.41572581e-05` val_on_continue = Val*Rand(0.99,1.01); prm !theta_ta  =theta_ma;:60.0205569`
+   prm zero_tb   7.48556928` prm   grad_tb  0.00838039321` val_on_continue = Val*Rand(0.99,1.01); prm !theta_tb  =theta_ma;:60.0205569`
+   prm zero_tc   7.64888484` prm   grad_tc  0.0102861025` val_on_continue = Val*Rand(0.99,1.01); prm !theta_tc  =theta_ma;:60.0205569`
+   prm zero_pa   5.27256347` prm   grad_pa  0.00247186279` val_on_continue = Val*Rand(0.99,1.01); prm !theta_pa  =theta_ma;:60.0205569`
+   prm zero_pb   5.15772684` prm   grad_pb  0.00154598106` val_on_continue = Val*Rand(0.99,1.01); prm !theta_pb  =theta_ma;:60.0205569`
+   prm zero_pc   7.65772806` prm   grad_pc  0.00555767741` val_on_continue = Val*Rand(0.99,1.01); prm !theta_pc  =theta_ma;:60.0205569`
+'cell angle descriptionrefineable parameters for Pc, P-1 and P21/n phases                      
+   prm  beta_m0  91.1982055` prm   beta_m1 -12.7701711` val_on_continue = 0;  prm    beta_m2  1.39043877` val_on_continue = 0; 
+   prm  alph_t0  89.1945298` prm   alph_t1 -52.6577284` val_on_continue = 0;  prm    alph_t2  171.585628` val_on_continue = 0; 
+   prm  beta_t0  89.5889293` prm   beta_t1  163.798877` val_on_continue = 0;   prm   beta_t2 -470.696672` val_on_continue = 0; 
+   prm  gamm_t0  89.6598446` prm   gamm_t1  109.455795` val_on_continue = 0;   prm   gamm_t2 -233.986536` val_on_continue = 0; 
+   prm  beta_p0  91.8703395` prm   beta_p1 -31.7309835` val_on_continue = 0;  prm    beta_p2  111.824913` val_on_continue = 0; 
+#endif 
+'commands that go into each of the phases
+macro Phase_Common(n, scv)
+   { 
+      extra_X_right 2
+      local sc scv min 1e-10
+      scale = sc;
+      out "results.txt" append
+      output_lines
+    }  
+'}}}  	 
+
+'{{{ 4. This for xdds section defines all of the Rietveld fits for all of the created xdds
+'local parameters are used which get saved to the .sv stored values file then read in on subsequent refinements
+'topas automatically sorts out local and global parameters according to names
+for xdds {
+	xdd_file = #Files(i);  'set up filename
+	local !te = #T_val(i); 'set up temperature
+	range = #Range_val(i); 'set up range number in raw data file
+	existing_prm i += 1;
+	x_calculation_step = Yobs_dx_at(Xo); convolution_step 2 
+	start_X 20  
+    finish_X 80.0  
+    LP_Factor(!th2_monochromator, 0) 
+	CuKa2(0.0001) 
+	Zero_Error(!zero, 0.0) 'refine height for each phase so zero point not needed 
+    local height -0.0347520605` min = -0.5; max = 0.5; del 0.001  th2_offset = -2 57.2957795130823 (height) Cos(Th) / Rs; 
+	Simple_Axial_Model(!axial, 5.74444) 'from a standard on instrument
+    local  individual_b -0.972990527` min -1 max 10 'single bvalue for all phases 
+	scale_pks = (Exp(-2*individual_b/(2 D_spacing)^2)); 'bvalue for all phases in each dataset 
+    local bkg0  61.3670083`
+    local bkg1 -57.91513`
+    local bkg2  33.8441769`
+    local bkg3 -23.5859545`
+    local bkg4  13.8796824`
+    local bkg5 -4.42188244`
+    bkg = bkg0; = bkg1; = bkg2; = bkg3; = bkg4; = bkg5;
+   
+	'{{{ write out xdd specific results here; phase-specific info done for each str via the Phase_Common macro    
+	#ifdef write_out 
+		out "results.txt" append 
+		Out(te, "\n %11.5f") 
+		Out(Get (r_wp), " %11.5f") 
+	#endif    
+	'write out rietveld fits and/or obs, calc, diff files here if requested   
+	#ifdef riet_out 
+      xdd_out = Concat("riet_plots\riet_", #Range_val(i-1), ".xyd"); load out_record out_fmt out_eqn { " %11.5f " = X; " %11.5f" = Yobs; " %11.5f" = Yobs; " %11.5f\n" = Yobs-Ycalc;} 
+      xdd_out = Concat("obs_plots\obs_", #Range_val(i-1), ".xy"); load out_record out_fmt out_eqn { " %11.5f " = X; " %11.5f\n" = Yobs; } 
+      xdd_out = Concat("calc_plots\calc_", #Range_val(i-1), ".xy"); load out_record out_fmt out_eqn { " %11.5f " = X; " %11.5f\n" = Ycalc; } 
+      xdd_out = Concat("diff_plots\diff_", #Range_val(i-1), ".xy"); load out_record out_fmt out_eqn { " %11.5f " = X; " %11.5f\n" = Yobs-Ycalc; } 
+    #endif 
+
+   '}}} 
+    
+   '{{{ P21/n structure information    
+	str 
+		phase_name p21n 
+		#ifdef param_cell 
+			a = cell_fT(zero_ma,grad_ma,theta_ma,te);:7.300100`
+			b = cell_fT(zero_mb,grad_mb,theta_mb,te);:7.523780`
+			c = cell_fT(zero_mc,grad_mc,theta_mc,te);:7.692586`
+			al 90.       
+			be = angle_fT(beta_m0,beta_m1,beta_m2,te);:90.86023`
+			ga 90 
+		#else 
+			a  @  7.303501 mlpaminmax 
+			b  @  7.535426 mlpbminmax 
+			c  @  7.687912 mlpcminmax 
+			al   90.       
+			be @  91.01850 mbetminmax 
+			ga   90. 
+		#endif           
+		space_group "P121/n1" 
+		Phase_Common(1, 7.60389134e-07`)
+		weight_percent  76.937`
+		Phase_Density_g_on_cm3( 7.28323831`) 
+		r_bragg  5.62048616
+		'ideal val2 coordinates from Woodward P21/n 
+		site W1  A1( xW1, 0.25283` , 0.25130) A2( yW1, 0.03197` , 0.02770) A3( zW1, 0.27936` , 0.28650) occ     W 1.0000 beq !bval 0 
+		site W2  A1( xW2, 0.24587` , 0.24810) A2( yW2, 0.02903` , 0.03420) A3( zW2, 0.78506` , 0.78150) occ     W 1.0000 beq !bval 0 
+		site O3  A1(!xO3, 0.00143 , 0.00143) A2(!yO3, 0.03550 , 0.03550) A3(!zO3, 0.21526 , 0.21526) occ     O 1.0000 beq !bval 0 
+		site O4  A1(!xO4, 0.99858 , 0.99858) A2(!yO4, 0.46301 , 0.46301) A3(!zO4, 0.21782 , 0.21782) occ     O 1.0000 beq !bval 0 
+		site O5  A1(!xO5, 0.28165 , 0.28165) A2(!yO5, 0.26251 , 0.26251) A3(!zO5, 0.28384 , 0.28384) occ     O 1.0000 beq !bval 0 
+		site O6  A1(!xO6, 0.20905 , 0.20905) A2(!yO6, 0.25985 , 0.25985) A3(!zO6, 0.73375 , 0.73375) occ     O 1.0000 beq !bval 0 
+		site O7  A1(!xO7, 0.27950 , 0.27950) A2(!yO7, 0.04128 , 0.04128) A3(!zO7, 0.00461 , 0.00461) occ     O 1.0000 beq !bval 0 
+		site O8  A1(!xO8, 0.28259 , 0.28259) A2(!yO8, 0.48854 , 0.48854) A3(!zO8, 0.99449 , 0.99449) occ     O 1.0000 beq !bval 0	 
+		Strain_G(strainG_p21n, 0.182835275` vcstrain) 
+		Strain_L(strainL_p21n, 0.157337816` vcstrain) 
+	'}}}} 
+	'{{{ Pb1 structure information    
+	str 
+		phase_name pb1 
+		#ifdef param_cell 
+			a = cell_fT(zero_ta,grad_ta,theta_ta,te);:7.309655`
+			b = cell_fT(zero_tb,grad_tb,theta_tb,te);:7.523406`
+			c = cell_fT(zero_tc,grad_tc,theta_tc,te);:7.695326`
+			al = angle_fT(alph_t0,alph_t1,alph_t2,te);:88.83427`
+			be = angle_fT(beta_t0,beta_t1,beta_t2,te);:90.64701`
+			ga = angle_fT(gamm_t0,gamm_t1,gamm_t2,te);:90.73722`
+		#else 
+			a  @  7.339178 tlpaminmax  
+			b  @  7.507749 tlpbminmax  
+			c  @  7.680995 tlpcminmax  
+			al @  88.90828 tlpalminmax 
+			be @  90.60022 tlpbeminmax 
+			ga @  90.95586 tlpgaminmax 
+		#endif 
+		space_group "P-1" 
+		Phase_Common(2, 4.87607063e-06`)
+		weight_percent  17.403`
+		Phase_Density_g_on_cm3( 7.31565953`) 
+		r_bragg  3.17924998
+		'ideal val2 coordinates from Woodward 80053 
+		site W21  A1( xW21, 0.26204` , 0.25660) A2( yW21, 0.02519` , 0.02590) A3( zW21, 0.28980` , 0.28500) occ     W 1.0000 beq !bval 0 
+		site W22  A1( xW22, 0.24417` , 0.25020) A2( yW22, 0.51680` , 0.52800) A3( zW22, 0.20998` , 0.21580) occ     W 1.0000 beq !bval 0 
+		site W23  A1( xW23, 0.24173` , 0.24380) A2( yW23, 0.02875` , 0.03130) A3( zW23, 0.78053` , 0.78170) occ     W 1.0000 beq !bval 0 
+		site W24  A1( xW24, 0.25204` , 0.24990) A2( yW24, 0.54015` , 0.53380) A3( zW24, 0.72442` , 0.71900) occ     W 1.0000 beq !bval 0 
+		site O25  A1(!xO25, 0.00120 , 0.00120) A2(!yO25, 0.03400 , 0.03400) A3(!zO25, 0.21090 , 0.21090) occ     O 1.0000 beq !bval 0 
+		site O26  A1(!xO26, 0.50100 , 0.50100) A2(!yO26, 0.53790 , 0.53790) A3(!zO26, 0.21700 , 0.21700) occ     O 1.0000 beq !bval 0 
+		site O27  A1(!xO27, 0.00070 , 0.00070) A2(!yO27, 0.46400 , 0.46400) A3(!zO27, 0.28570 , 0.28570) occ     O 1.0000 beq !bval 0 
+		site O28  A1(!xO28, 0.49940 , 0.49940) A2(!yO28, 0.96480 , 0.96480) A3(!zO28, 0.28850 , 0.28850) occ     O 1.0000 beq !bval 0 
+		site O29  A1(!xO29, 0.28750 , 0.28750) A2(!yO29, 0.26000 , 0.26000) A3(!zO29, 0.28430 , 0.28430) occ     O 1.0000 beq !bval 0 
+		site O10  A1(!xO10, 0.21150 , 0.21150) A2(!yO10, 0.76190 , 0.76190) A3(!zO10, 0.21570 , 0.21570) occ     O 1.0000 beq !bval 0 
+		site O11  A1(!xO11, 0.21170 , 0.21170) A2(!yO11, 0.25820 , 0.25820) A3(!zO11, 0.72860 , 0.72860) occ     O 1.0000 beq !bval 0 
+		site O12  A1(!xO12, 0.28460 , 0.28460) A2(!yO12, 0.76080 , 0.76080) A3(!zO12, 0.77260 , 0.77260) occ     O 1.0000 beq !bval 0 
+		site O13  A1(!xO13, 0.28780 , 0.28780) A2(!yO13, 0.04120 , 0.04120) A3(!zO13, 0.00370 , 0.00370) occ     O 1.0000 beq !bval 0 
+		site O14  A1(!xO14, 0.28400 , 0.28400) A2(!yO14, 0.54200 , 0.54200) A3(!zO14, 0.49610 , 0.49610) occ     O 1.0000 beq !bval 0 
+		site O15  A1(!xO15, 0.21300 , 0.21300) A2(!yO15, 0.48410 , 0.48410) A3(!zO15, 0.99170 , 0.99170) occ     O 1.0000 beq !bval 0 
+		site O16  A1(!xO16, 0.20960 , 0.20960) A2(!yO16, 0.98180 , 0.98180) A3(!zO16, 0.50620 , 0.50620) occ     O 1.0000 beq !bval 0 
+		Strain_G(strainG_pb1, 0.499986112` vcstrain) 
+		Strain_L(strainL_pb1, 0.000667022518` vcstrain) 
+	'}}}    
+	'{{{ Pc structure information    
+	str 
+		phase_name pc 
+		#ifdef param_cell 
+			a = cell_fT(zero_pa,grad_pa,theta_pa,te);:5.279790`
+			b = cell_fT(zero_pb,grad_pb,theta_pb,te);:5.162246`
+			c = cell_fT(zero_pc,grad_pc,theta_pc,te);:7.673975`
+			al 90.       
+			be = angle_fT(beta_p0,beta_p1,beta_p2,te);:91.67751`
+			ga 90 
+		#else 
+			a @   5.270670 plpaminmax 
+			b @   5.182303 plpbminmax 
+			c @   7.696197 plpcminmax 
+			al   90.       
+			be @  91.79753 pbetminmax 
+			ga   90.       
+		#endif 
+		local plpvol = Get(cell_volume);:208.980565`
+		space_group "P1c1" 
+		Phase_Common(3, 8.9857044e-07`)
+		weight_percent  60.881`
+		Phase_Density_g_on_cm3( 7.38054187`) 
+		r_bragg  3.1667539
+		'ideal val2 coordinates from Woodward Pc 
+		site W31  A1(!xW31,-0.00400 ,-0.00400) A2( yW31,-0.01223` ,-0.01400) A3( zW31,-0.01928` ,-0.02180) occ     W 1.0000 beq !bval 0 
+		site W32  A1( xW32, 0.50715` , 0.50800) A2( yW32, 0.47217` , 0.47200) A3( zW32, 0.05578` , 0.05500) occ     W 1.0000 beq !bval 0 
+		site O33  A1(!xO33, 0.21300 , 0.21300) A2(!yO33, 0.70800 , 0.70800) A3(!zO33,-0.01300 ,-0.01300) occ     O 1.0000 beq !bval 0 
+		site O34  A1(!xO34, 0.28500 , 0.28500) A2(!yO34, 0.21500 , 0.21500) A3(!zO34, 0.06300 , 0.06300) occ     O 1.0000 beq !bval 0 
+		site O35  A1(!xO35, 0.70860 , 0.70860) A2(!yO35, 0.79100 , 0.79100) A3(!zO35,-0.02300 ,-0.02300) occ     O 1.0000 beq !bval 0 
+		site O36  A1(!xO36, 0.79500 , 0.79500) A2(!yO36, 0.29000 , 0.29000) A3(!zO36, 0.05700 , 0.05700) occ     O 1.0000 beq !bval 0 
+		site O37  A1(!xO37,-0.00400 ,-0.00400) A2(!yO37, 0.07170 , 0.07170) A3(!zO37, 0.76400 , 0.76400) occ     O 1.0000 beq !bval 0 
+		site O38  A1(!xO38, 0.50100 , 0.50100) A2(!yO38, 0.42010 , 0.42010) A3(!zO38, 0.77800 , 0.77800) occ     O 1.0000 beq !bval 0 
+		Strain_G(strainG_pc, 0.151786789` vcstrain) 
+		Strain_L(strainL_pc, 0.302867202` vcstrain) 
+   '}}}    
+
+   for phase_ndx {
+   	'add this instrumental peakshape if you like to exactly mirror earlier tutorial
+   	'TCHZ_Peak_Type(pkuc,-0.875434846`,pkvc,  0.593231944`,pkwc,-0.0866350434`,!pkzc,0.0001,pkyc, 0.0001`,!pkxc, 0.0001) 
+   }   	
+   
+}
+'}}} 
+ 
+'{{{ 5. Some macros here used in the strs and for outputting parameters
+'these set min and max values for cells if allowed to refine individually 
+'useful for resetting things to "sensible" values 
+prm !tol 1.1 
+macro mlpaminmax  { min =7.301/tol; max = 7.301*tol; val_on_continue = 7.301;} 
+macro mlpbminmax  { min =7.539/tol; max = 7.539*tol; val_on_continue = 7.539;} 
+macro mlpcminmax  { min =7.692/tol; max = 7.692*tol; val_on_continue = 7.692;} 
+macro tlpaminmax  { min =7.310/tol; max = 7.310*tol; val_on_continue = 7.310;} 
+macro tlpbminmax  { min =7.508/tol; max = 7.508*tol; val_on_continue = 7.508;} 
+macro tlpcminmax  { min =7.678/tol; max = 7.678*tol; val_on_continue = 7.678;} 
+macro plpaminmax  { min =5.274/tol; max = 5.274*tol; val_on_continue = 5.274;} 
+macro plpbminmax  { min =5.159/tol; max = 5.159*tol; val_on_continue = 5.159;} 
+macro plpcminmax  { min =7.662/tol; max = 7.662*tol; val_on_continue = 7.662;} 
+macro pbetminmax  { min 91.6 max 91.8 val_on_continue = 91.68;} 
+macro mbetminmax  { min 90.0 max 92.0 val_on_continue = 90.86;} 
+macro tlpalminmax { min 87.0 max 90.0 val_on_continue = 88.87;} 
+macro tlpbeminmax { min 90.0 max 92.0 val_on_continue = 90.85;} 
+macro tlpgaminmax { min 90.0 max 92.0 val_on_continue = 90.79;} 
+'what to write out for each phase 
+macro output_lines { 
+	#ifdef write_out 
+	  	Out(Get(weight_percent), " %11.5f", " %11.5f") 
+		Out(Get(scale), " %11.9f", " %11.9f") 
+		Out(Get(a), " %11.5f", " %11.5f") 
+		Out(Get(b), " %11.5f", " %11.5f") 
+		Out(Get(c), " %11.5f", " %11.5f") 
+		Out(Get(al), " %11.5f", " %11.5f") 
+		Out(Get(be), " %11.5f", " %11.5f") 
+		Out(Get(ga), " %11.5f", " %11.5f") 
+		Out(Get(cell_volume), " %11.5f", " %11.5f") 
+	#endif 
+}
+'control min/max values on fractional coordinates and size/strain
+macro A1(param,val,val2) {x param val min = val2 - 0.05; max = val2 + 0.05;  val_on_continue = val2;} 
+macro A2(param,val,val2) {y param val min = val2 - 0.05; max = val2 + 0.05;  val_on_continue = val2;} 
+macro A3(param,val,val2) {z param val min = val2 - 0.05; max = val2 + 0.05;  val_on_continue = val2;} 
+macro vcstrain {val_on_continue = Rand(0.05,0.15); min 0.0001 max 0.5} 
+macro vcsize {val_on_continue = Rand(100,1000); min 10 max 10000} 
+'}}} 

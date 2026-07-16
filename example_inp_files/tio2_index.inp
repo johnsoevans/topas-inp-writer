@@ -1,0 +1,43 @@
+'Indexing INP file
+'Used in the tutorial https://topas.webspace.durham.ac.uk/tutorial_tio2index/ for indexing a lab pattern of TiO2
+
+'following quantities are common things you might want to change for indexing
+seed
+index_zero_error
+index_lam 1.5406
+'index_min_lp 1
+'index_max_lp 40
+
+'You can include or exclude crystal systems by commenting in/out the lines below.
+Bravais_Cubic_sgs
+Bravais_Trigonal_Hexagonal_sgs
+Bravais_Tetragonal_sgs
+Bravais_Orthorhombic_sgs
+Bravais_Monoclinic_sgs
+Bravais_Triclinic_sgs
+
+'Peak positions extracted from fitting the same data in tutorial https://topas.webspace.durham.ac.uk/tutorial_tio2peakfit/
+'For accurate positions use the best instrumental peak shape description possible
+'Using an internal standard like silicon lets you correct for any experimental artefacts
+
+load index_th2 index_I {
+	'Paste positions and areaa values below here
+	36.1397990	 601.766413
+	39.2475489	 86.8457649
+	41.2986185	 294.981236
+	44.0960637	 113.069378
+	54.3778813	 854.169193
+	56.6781592	 263.059163
+	62.8179927	 115.655192
+	64.0972935	 126.977269
+	65.5733631	 11.1309122
+	69.0537887	 312.783969
+	69.8586090	 143.643397
+	72.4702535	 16.8939491
+	76.5940077	 32.5261153
+	79.8820917	 17.2423583
+	82.3809157	 68.7857566
+	84.2939417	 48.6984405
+	87.5158448	 17.9090163
+	89.5986433	 115.225801
+}

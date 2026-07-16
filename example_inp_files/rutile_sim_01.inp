@@ -1,0 +1,36 @@
+' Example input file for simulating a powder diffraction with a str read in from a CIF file
+' Produced by the "Simulate pattern from CIF" menu of topas-editor
+' A file called dummy.xy is created in TOPAS as dummy observed data; this defines the 2-theta range and step size
+' The calculated pattern is plotted in TOPAS so user can see it
+' The calculated pattern is saved to a sensible filename in the directory of the initial cif
+' The calculated pattern assumes Cu Ka2 radiation; change this as needed
+' A constant background of 100 is used
+' The peak shape is for a typical laboratory diffractometer but could be replaced with e.g. size/strain broadening descriptors
+' As there is a single structure the "for strs" construct isn't needed, but it means additional strs could be inserted
+' John, July 2026
+
+iters 0
+yobs_eqn !dummy.xy=1;
+min 0 max 150 del 0.01
+xdd_out d:\data\topas_workshop\tio2_rietveld\rutile.cif_sim_01.xy load out_record out_fmt out_eqn { " %11.5f  " = X; " %11.5f\n" = Ycalc; }
+LP_Factor(!th2_monochromator,0)
+CuKa2(0.0001)
+bkg 100
+
+	'Structural information from d:\data\topas_workshop\tio2_rietveld\rutile.cif
+	str
+		a 4.594    
+		b 4.594    
+		c 2.959    
+		al 90.      
+		be 90.      
+		ga 90.      
+		space_group "P42/mnm"
+		site Ti1    x 0.00000       y 0.00000       z 0.00000       occ Ti    1.00000    beq 0.70000      
+		site O1     x 0.30600       y 0.30600       z 0.00000       occ O     1.00000    beq 0.70000      
+		scale @  0.0001`
+		r_bragg  13683.2463
+		Phase_Density_g_on_cm3( 4.24730344)
+		for strs {
+			TCHZ_Peak_Type(pku, 0.00039`,pkv, -0.00221`,pkw, -0.00146`,!pkz, 0.0000,pkx, 0.00957`, pky, 0.0001`) 
+		}
