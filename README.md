@@ -13,8 +13,9 @@ what the skill does). This repo exists to back up the skill and to serve version
 - `VERSION` — single line, current version number (semver). Bumped on every release.
 - `CHANGELOG.md` — human-readable log of what changed per version.
 
-`instructions.txt` (maintainer scratch notes) and `__pycache__/` are excluded via
+`__pycache__/` is excluded via
 `.gitignore` and never uploaded.
+
 
 ## Cutting a new release
 
@@ -59,7 +60,7 @@ releases, edit `.github/release-exclude.txt`.
 
 ## Downloading a specific version programmatically
 
-For the `topas-editor-extension` `.ts` installer:
+For the `topas-editor-extension` `TopasAisetup.ts` installer:
 
 - **Latest release metadata** (version + download URL), no auth needed for a public repo:
   ```
