@@ -40,8 +40,13 @@ If you forget to bump `VERSION` on a given push, the workflow finds the tag
 already exists and silently does nothing — safe to push freely without
 worrying about accidentally re-releasing.
 
-No build step, no other CI. The `.zip` GitHub generates from the tag *is* the
-release artifact.
+The workflow also builds the release `.zip` itself from a filtered copy of the repo
+(see `.github/release-exclude.txt`) rather than using GitHub's automatic full-repo
+zipball — so `README.md`, `CHANGELOG.md`, `LICENSE`, `VERSION`, `.gitignore`, and
+`.github/` are left out. The zip only contains the actual skill payload
+(`SKILL.md`, `references/`, `scripts/`, `example_inp_files/`), wrapped in a single
+top-level `topas-inp-writer/` folder. To change what's excluded from future
+releases, edit `.github/release-exclude.txt`.
 
 ## Access model
 
@@ -61,36 +66,30 @@ For the `topas-editor-extension` `.ts` installer:
   GET https://api.github.com/repos/johnsoevans/topas-inp-writer/releases/latest
   ```
   Relevant fields in the JSON response:
-  - `tag_name` — e.g. `"v1.0.0"` → this is your version string.
-  - `zipball_url` — e.g.
-    `"https://api.github.com/repos/johnsoevans/topas-inp-writer/zipball/v1.0.0"`
-    — redirects to a downloadable zip of the repo at that tag.
-
-- **A specific version's zip directly** (no API call needed if you already know the tag):
-  ```
-  https://github.com/johnsoevans/topas-inp-writer/archive/refs/tags/vX.Y.Z.zip
-  ```
+  - `tag_name` — e.g. `"v1.0.2"` → this is your version string.
+  - `published_at` — e.g. `"2026-07-16T13:00:00Z"` → the release date.
+  - `assets[].name` / `assets[].browser_download_url` — find the asset named
+    `topas-inp-writer.zip` and use its `browser_download_url`. This is the
+    filtered skill-only zip built by the release workflow (see above), *not*
+    GitHub's auto-generated `zipball_url` (which would include the whole repo,
+    README/CHANGELOG included).
 
 - GitHub API rate limits unauthenticated requests to 60/hour per IP, which is
   plenty for an occasional manual "check for updates" click. No token needed
   for a public repo.
 
-### Suggested install behavior
+### Actual install behavior (implemented in topas-editor's `TopasAiSetup.ts`)
 
-When the `.ts` command downloads and installs into `.claude/skills/`:
-
-1. Extract the zip (it will contain a single top-level folder like
-   `topas-inp-writer-1.0.0/` — strip that prefix so contents land directly in
-   the target `topas-inp-writer/` skill folder).
-2. After extraction, write a `version.txt` file in the skill's top directory containing
-   the version and the download date, e.g.:
+1. Fetch `releases/latest`, read `tag_name`, `published_at`, and the
+   `topas-inp-writer.zip` asset's `browser_download_url`.
+2. Download and extract that zip (it contains a single top-level
+   `topas-inp-writer/` folder — strip that prefix so contents land directly in
+   the target `.claude/skills/topas-inp-writer/` folder).
+3. Write a `version.txt` file in the skill's top directory:
    ```
-   1.0.0
+   v1.0.2
+   Released: 2026-07-16
    Installed: 2026-07-16
    ```
-   (Read the version from the release's `tag_name`, not from the bundled `VERSION`
-   file, since they're guaranteed to match but `tag_name` is what the API hands you
-   directly.)
-3. `version.txt` should itself be listed in `.gitignore` if `.claude/skills/` is ever
-   put under its own git tracking on the target machine, since it's install-local
-   metadata, not source.
+   (`Released` comes from `published_at`, `Installed` is today's date at
+   install time.)
