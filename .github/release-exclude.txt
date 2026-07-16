@@ -1,0 +1,7 @@
+.git
+.github
+.gitignore
+README.md
+CHANGELOG.md
+LICENSE
+VERSION

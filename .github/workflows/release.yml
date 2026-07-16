@@ -36,6 +36,14 @@ jobs:
             echo "Release v${{ steps.version.outputs.version }}" > /tmp/notes.md
           fi
 
+      - name: Build skill-only zip
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          mkdir /tmp/topas-inp-writer
+          rsync -a --exclude-from='.github/release-exclude.txt' ./ /tmp/topas-inp-writer/
+          cd /tmp
+          zip -r topas-inp-writer.zip topas-inp-writer
+
       - name: Tag and release
         if: steps.check.outputs.exists == 'false'
         env:
@@ -45,4 +53,5 @@ jobs:
           git push origin "v${{ steps.version.outputs.version }}"
           gh release create "v${{ steps.version.outputs.version }}" \
             --title "v${{ steps.version.outputs.version }}" \
-            --notes-file /tmp/notes.md
+            --notes-file /tmp/notes.md \
+            /tmp/topas-inp-writer.zip
