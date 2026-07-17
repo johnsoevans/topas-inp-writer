@@ -1,67 +1,22 @@
-# example_inp_files
+# Curated worked examples
 
-Curated, real, annotated `.inp` files (not minimal syntax demos). Prefer these as a style/structure reference before `references/examples-index.md` + a bundled TOPAS example.
+Real, working `.inp` files bundled directly in this folder (no `TOPAS_DIR` needed to read them, unlike the skill's larger ~280-file corpus indexed in `references/examples-index.md`). Prefer one of these as a starting point before writing from scratch — copy its structure and adapt names/values.
 
-## Files
+**Every file documents itself**: each has its own header comment (`/* ... */` or `'`-comments) explaining what it demonstrates, and templates additionally carry a "WHAT TO CHANGE" checklist. Read that header first — this README is a lookup index pointing at it, not a duplicate of it.
 
-### `parametric_06.inp`
-Parametric (sequential) Rietveld fit, ~11-100 variable-temperature WO3 patterns through 3 phase transitions, 300K→90K. Durham "surface_3" tutorial.
+**Adding a new example**: add one row to the table below (type + one line on what's distinctive about it, taken from the file's own header comment) and, if it forms a pair/derives from another file here, a line under "Relationships." Nothing else in this file needs touching.
 
-- `#list` + `Create_XDDs(...)` — one `xdd` per table row (v8-style multi-pattern setup)
-- `for xdds { }` / `for strs { }` loops, `local` per-dataset params, `existing_prm i += 1;` counter
-- `fn cell_fT(...)`/`fn angle_fT(...)` — temperature-dependent cell/angles, `#ifdef param_cell`
-- `val_on_continue` with `Rand(0.99,1.01)` restarts for `continue_after_convergence`
-- Bound-setting macros: `mlpaminmax`, `A1`/`A2`/`A3`, `vcstrain`, `vcsize`
-- `Out_String`/`Out(...)` results output, `Phase_Common(n, scv)` macro
-- Gotcha: `use_stored_values` is **invalid in TOPAS v8** (`unknown or misplaced keyword`) — delete it; `local` in `for xdds{}` auto-saves to `.sv` now
+| File | Type | Distinctive |
+|---|---|---|
+| `bragg_brentano_template.inp` | Rietveld (template) | Clean lab Bragg-Brentano fundamental-parameters instrument skeleton (Ge(111) monochromator, Cu Kα1). Commented-out optional extras: preferred orientation, Stephens broadening, `CS_L`/`Strain_L`. |
+| `tof_template.inp` | Rietveld (template) | The only neutron time-of-flight example — `TOF_XYE`/`TOF_LAM`/`TOF_x_axis_calibration`/`TOF_Exponential`/`TOF_PV` macro family. Same template/checklist structure as `bragg_brentano_template.inp`, for TOF geometry instead. |
+| `y2o3_demo_stage3.inp` | Rietveld (real fit) | Real fully-refined single-phase cubic Y2O3 fit: preferred orientation (March-Dollase), Stephens anisotropic broadening, artifact-peak exclusion, CIF export, full `C_matrix_normalized` correlation matrix. |
+| `rutile_sim_01.inp` | Simulation (`iters 0`, no refinement) | Shortest file — forward pattern simulation from a CIF-derived structure (TOPAS-Editor's "Simulate pattern from CIF"). |
+| `tio2_peak_fit_01.inp` | Deconvolution / peak-fitting | Real lab data, one shared peak shape, no structural model — extracts peak positions/intensities. Documents the GUI peak-search → paste-into-file workflow. |
+| `tio2_index.inp` | Indexing | Peak list taken directly from `tio2_peak_fit_01.inp`'s output. All six Bravais-lattice search macros left active. |
+| `d8_01612_vt_reel_02.inp` | Rietveld (multi-phase, variable-temperature, sequential) | Most complex file here: ~68-pattern VT sequence through 4 real phases of a topotactic transition, spherical-harmonics anisotropic broadening, `MVW` quant, plus a custom scripted output pipeline (Reel/`.xyy`/external Python). |
+| `parametric_06.inp` | Rietveld (parametric, multi-pattern) | Cell parameters/angles as explicit physical functions of temperature via `fn` macros, list-driven multi-pattern factory, coordinate-restraint macros, conditional compilation. |
 
-### `d8_01612_vt_reel_02.inp`
-4-phase VT Rietveld, 68 patterns, ZrMo2O7(OH)2·2H2O → LT/cubic/trigonal-ZrMo2O8 → decomposition. Durham "zrmo2o8_vt" tutorial, Reel output variant.
-
-- `#list` + `num_runs = #out pattern_count;` + `Run_Number`-driven `#if` — older-style sequential driving (vs. `parametric_06.inp`'s `Create_XDDs`)
-- `xdd filename` via macro + `##` concatenation of `#list` columns
-- Shared `boverall`: `beq = boverall;` across all sites/phases
-- `LVol_FWHM_CS_G_L(...)`, `e0_from_Strain(...)`, hand-built `spherical_harmonics_hkl` for anisotropic strain
-- `MVW(...)` + `prm scaleZMV = scale*mass*vol;` summed across phases
-- `system_before_save_OUT`/`system_after_save_OUT` — shells out to `to_Reel_v1.py`
-- `phase_out_X`/`xdd_out ... load out_record out_fmt out_eqn{}` — per-phase `.xyd` output (macros `Write_Rietveld_xyd`, `Writephase`)
-- `Out_String` header on `Run_Number==0`, appended data rows per run
-
-### `y2o3_demo_stage3.inp`
-Single-pattern FP Rietveld fit, simulated Y2O3 lab data, with PO + anisotropic broadening. Durham Y2O3 tutorial, stage 3.
-
-- FP instrument setup: `Radius`, `Divergence`, `axial_conv{filament_length}`, `Slit_Width`, `LP_Factor`, `CuKa1`, `Specimen_Displacement`
-- `Insert_Peak(...)` for a non-structural peak; `exclude 67.3 67.5` to mask a detector spike
-- `Preferred_Orientation(@,...,1 1 1)` (March-Dollase) + commented-out `PO_Spherical_Harmonics(...)` showing how the direction was derived
-- `Stephens_cubic(...)` anisotropic broadening
-- `do_errors` on — every value carries `` `_esd ``
-- `Out_pdCIF(...)` full pdCIF output
-- `C_matrix_normalized{}` block with real correlations — feed to `scripts/c_matrix_heatmap.py`
-
-### `tio2_peak_fit_01.inp` + `tio2_index.inp`
-Matched pair, same lab TiO2 pattern. Durham "tio2peakfit"/"tio2index" tutorials. `tio2_peak_fit_01.inp` fits peaks with no structural model (`xo_Is` + `TCHZ_Peak_Type`, single shared shape); its `load xo I{}` output is pasted into `tio2_index.inp`'s `load index_th2 index_I{}` for indexing (`Bravais_*_sgs` toggles, `index_lam`, `index_zero_error`). Minimal template for a peak-fit → indexing pipeline.
-
-### `tof_template.inp`
-Generic **template**, not a real fit result -- deliberately written with placeholder cell/site/data-file values for a user to fill in, rather than a real refinement's own converged numbers (every other file in this folder is a genuine worked example; this one is the exception, built at the user's own request for a reusable starting point). Adapted from the curated `tcinps-2.bat` corpus's `tof\tof_bank2_1.inp`/`tof\tof_bank2_2.inp` (CeO2 TOF calibration-standard fits, courtesy of John Evans/Kevin Knight).
-
-- `TOF_XYE`/`TOF_LAM`/`TOF_x_axis_calibration`/`TOF_Exponential`/`TOF_PV` -- the core Neutron-TOF macro family (`references/06-macros-and-include-files.md` "Neutron TOF" section)
-- Inline comments explain WHICH values are instrument-calibration constants (determined once from a standard, then reused fixed) vs. per-sample refined values, and exactly what to replace for a new sample
-- `scale_pks = D_spacing^4;` -- TOF's own Lorentz-type intensity scaling (the TOF analogue of `LP_Factor`)
-- Commented-out `TOF_CS_L`/`TOF_CS_G` crystallite-size lines, ready to uncomment if a sample needs them
-
-### `rutile_sim_01.inp`
-Pattern **simulation** (not a fit), rutile TiO2 straight from a CIF-derived `str`. Auto-generated by topas-editor's "Simulate pattern from CIF" menu command, which builds this file from a picked CIF and immediately runs it.
-
-- `iters 0` + `yobs_eqn !dummy.xy=1;` -- no observed data or refinement at all; TOPAS creates `dummy.xy` itself, and `yobs_eqn` just defines its value (`min`/`max`/`del` set the 2-theta range/step instead of a real scan)
-- `xdd_out ... load out_record out_fmt out_eqn { }` -- writes the calculated pattern (X, Ycalc) straight to a `.xy` file next to the source CIF, so the output is a plotted/saved simulated pattern, not a fit report
-- `CuKa2(0.0001)` -- Cu Ka2-only radiation (comment flags this as swappable); `LP_Factor(!th2_monochromator,0)` and flat `bkg 100` are generic placeholders, not fit to anything
-- `str { ... }` block populated directly from the CIF's cell/space group/sites -- unrefined `scale`, `r_bragg`, `Phase_Density_g_on_cm3` values are just whatever the generator command wrote, not meaningful fit statistics
-- `TCHZ_Peak_Type(...)` inside `for strs { }` -- generic lab-instrument peak shape (not size/strain), left in even though only one `str` is present, since `for strs` is a no-cost hook for adding more phases later
-- Minimal reference for what topas-editor's own CIF-to-simulated-pattern command produces, as opposed to a real Rietveld refinement
-
-### `bragg_brentano_template.inp`
-Another generic **template** (same placeholder-values convention as `tof_template.inp` above), for a standard lab-XRD reflection-geometry (Bragg-Brentano) fundamental-parameters instrument setup. Adapted from `y2o3_demo_stage3.inp` (below) -- that file is the same instrument block fully refined against real data, with preferred orientation and anisotropic broadening layered on top; this template strips it back to just the base instrument geometry, placeholder structure, and a commented "optional additions" section for PO/Stephens/CS_L/Strain_L.
-
-- `Radius`/`Divergence`/`axial_conv{filament_length, sample_length, receiving_slit_length, primary_soller_angle, secondary_soller_angle}`/`Slit_Width` -- the five numbers that describe the diffractometer itself, not the sample; comments explain each one's physical meaning and that they should be fit once against a certified standard and then reused fixed
-- `LP_Factor`/`Specimen_Displacement` -- intensity and 2-theta corrections, with a note on what `LP_Factor`'s monochromator-angle argument means and when it's 0 (no diffracted-beam monochromator)
-- Found via `scripts/find_example.py "bragg brentano"` returning no match (not a corpus folder/topic-synonym name) -- fell back to this skill's own priority order (`example_inp_files/` before the broader corpus) and found `y2o3_demo_stage3.inp` was already exactly this instrument, just not yet split out as a bare template
+**Relationships:**
+- `tio2_peak_fit_01.inp` → `tio2_index.inp`: a worked peak-fit-then-index pipeline on the same TiO2 lab pattern.
+- `y2o3_demo_stage3.inp` → `bragg_brentano_template.inp`: the template is the stripped-down, generic version of this real fit's instrument block.
