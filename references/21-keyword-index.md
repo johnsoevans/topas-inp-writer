@@ -446,13 +446,7 @@ capillary_u_cm_inv E
 
 [capillary_xy_n #]
 
-Examples for the capillary convolution (Coelho & Rowles, 2017) are lab6-stoe.inp and lab6-d8.inp as found in the directory test_examples\capillary. If using a str phase then capillary_u_cm_inv can be set to the calculated linear absorption coefficient multiplied by a packing density, for example:
-
-
-| prm packing_density 0.31208 capillary_diameter_mm @ 0.57313 capillary_u_cm_inv  = Get(mixture_MAC) Get(mixture_density_g_on_cm3) packing_density; capillary_focal_length_mm @ 197.89657 capillary_convergent_beam |
-| --- |
-
-If not defined, capillary_focal_length_mm defaults to the diffractometer radius Rs.
+Examples for the capillary convolution (Coelho & Rowles, 2017) are lab6-stoe.inp and lab6-d8.inp as found in the directory test_examples\capillary. See `references/20-miscellaneous.md` § "Capillary convolution for a focusing convergent beam" for a worked example (packing-density-derived `capillary_u_cm_inv`, `capillary_focal_length_mm` defaulting to the diffractometer radius Rs when omitted).
 
 [circles_conv E]...
 

@@ -33,10 +33,26 @@ Usable as a library:
     import topas_install
     inc_dir, found = topas_install.get_inc_dir()
     example_path, found = topas_install.resolve_example("cf/alvo4a.inp")
+    schema_html, found = topas_install.get_kernel_schema_html()
+    macro_browser_html, found = topas_install.get_macro_browser_html()
+    ref_pdf, found = topas_install.get_technical_reference_pdf()
+    keyword_tree_html, found = topas_install.get_keyword_tree_html()
 
 Or as a CLI (handy for Claude to shell out to before reading a file):
     python3 topas_install.py --inc-dir
     python3 topas_install.py --example cf/alvo4a.inp
+    python3 topas_install.py --kernel-schema-html
+    python3 topas_install.py --macro-browser-html
+    python3 topas_install.py --technical-reference-pdf
+    python3 topas_install.py --keyword-tree-html
+
+kernel_structure_tree.html (the "Show Schema" page, pre-rendered from
+TOPAS's internal kernel data-structure listing -- see
+scripts/kernel_structure_tree.py) is resolved the same TOPAS_DIR-search
+way: the source it's built from (the kernel's own internal type dump,
+exx.txt) is never distributed, only the rendered HTML, which ships
+inside each real TOPAS install (wherever the release process places it
+under TOPAS_DIR) rather than inside this skill.
 """
 
 import os
@@ -51,6 +67,15 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # isfile checks without special-casing None.
 NO_INC_DIR_PLACEHOLDER = os.path.join(SCRIPT_DIR, "..", "references", "system-files", "inc")
 NO_EXAMPLES_DIR_PLACEHOLDER = os.path.join(SCRIPT_DIR, "..", "references", "examples")
+NO_KERNEL_SCHEMA_HTML_PLACEHOLDER = os.path.join(SCRIPT_DIR, "..", "references", "kernel_structure_tree.html")
+NO_MACRO_BROWSER_HTML_PLACEHOLDER = os.path.join(SCRIPT_DIR, "..", "references", "macro_browser.html")
+NO_TECHNICAL_REFERENCE_PDF_PLACEHOLDER = os.path.join(SCRIPT_DIR, "..", "references", "Technical_Reference.pdf")
+NO_KEYWORD_TREE_HTML_PLACEHOLDER = os.path.join(SCRIPT_DIR, "..", "references", "topas_keyword_tree.html")
+
+KERNEL_SCHEMA_HTML_BASENAME = "kernel_structure_tree.html"
+MACRO_BROWSER_HTML_BASENAME = "macro_browser.html"
+TECHNICAL_REFERENCE_PDF_BASENAME = "technical_reference.pdf"
+KEYWORD_TREE_HTML_BASENAME = "topas_keyword_tree.html"
 
 # Safety cap on how many files a walk will look at, so an unexpectedly
 # huge or unusual TOPAS_DIR (e.g. pointed at a whole drive by mistake)
@@ -62,6 +87,10 @@ _cache = None  # lazily built; see _get_cache()
 
 def _walk_topas_dir(topas_dir):
     inc_dir = None
+    kernel_schema_html = None
+    macro_browser_html = None
+    technical_reference_pdf = None
+    keyword_tree_html = None
     by_relkey = {}   # "parentdirname/filename.ext" (lowercased) -> [full paths]
     by_basekey = {}  # "filename.ext" (lowercased) -> [full paths]
     count = 0
@@ -76,6 +105,14 @@ def _walk_topas_dir(topas_dir):
             fpath = os.path.join(root, fname)
             if lower == "topas.inc" and inc_dir is None:
                 inc_dir = root
+            if lower == KERNEL_SCHEMA_HTML_BASENAME.lower() and kernel_schema_html is None:
+                kernel_schema_html = fpath
+            if lower == MACRO_BROWSER_HTML_BASENAME.lower() and macro_browser_html is None:
+                macro_browser_html = fpath
+            if lower == TECHNICAL_REFERENCE_PDF_BASENAME and technical_reference_pdf is None:
+                technical_reference_pdf = fpath
+            if lower == KEYWORD_TREE_HTML_BASENAME.lower() and keyword_tree_html is None:
+                keyword_tree_html = fpath
             if lower.endswith((".inp", ".out", ".inc", ".txt")):
                 parent = os.path.basename(root).lower()
                 relkey = f"{parent}/{lower}"
@@ -83,7 +120,7 @@ def _walk_topas_dir(topas_dir):
                 by_basekey.setdefault(lower, []).append(fpath)
         if count > MAX_WALK_FILES:
             break
-    return inc_dir, by_relkey, by_basekey
+    return inc_dir, kernel_schema_html, macro_browser_html, technical_reference_pdf, keyword_tree_html, by_relkey, by_basekey
 
 
 def _get_cache():
@@ -92,10 +129,14 @@ def _get_cache():
         return _cache
     topas_dir = os.environ.get("TOPAS_DIR", "").strip()
     if not topas_dir or not os.path.isdir(topas_dir):
-        _cache = {"topas_dir": None, "inc_dir": None, "by_relkey": {}, "by_basekey": {}}
+        _cache = {"topas_dir": None, "inc_dir": None, "kernel_schema_html": None,
+                  "macro_browser_html": None, "technical_reference_pdf": None, "keyword_tree_html": None,
+                  "by_relkey": {}, "by_basekey": {}}
         return _cache
-    inc_dir, by_relkey, by_basekey = _walk_topas_dir(topas_dir)
-    _cache = {"topas_dir": topas_dir, "inc_dir": inc_dir, "by_relkey": by_relkey, "by_basekey": by_basekey}
+    inc_dir, kernel_schema_html, macro_browser_html, technical_reference_pdf, keyword_tree_html, by_relkey, by_basekey = _walk_topas_dir(topas_dir)
+    _cache = {"topas_dir": topas_dir, "inc_dir": inc_dir, "kernel_schema_html": kernel_schema_html,
+              "macro_browser_html": macro_browser_html, "technical_reference_pdf": technical_reference_pdf,
+              "keyword_tree_html": keyword_tree_html, "by_relkey": by_relkey, "by_basekey": by_basekey}
     return _cache
 
 
@@ -128,6 +169,69 @@ def get_inc_dir():
     if cache["inc_dir"]:
         return cache["inc_dir"], True
     return NO_INC_DIR_PLACEHOLDER, False
+
+
+def get_kernel_schema_html():
+    """
+    Returns (path, found). If TOPAS_DIR is set and a real
+    kernel_structure_tree.html was found under it (placed there by the
+    TOPAS release process -- see module docstring), path is that live
+    file and found is True. Otherwise path is a placeholder that does not
+    exist and found is False -- there is no bundled fallback copy (the
+    generator that produces this page is not part of this skill either;
+    only the rendered HTML shipped inside a real TOPAS install can
+    satisfy this).
+    """
+    cache = _get_cache()
+    if cache["kernel_schema_html"]:
+        return cache["kernel_schema_html"], True
+    return NO_KERNEL_SCHEMA_HTML_PLACEHOLDER, False
+
+
+def get_macro_browser_html():
+    """
+    Returns (path, found). If TOPAS_DIR is set and a macro_browser.html
+    was found under it, path is that live file and found is True.
+    Otherwise path is a placeholder that does not exist and found is
+    False. Unlike the kernel schema page, this skill DOES include the
+    generator for this page (scripts/generate_macro_browser.py) -- but
+    the rendered HTML itself lives under TOPAS_DIR, not inside the
+    skill, since it can be large and is meant to be regenerated
+    per-install (a --docx flag pulls in descriptions from the user's own
+    copy of Technical_Reference.docx, which isn't bundled either).
+    """
+    cache = _get_cache()
+    if cache["macro_browser_html"]:
+        return cache["macro_browser_html"], True
+    return NO_MACRO_BROWSER_HTML_PLACEHOLDER, False
+
+
+def get_technical_reference_pdf():
+    """
+    Returns (path, found). Technical_Reference.pdf (unlike the .docx
+    editing copy) ships with a real TOPAS install, so it's resolved the
+    same TOPAS_DIR-search way as everything else here -- used by
+    scripts/generate_macro_browser.py as its default source of §21.2
+    descriptions when no --docx is given.
+    """
+    cache = _get_cache()
+    if cache["technical_reference_pdf"]:
+        return cache["technical_reference_pdf"], True
+    return NO_TECHNICAL_REFERENCE_PDF_PLACEHOLDER, False
+
+
+def get_keyword_tree_html():
+    """
+    Returns (path, found). Like macro_browser.html, topas_keyword_tree.html
+    lives under TOPAS_DIR rather than inside the skill -- generated by
+    scripts/topas_keyword_tree.py, which defaults its own output path
+    here and skips regenerating if a copy already exists (pass --force
+    to regenerate anyway).
+    """
+    cache = _get_cache()
+    if cache["keyword_tree_html"]:
+        return cache["keyword_tree_html"], True
+    return NO_KEYWORD_TREE_HTML_PLACEHOLDER, False
 
 
 def resolve_example(rel_path):
@@ -175,6 +279,14 @@ def main():
                         help="Print the resolved .inc macro library directory.")
     group.add_argument("--example", metavar="REL_PATH",
                         help='Resolve an example file, e.g. "cf/alvo4a.inp" (path style used in references/examples-index.md).')
+    group.add_argument("--kernel-schema-html", action="store_true",
+                        help="Print the resolved kernel_structure_tree.html path (the pre-rendered 'Show Schema' page shipped inside a real TOPAS install).")
+    group.add_argument("--macro-browser-html", action="store_true",
+                        help="Print the resolved macro_browser.html path (generate it with scripts/generate_macro_browser.py if missing).")
+    group.add_argument("--technical-reference-pdf", action="store_true",
+                        help="Print the resolved Technical_Reference.pdf path (used by scripts/generate_macro_browser.py for §21.2 descriptions).")
+    group.add_argument("--keyword-tree-html", action="store_true",
+                        help="Print the resolved topas_keyword_tree.html path (generate it with scripts/topas_keyword_tree.py if missing).")
     args = parser.parse_args()
 
     topas_dir_set = bool(os.environ.get("TOPAS_DIR", "").strip())
@@ -190,6 +302,57 @@ def main():
         else:
             print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy. "
                   "Set TOPAS_DIR to your TOPAS install root.)", file=sys.stderr)
+    elif args.kernel_schema_html:
+        path, found = get_kernel_schema_html()
+        print(path)
+        if found:
+            print("(found via TOPAS_DIR)", file=sys.stderr)
+        elif topas_dir_set:
+            print(f"(NOT FOUND -- TOPAS_DIR={os.environ['TOPAS_DIR']!r} was searched but no "
+                  f"{KERNEL_SCHEMA_HTML_BASENAME} turned up under it; this skill has no bundled "
+                  f"fallback copy and does not generate this page itself)", file=sys.stderr)
+        else:
+            print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy and "
+                  "does not generate this page itself. Set TOPAS_DIR to find the copy shipped with "
+                  "your TOPAS install.)", file=sys.stderr)
+    elif args.macro_browser_html:
+        path, found = get_macro_browser_html()
+        print(path)
+        if found:
+            print("(found via TOPAS_DIR)", file=sys.stderr)
+        elif topas_dir_set:
+            print(f"(NOT FOUND -- TOPAS_DIR={os.environ['TOPAS_DIR']!r} was searched but no "
+                  f"{MACRO_BROWSER_HTML_BASENAME} turned up under it; generate one with "
+                  f"scripts/generate_macro_browser.py [--docx path/to/Technical_Reference.docx])", file=sys.stderr)
+        else:
+            print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy. "
+                  "Set TOPAS_DIR to your TOPAS install root, then generate one with "
+                  "scripts/generate_macro_browser.py.)", file=sys.stderr)
+    elif args.technical_reference_pdf:
+        path, found = get_technical_reference_pdf()
+        print(path)
+        if found:
+            print("(found via TOPAS_DIR)", file=sys.stderr)
+        elif topas_dir_set:
+            print(f"(NOT FOUND -- TOPAS_DIR={os.environ['TOPAS_DIR']!r} was searched but no "
+                  f"Technical_Reference.pdf turned up under it; this skill has no bundled fallback copy)",
+                  file=sys.stderr)
+        else:
+            print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy. "
+                  "Set TOPAS_DIR to your TOPAS install root.)", file=sys.stderr)
+    elif args.keyword_tree_html:
+        path, found = get_keyword_tree_html()
+        print(path)
+        if found:
+            print("(found via TOPAS_DIR)", file=sys.stderr)
+        elif topas_dir_set:
+            print(f"(NOT FOUND -- TOPAS_DIR={os.environ['TOPAS_DIR']!r} was searched but no "
+                  f"{KEYWORD_TREE_HTML_BASENAME} turned up under it; generate one with "
+                  f"scripts/topas_keyword_tree.py)", file=sys.stderr)
+        else:
+            print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy. "
+                  "Set TOPAS_DIR to your TOPAS install root, then generate one with "
+                  "scripts/topas_keyword_tree.py.)", file=sys.stderr)
     else:
         path, found = resolve_example(args.example)
         if found:

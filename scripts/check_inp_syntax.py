@@ -2,19 +2,27 @@
 """
 check_inp_syntax.py -- A basic, heuristic syntax checker for TOPAS .inp files.
 
-Catches eleven classes of mistake before you hand a file to TOPAS:
+Catches thirteen classes of mistake before you hand a file to TOPAS:
 
   1. Unbalanced braces { } or parentheses ( )
   2. Equations ("= ... ;") that never reach a terminating semicolon before
      the enclosing scope changes or the file ends
-  3. Identifiers that don't exactly match a real TOPAS keyword or macro
-     name but closely resemble one (a likely typo, or a case mistake --
-     TOPAS names are case sensitive, so matching here is exact-case).
-     Known names are harvested from bracket-notation keywords across
-     every reference chapter, every macro definition (both
-     'macro Name(args) {}' and bodiless 'macro Name {}' forms) in the
-     bundled .inc library plus the file itself, and a small hand-verified
-     supplemental list for real names that fall through both harvests.
+  3. Any identifier that isn't a real TOPAS keyword or macro name (exact
+     case), a name the file itself declares (prm/local/macro/site/...),
+     or a bare token consumed by a keyword's own known multi-token
+     argument grammar (z_matrix's atom labels, a parenthesized macro
+     call's arguments) -- flagged whether or not it closely resembles a
+     real keyword (a close resemblance gets "likely a typo of X"; no
+     resemblance at all gets "likely a stray/leftover token"). Confirmed
+     directly by the user (TOPAS-Academic's author): "An identifier must
+     be a keyword or a macro. When a file is macro expanded then the
+     identifier must be a keyword" -- no length floor, no fuzzy-match
+     requirement to report something. Known names are harvested from
+     bracket-notation keywords across every reference chapter, every
+     macro definition (both 'macro Name(args) {}' and bodiless
+     'macro Name {}' forms) in the bundled .inc library plus the file
+     itself, and a small hand-verified supplemental list for real names
+     that fall through both harvests.
   4. Macro calls whose argument count doesn't match any known definition
      of that macro (same harvested arities as above)
   5. A space_group value that looks like it was split by a stray space
@@ -53,11 +61,10 @@ Catches eleven classes of mistake before you hand a file to TOPAS:
       keyword and producing "unknown or misplaced keyword" at LINE 1, even
       though the file looks completely normal in most text editors (the
       BOM renders as invisible). See check_bom()'s own docstring.
-  11. A site coordinate, ADP tensor component (u11..u23), or lattice
-      parameter (a/b/c/al/be/ga) written as an independently refined value
-      when the file's own declared space group requires it tied to another
-      via a 'Get()' equation (e.g. 'y = Get(x);' on a site sitting on a
-      mirror/axis, 'u22 = Get(u11);' for that same site's ADP tensor, or
+  11. An ADP tensor component (u11..u23) or lattice parameter
+      (a/b/c/al/be/ga) written as an independently refined value when the
+      file's own declared space group requires it tied to another via a
+      'Get()' equation (e.g. 'u22 = Get(u11);' for a site's ADP tensor, or
       'b = Get(a);' for a cubic cell) -- or fixed at an exact constant
       that's instead left '@'-refined. For ADPs specifically, a WRONG bare
       value (not just a refined one) is also flagged -- unlike a
@@ -67,11 +74,36 @@ Catches eleven classes of mistake before you hand a file to TOPAS:
       via TOPAS's own sgcom6.exe/sg database (needs TOPAS_DIR; silently
       produces no findings if unavailable, like the macro-arity check's
       live-install fallback). See check_symmetry_constraints()'s own
-      docstring for the full method, the built-in lattice-macro
-      (Cubic/Tetragonal/Hexagonal/Trigonal/Rhombohedral) recognition, and
-      the deliberately conservative scoping for coordinates/lattice
-      parameters (only flags a real drift risk -- something actually being
-      refined -- not every stylistic omission of a Get() tie).
+      docstring for the full method and the built-in lattice-macro
+      (Cubic/Tetragonal/Hexagonal/Trigonal/Rhombohedral) recognition.
+      NOTE: site COORDINATE (x/y/z) constraint checking was built here
+      and later explicitly REMOVED, directly at the request of the user
+      (TOPAS-Academic's author) -- writing a coordinate independently
+      (no '!') is itself the deliberate signal that a site should be
+      treated as a general position, not a mistake worth flagging
+      regardless of what numeric value it happens to hold. See
+      check_symmetry_constraints()'s own docstring for the full story.
+  12. A stray bare number sitting right after a keyword that takes NO
+      value at all -- e.g. "str  123123" -- generalizing item 8 above from
+      "a keyword that takes exactly one value" to "a keyword that takes
+      zero". Found directly by the user (TOPAS-Academic's author) spotting
+      it by eye in a macro-expanded file and pointing out this checker
+      should already have caught it -- correct: item 3's identifier check
+      never looked at it (numbers aren't identifier-shaped) and item 8
+      only ever checked keywords that legitimately take one value first.
+      See check_zero_arg_keywords()'s own docstring for exact scoping and
+      the corpus verification behind it (including a real false-conflict
+      exclusion for 'str' itself, and a real macro-argument-glossary false
+      positive shared with topas_keyword_tree.py's own bracket scanner).
+  13. A '@' (auto-name sigil) not immediately followed by a numeric value
+      or '=' -- e.g. "scale @ a2.27742249e-05" (a stray letter prepended
+      to a real number, corrupting it). Found directly by the user
+      (TOPAS-Academic's author) immediately after item 12 above, in the
+      same file: "The @ is corresponds to a unique name. The next item
+      should be a number or an equal sign." See check_at_sigil_value()'s
+      own docstring for exact scoping and the three real exceptions its
+      own corpus regression sweep required (a bare '@'/'@name' as a
+      macro-call argument, and a macro body that's just '@'/'@name').
 
 This is NOT a full TOPAS parser. It does not understand macro expansion
 and cannot verify semantics. It is a fast first pass to catch the
@@ -128,14 +160,82 @@ MACRO_LIB_DIR, MACRO_LIB_FROM_LIVE_INSTALL = topas_install.get_inc_dir()
 
 IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 BRACKET_KEYWORD_RE = re.compile(r"\[([A-Za-z_][A-Za-z0-9_]*)")
-MACRO_DEF_RE = re.compile(r"macro\s+([A-Za-z_]\w*)\s*\(([^()]*)\)")
-BODILESS_MACRO_DEF_RE = re.compile(r"macro\s+([A-Za-z_]\w*)\s*\{")
+# The optional '&' before the macro name (e.g. 'macro & CeV(c, v)') wraps
+# the WHOLE expansion result in parens at call sites -- a real, distinct
+# TOPAS macro-definition syntax (see expand_inp_macros.py, fixed for the
+# same construct earlier). topas.inc's own CeV macro -- used constantly
+# throughout the library -- is itself defined this way; without allowing
+# for it here, CeV (and anything else defined with a leading '&') was
+# silently invisible to this checker's own keyword/macro harvest, coming
+# back as "not a recognized keyword, macro, or declared name" everywhere
+# it was actually called.
+MACRO_DEF_RE = re.compile(r"macro\s+&?\s*([A-Za-z_]\w*)\s*\(([^()]*)\)")
+BODILESS_MACRO_DEF_RE = re.compile(r"macro\s+&?\s*([A-Za-z_]\w*)\s*\{")
+# 'fn NAME(args) { ... }' user-defined functions -- same parameter-list
+# shape as MACRO_DEF_RE, used by find_defined_names() to register a
+# function's own parameter names as legitimate throughout its body.
+FN_DEF_RE = re.compile(r"\bfn\s+([A-Za-z_]\w*)\s*\(([^()]*)\)")
 TABLE_ROW_FUNC_RE = re.compile(r"^\|\s*([A-Za-z_][A-Za-z0-9_]*)\(", re.MULTILINE)
+# A handful of equation functions in references/02-equation-operators-
+# and-functions.md are documented as a bare 'Name(args)' signature line
+# on its own (e.g. 'Constant(expression)', 'Bkg_at(x)') rather than a
+# markdown table row -- TABLE_ROW_FUNC_RE alone misses these. Anchored to
+# the WHOLE line (nothing else on it) so a function CALL embedded in a
+# longer prose sentence or code example doesn't get mistaken for its own
+# definition site.
+BARE_FUNC_SIGNATURE_RE = re.compile(r"^([A-Za-z_]\w*)\([A-Za-z_#$][A-Za-z0-9_#$, ]*\)\s*(?::|$)", re.MULTILINE)
+# A few low-level keywords are documented as a bare 'name E'/'name #'
+# signature line with no surrounding brackets at all (e.g.
+# 'lpsd_equitorial_sample_length_mm E', 'capillary_u_cm_inv E' in
+# 21-keyword-index.md) -- neither BRACKET_KEYWORD_RE nor
+# TABLE_ROW_FUNC_RE/BARE_FUNC_SIGNATURE_RE catch this form. Anchored to
+# the whole line for the same reason as BARE_FUNC_SIGNATURE_RE.
+BARE_KEYWORD_SIGNATURE_RE = re.compile(r"^([a-z][A-Za-z0-9_]{4,})\s+(?:!?[EN]|!?#\w*)\s*$", re.MULTILINE)
 
-# Keywords/attribute names shorter than this are excluded from the
-# typo-detection pass (too many one- and two-letter TOPAS tokens like
-# "a", "b", "be", "al" would otherwise swamp the report with noise).
-MIN_TYPO_CHECK_LEN = 5
+# A "type marker" placeholder in the manual's own bracket notation (see
+# the longer note below on the sigil convention) -- NOT a keyword name,
+# even though it's identifier-shaped. Used to tell keyword names apart
+# from their own type annotations when several names are packed into one
+# bracket (see extract_bracket_keyword_names()).
+BRACKET_TYPE_MARKER_RE = re.compile(r"^(?:!?[EN]|!?#\w*|\$\w*|!?-?\d.*|\.\.\.|…)$")
+
+
+def extract_bracket_keyword_names(inner_text):
+    """Every keyword-shaped name inside one bracket's content, not just
+    the first -- many manual entries pack several names into one bracket
+    with type markers between them (e.g. '[pv_lor E  pv_fwhm E]',
+    '[h1 E  h2 E  m1 E  m2 E]'), and the original single-capture harvest
+    (a bare '\\[(\\w+)' regex) only ever saw the first ('pv_lor', 'h1'),
+    silently missing the rest ('pv_fwhm', 'h2', 'm1', 'm2', ...) --
+    confirmed as a real gap when 'pv_fwhm' (used constantly for pseudo-
+    Voigt peak shapes) came back completely unrecognized in a real-corpus
+    regression run after MIN_TYPO_CHECK_LEN was removed. Nested brackets
+    (e.g. grs_interaction's own '[qi !E qj !E]') get walked too, since
+    their own names are equally real, just an inner sub-argument rather
+    than a top-level one."""
+    names = []
+    for tok in re.split(r"[\s,|\[\]]+", inner_text):
+        tok = tok.strip()
+        if not tok or BRACKET_TYPE_MARKER_RE.match(tok):
+            continue
+        if re.match(r"^[A-Za-z_]\w*$", tok):
+            names.append(tok)
+    return names
+
+# No minimum length for typo-detection -- confirmed directly by the user
+# (TOPAS-Academic's author): "An identifier must be a keyword or a macro.
+# When a file is macro expanded then the identifier must be a keyword."
+# A short, previous version of this checker skipped anything under 5
+# characters to avoid noise from one/two-letter TOPAS tokens (a, b, al,
+# be, ...) -- but those are all legitimately declared or consumed
+# elsewhere (lattice-parameter keywords themselves, or the token right
+# after a recognized keyword/macro call), so the length itself was never
+# actually protecting against a real ambiguity; it was just hiding short,
+# genuine mistakes (e.g. a stray leftover token like "eee" on its own
+# line, 3 characters, previously invisible to this check both because of
+# this length gate AND because it doesn't closely resemble any real
+# keyword -- see the "no close match" handling in check_keyword_typos()).
+MIN_TYPO_CHECK_LEN = 0
 
 # Keywords load_single_string_arg_keywords() harvests as "takes exactly one
 # '$'-sigil argument" purely from their bracket-notation entry, but which
@@ -166,6 +266,42 @@ SINGLE_ARG_FALSE_POSITIVES = {
     # anywhere as a conflict the harvester could have caught on its own.
 }
 
+# The mirror image of SINGLE_ARG_FALSE_POSITIVES above: keywords that ARE
+# genuinely zero-argument in every real usage, but load_zero_arg_keywords()
+# drops them anyway because of a FALSE documented conflict -- a bracket
+# entry elsewhere that LOOKS like a richer signature but is actually a
+# different notation entirely, not really describing this keyword's own
+# argument grammar. Populated and justified one at a time, same
+# discipline as the set above; subtracted the opposite way (added to the
+# harvest, not removed from it) at zero_arg_keywords' own computation
+# site in main().
+ZERO_ARG_KEYWORD_SUPPLEMENT = {
+    "str",
+    # references/21-keyword-index.md's alphabetical listing documents
+    # '[str]...' as a clean bare entry (correctly harvested), but the SAME
+    # file's "Data structures" schema section also has 'str' appearing as
+    # part of '[str | dummy_str]...' inside Txdd's own child listing --
+    # that's the schema's TYPE-ALTERNATION notation ("either str or
+    # dummy_str is valid here"), not a statement about str's own argument
+    # grammar, but BRACKET_FULL_RE's generic scan can't tell the two
+    # notations apart, so the harvester's conflict-detection (correctly
+    # cautious in general) drops 'str' here specifically as a false
+    # positive. Confirmed zero-arg in every real corpus usage throughout
+    # this whole skill's development -- 'str' never takes a following
+    # value. Found directly from a real bug the user spotted by eye in a
+    # macro-expanded file: a stray 'str  123123' (a leftover number with
+    # nothing consuming it) passed this checker cleanly before this fix,
+    # exactly the same class of miss check_single_e_arg_keywords was
+    # built to catch for single-E-arg keywords, just for the zero-arg case.
+    "dummy_str",
+    # Same root cause and same fix as 'str' immediately above -- 'dummy_str'
+    # only ever appears via that same '[str | dummy_str]...' alternation
+    # entry, never as its own bare bracket line, so the raw harvest never
+    # even considers it a candidate at all. Confirmed zero-arg the same
+    # way 'str' is (a dummy_str block plays the identical structural role,
+    # just excluded from contributing intensity).
+}
+
 # Names defined BY the file itself (macro/prm/local names, refined
 # parameter names after @ or !) are never flagged as typos, since they are
 # legitimately user-chosen, not meant to match a keyword.
@@ -177,7 +313,20 @@ DEFINER_KEYWORDS = {"macro", "prm", "local", "for", "inp_text", "fn"}
 # plain prose characters, not equations). Content inside these blocks is
 # blanked out (braces themselves kept, for brace-balance purposes) before
 # the semicolon/typo checks run, to avoid false positives on prose.
-OPAQUE_BLOCK_KEYWORDS = {"pdf_info"}
+OPAQUE_BLOCK_KEYWORDS = {
+    "pdf_info",
+    # Auto-generated correlation-matrix report blocks appended to the
+    # file on refinement termination (references/21-keyword-index.md's
+    # Data structures listing: "[A_matrix] [C_matrix] [A_matrix_normalized]
+    # [C_matrix_normalized]") -- bare row-label names inside are whatever
+    # hash-based auto-names macro expansion happened to generate that run
+    # (e.g. 'bkg_rec28176AE3BB0_', 'm6a54dfe6_0'), never resolvable from
+    # the raw, un-expanded source the way a real declared name is, so
+    # they're display/report content, not parseable statement syntax --
+    # found via a real false-positive flood in test_examples/simple.inp
+    # once MIN_TYPO_CHECK_LEN was removed (see check_keyword_typos()).
+    "A_matrix", "C_matrix", "A_matrix_normalized", "C_matrix_normalized",
+}
 
 
 # Real low-level reserved keywords confirmed (against the bundled examples
@@ -259,20 +408,40 @@ def load_keyword_set(index_path):
                 text = f.read()
         except OSError:
             continue
-        for m in BRACKET_KEYWORD_RE.finditer(text):
-            name = m.group(1)
-            keywords.add(name)
-            # TOPAS documents many keywords with a trailing digit meaning
-            # "the first of possibly several numbered instances" (e.g.
-            # '[pdf_convolute1 E]', '[scale_phase_X1 E]', '[pdf_zero1 E]')
-            # -- bare, unnumbered usage (referring to the first/default
-            # instance) is valid and extremely common in real INP files,
-            # so register the digit-stripped base form too.
-            if name and name[-1].isdigit():
-                base = name.rstrip("0123456789")
-                if base:
-                    keywords.add(base)
+        i = 0
+        n = len(text)
+        while i < n:
+            if text[i] == "[":
+                depth = 1
+                j = i + 1
+                while j < n and depth > 0:
+                    if text[j] == "[":
+                        depth += 1
+                    elif text[j] == "]":
+                        depth -= 1
+                    j += 1
+                inner = text[i + 1:max(j - 1, i + 1)]
+                for name in extract_bracket_keyword_names(inner):
+                    keywords.add(name)
+                    # TOPAS documents many keywords with a trailing digit
+                    # meaning "the first of possibly several numbered
+                    # instances" (e.g. '[pdf_convolute1 E]',
+                    # '[scale_phase_X1 E]', '[pdf_zero1 E]') -- bare,
+                    # unnumbered usage (referring to the first/default
+                    # instance) is valid and extremely common in real INP
+                    # files, so register the digit-stripped base form too.
+                    if name and name[-1].isdigit():
+                        base = name.rstrip("0123456789")
+                        if base:
+                            keywords.add(base)
+                i = j
+            else:
+                i += 1
         for m in TABLE_ROW_FUNC_RE.finditer(text):
+            keywords.add(m.group(1))
+        for m in BARE_FUNC_SIGNATURE_RE.finditer(text):
+            keywords.add(m.group(1))
+        for m in BARE_KEYWORD_SIGNATURE_RE.finditer(text):
             keywords.add(m.group(1))
     return keywords
 
@@ -413,6 +582,75 @@ def load_single_e_arg_keywords(references_dir):
                 conflicting.add(name)
 
     return single_arg - conflicting
+
+
+# A whole line matching '[name]: description...' (e.g. '[r]: Distance in
+# Å.', '[n1]: The closest n1 number of atoms...') is a macro-argument-
+# glossary label, not a real TOPAS keyword -- the identical, already-
+# confirmed data-quality issue topas_keyword_tree.py's own
+# GLOSSARY_LINE_RE was built for (see that module's docstring: "using
+# square brackets for macro arguments was a bad idea," confirmed
+# directly by the user, TOPAS-Academic's own author). load_zero_arg_
+# keywords() below is uniquely exposed to this, unlike its two siblings:
+# a glossary bracket's OWN content (just the bare argument name, e.g.
+# "r") is empty in exactly the same way a genuine zero-arg keyword's
+# bracket is -- the description text sits AFTER the closing ']', outside
+# BRACKET_FULL_RE's own capture -- so 'r'/'n1'/'n2' (real short glossary
+# names from 13-rigid-bodies.md/06-macros-and-include-files.md) were
+# silently harvested as if they were genuine bare TOPAS keywords, and
+# then flagged real corpus files' own local prm/local names ('n !n1 0',
+# a legitimate keyword-$name-value declaration, nothing to do with this
+# glossary) as false positives -- found and fixed via this check's own
+# curated-corpus regression sweep. The other two harvesters happen to be
+# naturally immune (a glossary line's prose "rest" text never matches
+# their own strict single-$-or-E-token shape, so it lands in
+# `conflicting` instead of being wrongly added) -- this blanking step
+# isn't needed there, only here.
+GLOSSARY_LINE_RE = re.compile(r"^[ \t]*\[[^\n\]]*\]:.*$", re.MULTILINE)
+
+
+def load_zero_arg_keywords(references_dir):
+    """
+    Harvest keywords whose bracket-notation signature is a BARE name and
+    nothing else (e.g. '[str]', '[do_errors]', '[no_f11]') -- these take
+    NO following value, name, or equation at all; TOPAS reads straight to
+    the next real keyword/directive/macro/brace after one of these. Both
+    load_single_string_arg_keywords() and load_single_e_arg_keywords()
+    above already compute exactly this condition (`rest = m.group(2).
+    strip()` being empty) and simply `continue` past it as "not relevant
+    here" -- this is that same BRACKET_FULL_RE scan, just keeping what
+    the other two throw away.
+
+    Same conflict-detection as the other two harvesters: if the SAME
+    keyword name is EVER documented elsewhere with a non-empty bracket
+    signature, it's dropped from the result entirely, even if it also has
+    a clean bare form elsewhere -- conflicting evidence means "don't
+    trust this one."
+    """
+    zero_arg = set()
+    conflicting = set()
+    try:
+        fnames = [f for f in os.listdir(references_dir) if f.lower().endswith(".md")]
+    except OSError:
+        return zero_arg
+
+    for fname in fnames:
+        fpath = os.path.join(references_dir, fname)
+        try:
+            with open(fpath, encoding="utf-8", errors="ignore") as f:
+                text = f.read()
+        except OSError:
+            continue
+        text = GLOSSARY_LINE_RE.sub(lambda m: " " * len(m.group(0)), text)
+        for m in BRACKET_FULL_RE.finditer(text):
+            name = m.group(1)
+            rest = m.group(2).strip()
+            if not rest:
+                zero_arg.add(name)
+            else:
+                conflicting.add(name)
+
+    return zero_arg - conflicting
 
 
 def strip_comments_and_strings(text):
@@ -883,6 +1121,139 @@ def check_single_e_arg_keywords(clean_text, keywords, e_arg_keywords, issues):
             )
 
 
+def check_zero_arg_keywords(clean_text, zero_arg_keywords, issues):
+    """
+    Every keyword in zero_arg_keywords (harvested by
+    load_zero_arg_keywords() -- keywords documented with a bare bracket
+    signature, e.g. '[str]', '[do_errors]', and nothing else) takes NO
+    following value, name, or equation at all -- TOPAS reads straight to
+    the next real keyword/directive/macro/brace after one of these. A
+    bare NUMBER sitting immediately after one is never valid TOPAS
+    grammar -- there's no legitimate reading of "keyword number" as one
+    statement when 'keyword' itself takes zero arguments.
+
+    Deliberately scoped to a stray NUMBER specifically, not any
+    unrecognized token: an unrecognized bare IDENTIFIER immediately after
+    one of these keywords is already caught by the keyword-typo check
+    elsewhere in this script (which scans every identifier-shaped token
+    in the whole file, not just the ones right after a particular
+    keyword class -- see feedback_identifier_must_resolve's "an
+    identifier must be a keyword or a macro" principle). This check
+    exists for the gap that principle doesn't cover: a bare NUMBER is
+    invisible to the keyword-typo check (numbers aren't identifier-
+    shaped), which is exactly how this real bug slipped through
+    uncaught -- 'str  123123' in a macro-expanded test file, confirmed
+    directly by the user (TOPAS-Academic's author): "This line is wrong
+    as there's a number just floating there."
+
+    Flagged as a warning, not a hard error -- the same caution applied to
+    every other harvested-keyword check in this script: the harvest is
+    corpus-verified (see this check's own development history) but can't
+    prove every zero-arg keyword's real-world grammar is fully captured
+    by its bare bracket notation.
+    """
+    if not zero_arg_keywords:
+        return
+    pattern = r"\b(" + "|".join(re.escape(k) for k in sorted(zero_arg_keywords, key=len, reverse=True)) + r")\b"
+    for m in re.finditer(pattern, clean_text):
+        kw = m.group(1)
+        pos = m.end()
+        n = len(clean_text)
+        if pos >= n or clean_text[pos] not in " \t\r\n":
+            continue
+        j = pos
+        while j < n and clean_text[j] in " \t\r\n":
+            j += 1
+        if j >= n:
+            continue
+        next_tok_m = re.match(r"\S+", clean_text[j:])
+        if not next_tok_m:
+            continue
+        next_tok = next_tok_m.group(0)
+        num_m = E_ARG_NUMBER_TOKEN_RE.match(next_tok)
+        if num_m and num_m.group(0) == next_tok:
+            issues.append(
+                ("warning", line_of(clean_text, m.start()),
+                 f"'{kw}' takes no value at all, but is immediately followed by a bare "
+                 f"number '{next_tok}' with nothing in between. This looks like a stray "
+                 f"leftover value from a bad edit -- verify manually and remove it if so "
+                 f"(this is a heuristic).")
+            )
+
+
+def check_at_sigil_value(clean_text, issues):
+    """
+    '@' always means "auto-generate a unique name for the value/equation
+    that follows" (Technical_Reference.pdf Chapter 2) -- confirmed
+    directly by the user (TOPAS-Academic's author): "The @ is
+    corresponds to a unique name. The next item should be a number or
+    an equal sign. This is all spelled out in Chapter 2 of the Technical
+    Reference." So the very next non-whitespace token after a real '@'
+    sigil must be either a valid numeric value or '=' -- a bare
+    identifier, or a malformed/corrupted number (e.g. a stray letter
+    prepended to real digits, 'a2.27742249e-05' instead of
+    '2.27742249e-05' -- the exact real bug this check was built to
+    catch, found by the user in a macro-expanded test file, immediately
+    after the zero-arg-keyword check above was built for the same class
+    of "a value slot silently isn't validated" gap) is never valid
+    grammar there.
+
+    Three deliberate exceptions, all confirmed necessary directly from
+    this check's own corpus regression sweep (real, common syntax
+    throughout the example corpus, not rare edge cases):
+      1. '@' used as a bare MACRO-CALL argument (e.g. 'TOF_PV(@, 100, @,
+         .5, t1)', 'CS_L(@, 300)') means "auto-name whatever parameter
+         this call site ends up building here" and is legitimately
+         followed by ',' or ')' with no number at all -- that's the
+         macro's own business, not a value this checker can see the
+         shape of.
+      2. '@' directly concatenated with a suggested name, no space (e.g.
+         'TOF_PV(@pv6, 72.10546, ...)') -- the same concatenated-sigil
+         convention already established for '!name' (e.g. 'prm !b1 .5'),
+         just for '@' instead of '!'. The name is consumed first, then
+         the SAME validation applies to whatever follows it.
+      3. A macro body that's just a bare '@' (or '@name') and nothing
+         else, e.g. 'macro SVs { @ }' -- a common TOPAS idiom for a
+         toggle macro later substituted into other keyword calls to
+         conditionally enable refinement (confirmed directly against a
+         real corpus file, kaolinite.inp, using exactly this pattern for
+         several such macros). '@' immediately followed by '}' is this
+         case.
+
+    Flagged as a warning, not a hard error, the same caution applied to
+    every heuristic check in this script.
+    """
+    for m in re.finditer(r"@", clean_text):
+        pos = m.end()
+        n = len(clean_text)
+        # Exception 2: '@' concatenated directly with a suggested name --
+        # consume it before looking at what comes next.
+        name_m = re.match(r"[A-Za-z_]\w*", clean_text[pos:])
+        j = pos + name_m.end() if name_m else pos
+
+        while j < n and clean_text[j] in " \t\r\n":
+            j += 1
+        if j >= n:
+            continue
+        c = clean_text[j]
+        if c in "=,)}":
+            continue  # exceptions 1 and 3, plus the equation form
+        num_m = E_ARG_NUMBER_TOKEN_RE.match(clean_text[j:])
+        if num_m and num_m.group(0):
+            continue  # valid numeric value
+        next_tok_m = re.match(r"\S+", clean_text[j:])
+        next_tok = next_tok_m.group(0) if next_tok_m else ""
+        if not next_tok:
+            continue
+        issues.append(
+            ("warning", line_of(clean_text, m.start()),
+             f"'@' (the auto-name sigil) must be immediately followed by a numeric value or "
+             f"'=', but is followed by '{next_tok}', which is neither. This looks like a "
+             f"corrupted value (e.g. a stray character prepended to a real number) -- verify "
+             f"manually.")
+        )
+
+
 XYZ_FRACTION_TARGETS = (("1/3", 1.0 / 3.0), ("2/3", 2.0 / 3.0))
 # 0.0015 catches CIF-rounded decimals from 3 to 5 places (0.333 .. 0.33333)
 # without reaching into territory a genuinely-refined general-position
@@ -1275,18 +1646,499 @@ def check_prm_local_missing_min_max(clean_text, min_max_macro_names, issues):
         )
 
 
-def find_defined_names(clean_text):
+Z_MATRIX_KW_RE = re.compile(r"\bz_matrix\b")
+Z_MATRIX_ROW_TOKEN_RE = re.compile(r"([A-Za-z_]\w*)(?:\s*(=)\s*([^;]+);)?")
+
+
+def find_z_matrix_block_spans(text):
+    """Outer '{ ... }' span of every 'load z_matrix { ... }' block
+    (brace-matched from the first '{' following the keyword). Mirrors
+    param_dependency_trees.py's find_z_matrix_spans() -- duplicated
+    rather than imported, since that module already imports THIS one
+    (a `from param_dependency_trees import ...` here would be circular);
+    keep the two in sync by hand if this grammar ever changes."""
+    spans = []
+    n = len(text)
+    for m in Z_MATRIX_KW_RE.finditer(text):
+        pos = m.end()
+        while pos < n and text[pos] in " \t\r\n":
+            pos += 1
+        if pos < n and text[pos] == "{":
+            depth = 0
+            i = pos
+            while i < n:
+                if text[i] == "{":
+                    depth += 1
+                elif text[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        spans.append((m.start(), i + 1))
+                        break
+                i += 1
+    return spans
+
+
+def find_z_matrix_label_spans(text):
+    """Character spans of z_matrix's own atom-label/reference-label
+    tokens (e.g. the 'C2'/'C1' in 'C2  C1  =dc1c2;', or the 'O1'/'C1' in
+    the inline 'z_matrix O1 C1 =do1c1; ...' form) -- these are internal
+    z-matrix atom tags, never TOPAS keywords or declared parameter
+    names, so a generic 'is this a known name' check would misfire on
+    every one of them (confirmed directly by the user when scoping this
+    check: 'It knows that z_matrix will load a string as the next
+    sequence on the stream... you already know the syntax of z_matrix').
+    The EXPRESSION after each '=' is deliberately NOT included in these
+    spans -- that text is a real equation that can reference real
+    declared prm/local names, and should still go through normal typo
+    checking. Mirrors the identical grammar in param_dependency_trees.py's
+    parse_z_matrix_row_nodes()/parse_inline_z_matrix_rows() (see that
+    module for the out_dependences_for/out_dependences verification this
+    grammar was originally built and checked against)."""
+    spans = []
+    for start, end in find_z_matrix_block_spans(text):
+        segment = text[start:end]
+        in_row = False
+        for m in Z_MATRIX_ROW_TOKEN_RE.finditer(segment):
+            if m.group(2) is None:
+                spans.append((start + m.start(1), start + m.end(1)))
+                in_row = True
+            elif in_row:
+                spans.append((start + m.start(1), start + m.end(1)))
+
+    n = len(text)
+    for m in Z_MATRIX_KW_RE.finditer(text):
+        pos = m.end()
+        look = pos
+        while look < n and text[look] in " \t":
+            look += 1
+        if look < n and text[look] == "{":
+            continue  # block form, handled above
+        eol = text.find("\n", pos)
+        if eol == -1:
+            eol = n
+        line_text = text[pos:eol]
+        lead_ws = len(line_text) - len(line_text.lstrip(" \t"))
+        atom_m = IDENTIFIER_RE.match(line_text, lead_ws)
+        if not atom_m:
+            continue
+        spans.append((pos + atom_m.start(), pos + atom_m.end()))
+        p = atom_m.end()
+        ll = len(line_text)
+        while p < ll:
+            while p < ll and line_text[p] in " \t":
+                p += 1
+            ref_m = IDENTIFIER_RE.match(line_text, p)
+            if not ref_m:
+                break
+            spans.append((pos + ref_m.start(), pos + ref_m.end()))
+            p = ref_m.end()
+            while p < ll and line_text[p] in " \t":
+                p += 1
+            if p < ll and line_text[p] == "=":
+                semi = line_text.find(";", p)
+                if semi == -1:
+                    break
+                p = semi + 1
+            else:
+                val_m = E_ARG_NUMBER_TOKEN_RE.match(line_text, p)
+                if val_m and val_m.group(0):
+                    p = val_m.end()
+                    # An optional trailing function-call modifier
+                    # immediately after the value, e.g. 'MR(1.55)' or
+                    # 'M12(90, 120)' in 'z_matrix C6 C5 1.55 MR(1.55)
+                    # S1 a1 114.99792 M12(90, 120)' -- consume it too so
+                    # it isn't left exposed to typo-checking (a real
+                    # corpus false positive otherwise -- see cime-z-
+                    # auto.inp's rigid-body z-matrix rows).
+                    fn_m = re.match(r"[ \t]*[A-Za-z_]\w*[ \t]*\(", line_text[p:])
+                    if fn_m:
+                        paren_rel = p + fn_m.end() - 1
+                        depth = 0
+                        k = paren_rel
+                        while k < ll:
+                            if line_text[k] == "(":
+                                depth += 1
+                            elif line_text[k] == ")":
+                                depth -= 1
+                                if depth == 0:
+                                    k += 1
+                                    break
+                            k += 1
+                        p = k
+                else:
+                    # A richer variant this parser doesn't fully model
+                    # (e.g. a '!name'/'name' tag before the real value,
+                    # like '!rc5s1 1.70' or 'a1  114.99792') -- rather
+                    # than mis-parsing it, exempt everything remaining
+                    # on this z_matrix line wholesale and move on to the
+                    # next one; still correct (these ARE legitimate
+                    # z-matrix row tokens, not typos), just less granular
+                    # than the clean '=expr;'/bare-number cases above.
+                    spans.append((pos + p, pos + ll))
+                    break
+    return spans
+
+
+# A "complex" bare filename -- containing hyphens, parens, and/or digits
+# stitched together with no whitespace, ending in a recognized extension
+# (e.g. 'cube-ln-normal-1.xy', 'CT-DMF(5oC)-100K-6-64-VC.raw') -- breaks
+# into several separate IDENTIFIER_RE fragments no single existing
+# exemption covers: the leading filename-fragment-suppression check only
+# ever protects a token immediately followed by '.ext' or '-digit', not
+# a middle fragment like 'ln' or 'DMF' sitting between two hyphens deep
+# inside a longer compound name. Matched as one run of non-whitespace,
+# filename-shaped characters ending in a real extension; every
+# identifier-shaped fragment inside that run is exempted.
+FILENAME_EXTENSIONS = ("xy", "xye", "xys", "raw", "dat", "txt", "cif", "inc", "inp", "hkl", "scr", "cld", "sst")
+FILENAME_RUN_RE = re.compile(
+    r"[A-Za-z0-9_.\-()#]*\.(?:" + "|".join(FILENAME_EXTENSIONS) + r")\b", re.IGNORECASE
+)
+
+
+def find_filename_run_spans(text):
+    spans = []
+    for m in FILENAME_RUN_RE.finditer(text):
+        if "-" in m.group(0) or "(" in m.group(0):
+            spans.append((m.start(), m.end()))
+    return spans
+
+
+def find_space_group_symbol_spans(text):
+    """The single bare-token character-run immediately after 'space_group'
+    (e.g. 'R_-3_c', 'P_21/c') is ONE symbol, but hyphens and digits inside
+    it break IDENTIFIER_RE into several separate fragment tokens (e.g.
+    'R_-3_c' tokenizes as 'R_' then, separately, '_c' -- the '-3' in
+    between isn't identifier-shaped at all) -- consumed as a single span
+    so none of its fragments get typo-checked individually. A quoted
+    symbol ('space_group "P 21/c"') is skipped here since
+    strip_comments_and_strings already blanks its interior."""
+    spans = []
+    n = len(text)
+    for m in re.finditer(r"\bspace_group\b", text):
+        pos = m.end()
+        while pos < n and text[pos] in " \t":
+            pos += 1
+        if pos < n and text[pos] == '"':
+            continue
+        start = pos
+        while pos < n and text[pos] not in " \t\r\n":
+            pos += 1
+        if pos > start:
+            spans.append((start, pos))
+    return spans
+
+
+# Preprocessor directive words -- '#define', '#ifdef', '#ifndef', '#if',
+# '#else', '#elseif', '#endif', '#include', '#ingest', '#list',
+# '#undef', '#seed', '#m_argu' (macro-internal argument marker, e.g.
+# 'macro Foo(x) { #m_argu x ... }') -- the leading '#' isn't a word
+# character, so it strips away during tokenization, leaving the bare
+# directive word looking like an unrecognized identifier (confirmed as a
+# real false positive: '#m_argu sxc' inside a macro body flagged
+# 'm_argu' as unrecognized in a real corpus regression run).
+PREPROCESSOR_WORDS = {
+    "define", "ifdef", "ifndef", "if", "else", "elseif", "endif",
+    "include", "ingest", "list", "undef", "seed", "m_argu",
+    "m_if", "m_else", "m_elseif", "m_endif", "m_ifarg", "m_prm",
+    "delete_macros",
+}
+
+# Small hand-verified supplement of real keywords/reserved-parameter
+# names that fall outside every harvester above (bracket-notation, table-
+# row, bare-signature-line) -- found empirically, one at a time, the same
+# way SINGLE_ARG_FALSE_POSITIVES was built. atomic_interaction's own
+# ai_sites_1/ai_sites_2/etc. sub-keywords are documented as a single
+# run-on prose line ('ai_sites_1 $sites_1 ai_sites_2 $sites_2'), not any
+# of the three recognized signature forms. axial_del and INP_File are
+# real (confirmed by real usage in the corpus -- axial_del alongside
+# Full_Axial_Model in a real corpus file; INP_File as
+# 'String(INP_File)' in another) but aren't documented in a form
+# any harvester here catches; INP_File specifically is the reserved
+# parameter name for the current INP file's own name/path.
+SUPPLEMENTAL_MISC_KEYWORDS = {
+    "ai_sites_1", "ai_sites_2", "ai_no_self_interation", "ai_closest_N",
+    "ai_radius", "ai_exclude_eq_0", "ai_only_eq_0", "AI_R_CM",
+    "axial_del", "INP_File", "Get_Element_Weight", "fft_max_order",
+}
+
+# axial_conv's own named sub-parameters (references/21-keyword-index.md,
+# Tcomm_1: '[axial_conv]... filament_length E sample_length E
+# receiving_slit_length E'; also cross-confirmed in the min/max defaults
+# table, references/01-syntax-and-parameters.md Table: 'sample_length,
+# receiving_slit_length, primary_soller_angle, secondary_soller_angle').
+# Packed as bare name-then-value pairs directly after the axial_conv
+# keyword (no further keyword in between each), the same
+# multi-bare-token-argument grammar z_matrix has -- but since this is a
+# small, fixed, well-documented set of names (not a repeating row
+# structure), just registering the names themselves as always-known is
+# simpler than a dedicated positional consumer like z_matrix's.
+AXIAL_CONV_SUBPARAMS = {
+    "filament_length", "sample_length", "receiving_slit_length",
+    "primary_soller_angle", "secondary_soller_angle", "axial_n_beta",
+}
+
+# Keywords whose grammar takes TWO bare tag tokens before the real value,
+# not just one -- occ's '$atom [$name] E' (the atom symbol is required,
+# the name optional) and element_weight_percent's '$atom $Name #'
+# (references/21-keyword-index.md's Data structures listing). A real
+# corpus false positive otherwise: 'element_weight_percent Pr wt_Pr
+# 28.29...' -- 'Pr' (the required atom) was already protected by the
+# general single-token skip, but 'wt_Pr' (the second, tag-name token)
+# wasn't.
+WIDE_TAG_KEYWORDS = {"occ", "element_weight_percent"}
+
+# Small hand-verified supplement to the Table 2-2/2-4 reserved-parameter-
+# name harvest below (load_reserved_parameter_names()) -- real reserved
+# names confirmed in reference-chapter prose (Fcalc/Fobs:
+# 21-keyword-index.md's fourier_map_formula note; FT_K/WPPL_L/WPPM_L/
+# WPPM_Ln_k: 20-miscellaneous.md's ft_conv/WPPM sections; I: Table 2-4's
+# own footnote text, "1) I corresponds to I of hkl_Is..." -- prose, not
+# a clean Name-column table row, so the table harvester alone misses it)
+# that fall outside the two clean tables the harvester parses.
+RESERVED_PARAMETER_NAME_SUPPLEMENT = {
+    "Fcalc", "Fobs", "FT_K", "WPPL_L", "WPPM_L", "WPPM_Ln_k", "I",
+}
+
+
+def load_reserved_parameter_names(references_dir):
+    """Harvest TOPAS's own reserved parameter names (X, Yobs, Ycalc, H,
+    K, L, D_spacing, Th, Lam, T, Cycle, Val, Change, ...) from
+    references/01-syntax-and-parameters.md's 'Table 2-2. Reserved
+    parameter names.' and 'Table 2-4. Phase intensity reserved parameter
+    names.' -- these are internally-updated names usable inside
+    equations (see that file's own '## Reserved parameter names'
+    section), never declared via prm/local and never a bracket-notation
+    keyword either, so without this they were coming back as
+    unrecognized identifiers everywhere real equations used them (Xo,
+    Yobs, Ycalc, H, K, L, D_spacing, ... -- a large, real false-positive
+    class found in a full corpus regression run). Each table row's first
+    cell is a comma-separated list of names sharing one description;
+    parsed by locating the two table's own header rows and reading every
+    '| Name(s) | ... |' row until the next '##'/'|---|' section
+    boundary that isn't part of the same table."""
+    names = set(RESERVED_PARAMETER_NAME_SUPPLEMENT)
+    path = os.path.join(references_dir, "01-syntax-and-parameters.md")
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return names
+    for header in ("Table 2-2. Reserved parameter names.", "Table 2-4. Phase intensity reserved parameter names."):
+        idx = text.find(header)
+        if idx == -1:
+            continue
+        end = text.find("\n\n\n", idx)
+        if end == -1:
+            end = len(text)
+        block = text[idx:end]
+        for line in block.split("\n"):
+            line = line.strip()
+            if not line.startswith("|") or line.startswith("| ---") or line.startswith("| Name"):
+                continue
+            cell = line.strip("|").split("|")[0]
+            # Most rows comma-separate multiple names sharing one
+            # description ('A_star, B_star, C_star'), but at least one
+            # (Table 2-4's 'Iobs_no_scale_pks Iobs_no_scale_pks_err')
+            # space-separates them instead with no comma at all -- split
+            # on both.
+            for tok in re.split(r"[,\s]+", cell):
+                tok = tok.strip()
+                if re.match(r"^[A-Za-z_]\w*$", tok):
+                    names.add(tok)
+    return names
+
+
+# Trigger words for find_data_block_spans() -- deliberately a small,
+# curated set (NOT "any recognized keyword/macro"), since a brace block
+# immediately after most keywords/macros IS real, checkable TOPAS
+# statement syntax (e.g. a macro's own body).
+DATA_BLOCK_TRIGGER_WORDS = {
+    "load", "ADPs", "adps",
+    # '#list File_Name Time Temperature Gas { data rows }' (references/
+    # 26-parametric-and-sequential-refinement.md) -- same
+    # header-keyword-list-then-brace-table shape as 'load', for
+    # sequential/parametric refinement's per-pattern data table. A real
+    # corpus false positive otherwise: bare column values inside the
+    # table (e.g. 'CH4', 'Gas') flagged as unrecognized.
+    "list",
+}
+
+# For most trigger words (load/ADPs/adps), the HEADER between the
+# trigger and the '{' is real, checkable syntax (load's column-type
+# keywords are actual TOPAS keywords) and should stay validated
+# normally -- only the brace BODY is data. '#list', however, uses
+# user-CHOSEN column names in its own header ('#list File_Name Time
+# Temperature Gas { ... }' -- none of File_Name/Time/Temperature/Gas
+# are real keywords), so its header needs exempting too.
+DATA_BLOCK_TRIGGERS_WITH_EXEMPT_HEADER = {"list"}
+
+
+def find_data_block_spans(text):
+    """The '{ ... }' body of a 'TRIGGER [KEYWORD1 KEYWORD2 ...] { data
+    rows }' block, for a small curated set of trigger words known to
+    introduce this shape (DATA_BLOCK_TRIGGER_WORDS below) -- NOT any
+    arbitrary recognized keyword/macro, since e.g. 'macro Foo(x) {
+    ...real TOPAS code... }' has the same surface shape (a keyword-ish
+    name immediately followed by a brace block) but its body is genuine
+    statement syntax that must still be checked normally. Two confirmed
+    real cases: 'load site x y z occ beq layer { Al1 XX(0.2986)
+    YY(0.4955) ZZ(0.4755) Al 1 0.25 A ... }' (references/20-
+    miscellaneous.md's use_hklm example; the header keyword list itself
+    is validated normally, but the DATA ROWS below follow whatever
+    column types the header declared, not keyword syntax -- e.g. an
+    'occ' column's row value is a bare atom symbol like 'Al'/'Si'/'O',
+    not itself required to be a keyword -- 'Si' inside exactly this kind
+    of table was a real corpus false positive); and 'ADPs { u11C1 0.01
+    u22C1 0.01 ... }' (a CIF-import-generated file's own convention of
+    suffixing each U_ij component name with its site label, e.g.
+    'u23O3' -- also a real corpus false positive)."""
+    spans = []
+    n = len(text)
+    for m in re.finditer(r"\b(?:" + "|".join(re.escape(w) for w in DATA_BLOCK_TRIGGER_WORDS) + r")\b", text):
+        pos = m.end()
+        brace_pos = None
+        j = pos
+        while j < n and j < pos + 300:
+            c = text[j]
+            if c == "{":
+                brace_pos = j
+                break
+            if c == ";":
+                break
+            j += 1
+        if brace_pos is None:
+            continue
+        depth = 0
+        i = brace_pos
+        while i < n:
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    span_start = pos if m.group(0) in DATA_BLOCK_TRIGGERS_WITH_EXEMPT_HEADER else brace_pos + 1
+                    spans.append((span_start, i))
+                    break
+            i += 1
+    return spans
+
+
+def find_call_argument_spans(text, keywords_plus_macros):
+    """Character span of every '(...)' argument list immediately
+    following a recognized keyword/macro name (e.g. 'CS_L(csl,
+    207.591332)', 'MVW(6531.635, 1266.863, 100.000)') -- exempted from
+    typo-checking wholesale, since these arguments are typically site/
+    parameter names or literal values the callee's own grammar defines,
+    not TOPAS keywords themselves (the same reasoning DEFINER_KEYWORDS
+    already applies to 'prm NAME'/'local NAME', generalized to every
+    parenthesized macro/keyword call). Brace-matched so nested parens in
+    the argument list don't truncate the span early."""
+    spans = []
+    n = len(text)
+    for m in re.finditer(r"([A-Za-z_]\w*)\s*\(", text):
+        if m.group(1) not in keywords_plus_macros:
+            continue
+        paren_start = m.end() - 1
+        depth = 0
+        i = paren_start
+        while i < n:
+            if text[i] == "(":
+                depth += 1
+            elif text[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    spans.append((paren_start + 1, i))
+                    break
+            i += 1
+    return spans
+
+
+def _in_any_span(pos, spans):
+    return any(s <= pos < e for s, e in spans)
+
+
+def find_defined_names(clean_text, keywords=None):
     names = set()
     tokens = list(IDENTIFIER_RE.finditer(clean_text))
     for idx, m in enumerate(tokens):
         word = m.group(0)
         if word in DEFINER_KEYWORDS and idx + 1 < len(tokens):
             names.add(tokens[idx + 1].group(0))
+    if keywords:
+        # Many keywords use a 'keyword $name value' tagging convention
+        # (occ/beq/number_of_sequences/scale/...) where the tag becomes a
+        # real, persistently-referenceable name -- e.g.
+        # 'number_of_sequences Nseqs 200' declares Nseqs, then some LATER
+        # equation elsewhere in the file does 'Nv Nseqs'. This has to be
+        # a full pre-pass over the WHOLE file (not just registered as a
+        # side effect while the main check_keyword_typos() loop happens
+        # to walk past the declaration), because a reference can appear
+        # BEFORE its own declaration in the file (a real false positive
+        # found in a corpus regression run: exactly this Nseqs case,
+        # where the reference on an earlier line was still unresolved
+        # even after teaching the main loop to register tags going
+        # forward, since that single left-to-right pass hadn't reached
+        # the later declaration yet when it hit the earlier reference).
+        for idx, m in enumerate(tokens):
+            word = m.group(0)
+            if word not in keywords:
+                continue
+            after_pos = m.end()
+            while after_pos < len(clean_text) and clean_text[after_pos] in " \t\r\n":
+                after_pos += 1
+            if after_pos < len(clean_text) and clean_text[after_pos] == "(":
+                continue  # a parenthesized call -- no bare tag-name argument to register
+            width = 2 if word in WIDE_TAG_KEYWORDS else 1
+            for j in range(idx + 1, min(idx + width, len(tokens) - 1) + 1):
+                names.add(tokens[j].group(0))
     for m in re.finditer(r"[@!]\s*([A-Za-z_][A-Za-z0-9_]*)", clean_text):
         names.add(m.group(1))
     # Names introduced via #define NAME are user-chosen flags, not keywords.
     for m in re.finditer(r"#define\s+([A-Za-z_]\w*)", clean_text):
         names.add(m.group(1))
+    # 'def' can declare several comma-separated names in one statement
+    # with no value at all ('def f21, f22;', a forward declaration) --
+    # the general single-token skip-after-any-keyword mechanism only
+    # ever protects the FIRST name in such a list ('f21'), missing the
+    # rest ('f22', a real false positive found in a corpus regression
+    # run). 'def NAME = expr;' (the far more common single-name form)
+    # is already covered by that same general mechanism and doesn't need
+    # duplicating here.
+    for m in re.finditer(r"\bdef\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)+)\s*;", clean_text):
+        for name in m.group(1).split(","):
+            names.add(name.strip())
+    # TOPAS's '##' token-pasting operator builds a dynamic parameter name
+    # from a macro-argument prefix and a literal suffix (e.g. 'prm
+    # ZZ##z1' -- 'ZZ' is usually a real macro parameter, already handled
+    # elsewhere, but the 'z1' suffix is hand-typed literal text meant to
+    # be concatenated on, not an independent reference to anything). Any
+    # identifier immediately preceded by '##' is this kind of suffix,
+    # never meant to be independently meaningful/checkable.
+    for m in re.finditer(r"##([A-Za-z_]\w*)", clean_text):
+        names.add(m.group(1))
+    # A macro's own PARAMETER names (e.g. 'macro Foo(sh_c22m, sh_c22p)')
+    # are legitimate identifiers throughout that macro's own body, but
+    # were never registered anywhere -- only the macro's own NAME was
+    # harvested, never its parameter list. A real false-positive class
+    # found in a full corpus regression run: spherical-harmonics-style
+    # macro parameter names (sh_c22m, y22p, Lpa, u1, v1, ...) flagged as
+    # unrecognized throughout the macro body that declares and uses them.
+    for m in MACRO_DEF_RE.finditer(clean_text):
+        for param in m.group(2).split(","):
+            param = param.strip().lstrip("&").strip()
+            if re.match(r"^[A-Za-z_]\w*$", param):
+                names.add(param)
+    # 'fn NAME(args) { ... }' user-defined functions have the same "own
+    # parameter names are legitimate throughout the body" issue as
+    # 'macro', but use a different keyword and so aren't matched by
+    # MACRO_DEF_RE at all (a real false positive found in a corpus
+    # regression run: x1/y1/z1/o1/b1 flagged inside a 'fn str_F2(h, k,
+    # l, ...)' body that used them as its own parameters).
+    for m in FN_DEF_RE.finditer(clean_text):
+        for param in m.group(2).split(","):
+            param = param.strip().lstrip("&").strip()
+            if re.match(r"^[A-Za-z_]\w*$", param):
+                names.add(param)
     return names
 
 
@@ -1307,33 +2159,127 @@ def check_keyword_typos(clean_text, keywords, issues):
     # elsewhere in the manual). `keywords` here is expected to already
     # include those exact-cased macro names, merged in by the caller from
     # the bundled .inc library.
-    defined_names = find_defined_names(clean_text)
+    defined_names = find_defined_names(clean_text, keywords)
+    consumed_spans = (find_z_matrix_label_spans(clean_text) + find_call_argument_spans(clean_text, keywords)
+                       + find_space_group_symbol_spans(clean_text) + find_data_block_spans(clean_text)
+                       + find_filename_run_spans(clean_text))
     seen_already = set()
     keywords_by_len = {}
     for kw in keywords:
         keywords_by_len.setdefault(len(kw), []).append(kw)
 
     tokens = list(IDENTIFIER_RE.finditer(clean_text))
-    skip_next_idx = -1
+    skip_through_idx = -1
     for idx, m in enumerate(tokens):
         word = m.group(0)
-
-        if idx == skip_next_idx:
-            continue
 
         # If this token is itself a real keyword/macro (exact case), the
         # next token is very likely its argument/parameter-name position
         # (e.g. "scale scale_1", "peak_buffer_step ..."), not a keyword
-        # itself -- skip it.
+        # itself -- skip it. Checked BEFORE the skip_through_idx test below
+        # (not after -- a real, confirmed bug found once MIN_TYPO_CHECK_LEN
+        # was removed: a keyword whose bare numeric argument produces no
+        # IDENTIFIER_RE token at all, e.g. 'x 0.25', leaves skip_through_idx
+        # pointing at the very NEXT keyword in the token list, e.g. 'y' in
+        # 'x 0.25 y 0.5' -- checking skip_through_idx first would silently
+        # swallow that next keyword as if it were a skipped argument,
+        # permanently desyncing the skip chain for the rest of the
+        # statement, e.g. across an entire dense 'site NAME x # y # z #
+        # occ ATOM # beq #' line. Checking `word in keywords` first means a
+        # real keyword is always recognized regardless of stale skip
+        # state, and skip_through_idx only ever protects genuine non-
+        # keyword value token(s) -- safe to widen the window for a
+        # specific keyword (see 'occ' below) since a real keyword inside
+        # that window still always wins.
         if word in keywords:
-            skip_next_idx = idx + 1
+            # ...UNLESS this keyword/macro is being invoked as a
+            # parenthesized call ('ZE(@, 0)', 'CS_L(csl, 207.6)') --
+            # find_call_argument_spans() already exempts everything
+            # inside those parens, so there's no "next bare tag-name
+            # argument" to protect here at all. Without this check, a
+            # call with no identifier-shaped token inside its own parens
+            # (e.g. 'ZE(@, 0)' -- '@'/'0' aren't identifiers) leaves
+            # skip_next_idx pointing at the next real identifier
+            # anywhere AFTER the call closes, wrongly absorbing an
+            # unrelated, genuinely stray token positioned right after it
+            # (a real, confirmed bug: 'ZE(@, 0)' immediately followed by
+            # a leftover 'eee' on the next line was silently swallowed
+            # this way before this check was added).
+            after_pos = m.end()
+            while after_pos < len(clean_text) and clean_text[after_pos] in " \t\r\n":
+                after_pos += 1
+            if after_pos >= len(clean_text) or clean_text[after_pos] != "(":
+                # occ's own grammar is 'occ $atom [$name] E [beq E] ...'
+                # -- an OPTIONAL user-chosen name (the same "scale
+                # scale_1"-style convention) can follow the required atom
+                # symbol before the real value, so widen the window to 2
+                # bare tokens for this one keyword specifically (e.g.
+                # 'occ Na occn2 0.03259` ...', a real corpus false
+                # positive on 'occn2' otherwise). Safe even when there's
+                # no second bare tag present, since a real keyword
+                # anywhere in the window still always wins (checked
+                # first, above).
+                width = 2 if word in WIDE_TAG_KEYWORDS else 1
+                skip_through_idx = idx + width
+                # (The tag-name token(s) in this window are ALSO
+                # registered persistently into defined_names -- but as a
+                # dedicated pre-pass over the whole file in
+                # find_defined_names(), not here, since a reference can
+                # appear BEFORE its own declaration; see that function's
+                # own note.)
             continue
 
-        if len(word) < MIN_TYPO_CHECK_LEN:
+        if idx <= skip_through_idx:
             continue
+
         if word in defined_names:
             continue
         if word in seen_already:
+            continue
+        # A keyword's own documented multi-token argument grammar (right
+        # now: z_matrix's atom-label/reference-label tokens, and the full
+        # argument list of any parenthesized keyword/macro call) -- these
+        # bare tokens are consumed by that grammar, not required to
+        # themselves be a keyword. See find_z_matrix_label_spans() /
+        # find_call_argument_spans() docstrings.
+        if _in_any_span(m.start(), consumed_spans):
+            continue
+        # A string-literal placeholder ('x' repeated -- see
+        # strip_comments_and_strings' docstring on why quoted-string
+        # interiors become 'x' runs rather than blank spaces) is a
+        # stripped-string artifact, never a real identifier.
+        if re.fullmatch(r"x+", word):
+            continue
+        # The EXTENSION half of a bare, unquoted filename ('somefile.xy'
+        # tokenizes as 'somefile' then, separately, 'xy' right after the
+        # literal dot) -- the existing filename-fragment suppression
+        # below only ever protected the STEM half (by checking what
+        # follows a token for '.ext'); this protects the extension
+        # token itself, recognized by being immediately preceded by '.'.
+        if m.start() > 0 and clean_text[m.start() - 1] == "." and len(word) <= 5:
+            continue
+        # The fractional-part digits of a backtick-error value tokenize as
+        # a bare '_N' identifier (e.g. the '_0' in '52.5347835`_0.817...',
+        # matched up to the decimal point) purely because IDENTIFIER_RE
+        # allows a leading underscore -- not a real identifier, just an
+        # artifact of TOPAS's own 'value`_error' notation. Recognized by
+        # being immediately preceded by a backtick OR a digit -- some
+        # real corpus files write this without the backtick at all (e.g.
+        # 'local !d0_1 4.32982_0.13351', found in a regression run), so
+        # requiring the backtick specifically missed that variant. A bare
+        # trailing '_' with NOTHING after it (e.g. 'prm !const2
+        # 4.81474_', also found in a regression run) is the same artifact
+        # with its error digits apparently truncated/missing -- still not
+        # a real identifier either way, so exempted the same as the
+        # digit-suffixed form (word[1:] == "" for this case).
+        if word[0] == "_" and (word[1:].isdigit() or word[1:] == "") and m.start() > 0 and clean_text[m.start() - 1] in "`0123456789":
+            continue
+        # TOPAS's own '_LIMIT_MIN_value'/'_LIMIT_MAX_value' suffix,
+        # appended directly after a refined value's error to record that
+        # it terminated at a parameter limit (e.g.
+        # '15.68351_LIMIT_MIN_-0.386567039') -- documented notation, not
+        # an identifier.
+        if word.startswith("_LIMIT_MIN_") or word.startswith("_LIMIT_MAX_"):
             continue
 
         # Filename-fragment suppression: an identifier immediately followed
@@ -1348,19 +2294,33 @@ def check_keyword_typos(clean_text, keywords, issues):
         candidates = []
         for delta in (-2, -1, 0, 1, 2):
             candidates.extend(keywords_by_len.get(len(word) + delta, []))
-        if not candidates:
-            continue
         # Exact-case near-miss matching -- a stricter comparison than the
         # earlier case-folded version, since case itself now counts as a
         # real difference (and a real class of typo: right word, wrong case).
-        close = difflib.get_close_matches(word, candidates, n=1, cutoff=0.82)
+        close = difflib.get_close_matches(word, candidates, n=1, cutoff=0.82) if candidates else []
+        seen_already.add(word)
         if close:
-            seen_already.add(word)
             issues.append(
                 ("warning", line_of(clean_text, m.start()),
                  f"'{word}' is not a recognized keyword/macro name (exact case) and closely "
                  f"resembles '{close[0]}'. Possible typo, or a case mistake since TOPAS names "
                  f"are case sensitive -- verify manually (this is a heuristic, not certain).")
+            )
+        else:
+            # No length floor and no fuzzy-match requirement (confirmed
+            # directly by the user): every identifier must resolve to a
+            # keyword, a macro, a name this file itself declares, or a
+            # token consumed by some keyword's own known argument
+            # grammar -- anything left over is a stray/leftover token,
+            # not a near-miss of anything in particular (e.g. "eee" sitting
+            # alone on its own line, not a typo of any real keyword).
+            issues.append(
+                ("warning", line_of(clean_text, m.start()),
+                 f"'{word}' is not a recognized keyword, macro, or declared name, and doesn't "
+                 f"closely resemble any known one either -- likely a stray/leftover token rather "
+                 f"than a typo of something specific; verify manually (this is a heuristic: if "
+                 f"this is a legitimate bare-token argument to a keyword this checker doesn't yet "
+                 f"know the grammar of, that's a gap in this checker, not a mistake in the file).")
             )
 
 
@@ -1395,6 +2355,24 @@ def harvest_bodiless_macro_names(text):
     """
     names = set()
     for m in BODILESS_MACRO_DEF_RE.finditer(text):
+        names.add(m.group(1))
+    return names
+
+
+def harvest_fn_names(text):
+    """'fn NAME(args) { ... }' user-defined functions -- DEFINER_KEYWORDS
+    already registers a fn's own NAME in find_defined_names() (so a bare
+    mention of 'site_F' by itself wouldn't be flagged), but that's a
+    SEPARATE set from keywords_plus_macros, which is what
+    find_call_argument_spans() actually checks a callee name against
+    before exempting its whole argument list. Without this, 'fn'
+    definitions were invisible to the call-argument exemption -- e.g.
+    'site_F(h, k, l, x1, y1, z1, o1, b1, d2_inv, f0_Al)' calling a real
+    'fn site_F(...)' still had EVERY one of its own arguments individually
+    typo-checked, a real false-positive class found in a corpus
+    regression run (z1/o1/z2/o2/... flagged throughout)."""
+    names = set()
+    for m in FN_DEF_RE.finditer(text):
         names.add(m.group(1))
     return names
 
@@ -1454,9 +2432,13 @@ def check_macro_arity(clean_text, library_arities, issues):
         name = m.group(1)
         if name not in library_arities:
             continue
-        # Skip the macro's own definition site ("macro Name(...)").
-        prefix = clean_text[:m.start()]
-        prev_word_match = re.search(r"([A-Za-z_]\w*)\s*$", prefix.rstrip())
+        # Skip the macro's own definition site ("macro Name(...)" or
+        # "macro & Name(...)" -- see MACRO_DEF_RE's own note on the
+        # optional '&' before the name).
+        prefix = clean_text[:m.start()].rstrip()
+        if prefix.endswith("&"):
+            prefix = prefix[:-1].rstrip()
+        prev_word_match = re.search(r"([A-Za-z_]\w*)\s*$", prefix)
         if prev_word_match and prev_word_match.group(1) == "macro":
             continue
 
@@ -1692,6 +2674,151 @@ def find_str_blocks(clean_text):
     return blocks
 
 
+FOR_XDDS_RE = re.compile(r"\bfor\s+xdds\s*\{")
+FOR_STRS_ALL_RE = re.compile(r"\bfor\s+strs\s*\{")
+FOR_STRS_RANGE_RE = re.compile(r"\bfor\s+strs\s+(\d+)\s+to\s+(\d+)\s*\{")
+
+
+def find_xdd_count(clean_text):
+    """Count of top-level `xdd` block declarations (each starts a new
+    xdd/pattern object) -- used to determine the iteration count of a
+    `for xdds { ... }` loop, which applies its body once per already-
+    declared xdd object rather than declaring a new one itself. xdd
+    objects are always declared as a bare 'xdd <file>' statement (never
+    inside a for-loop body, which only ever APPLIES settings to objects
+    that already exist), so a plain count of '\\bxdd\\b' tokens is
+    sufficient -- word-boundary matching already excludes 'xdds' (as in
+    'for xdds'). Confirmed against a real file: returns 65 for
+    test_examples/matthew-rowles/2457_surface_paper_2.inp, matching that
+    file's own tc.exe console output ('Num data files: 65')."""
+    return len(re.findall(r"\bxdd\b", clean_text))
+
+
+def _find_matching_brace(clean_text, open_brace_pos):
+    """Given the offset of a '{' character, return the offset of its
+    matching '}' via simple depth counting (clean_text is already
+    comment/string-stripped, so no need to skip over those here)."""
+    depth = 0
+    n = len(clean_text)
+    i = open_brace_pos
+    while i < n:
+        c = clean_text[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return n
+
+
+def find_for_loop_multipliers(clean_text):
+    """Find every `for xdds { ... }` / `for strs { ... }` / `for strs N
+    to M { ... }` construct and its multiplicity -- how many times TOPAS
+    actually evaluates that block's body internally (once per already-
+    declared xdd, once per already-declared str, or once per str in the
+    given 1-based inclusive range, respectively). A parameter declared
+    ONCE in a loop's source text is really N independent parameters at
+    runtime (auto-uniquified per iteration) -- confirmed directly, at the
+    user's own request, against a real file: TOPAS itself reported 1448
+    independent parameters for test_examples/matthew-rowles/
+    2457_surface_paper_2.inp, while a scan with no concept of this
+    multiplication found only 800-864 (missing the multiplication inside
+    that file's `for xdds { ... }`, which contains independently-refined
+    parameters like `Pb_shift`/`Pb_ka1_fwhm` applied once per xdd -- 65
+    times each, not once).
+
+    Returns a list of (body_start, body_end, multiplier) offset spans
+    (body = strictly between the '{' and its matching '}'). Nested loops
+    just produce multiple overlapping spans -- a position inside more
+    than one span is multiplied by all of them (the product), matching
+    real nested-loop semantics (e.g. `for xdds { for strs 1 to 2 { ... }
+    }`'s inner body is n_xdd * 2, not just one or the other).
+
+    Only these three documented forms are recognized. TOPAS's `for` can
+    also iterate over other internal node types (e.g. `for site_recs
+    { ... }`, references/20-miscellaneous.md) -- those are NOT specially
+    handled here; their body is scanned as literal text occurring once,
+    same as before this function existed. Stated plainly as a known scope
+    boundary, not a silent gap: xdds/strs are the dominant, corpus-
+    confirmed forms actually used for multi-pattern refinement files.
+
+    One deliberately conservative choice, stated plainly rather than
+    guessed at: a BARE (no-range) `for strs { ... }` found NESTED inside
+    another one of these spans (almost always a `for xdds { ... }`) does
+    NOT get its own extra multiplier on top of the enclosing one -- only
+    a TOP-LEVEL bare `for strs { ... }` uses the file's total str count.
+    The real semantics of a nested bare `for strs` (every str in the
+    whole file, again, for every xdd iteration? or just the strs
+    belonging to the current xdd?) aren't confirmed, and the wrong guess
+    in the "whole file, again" direction is a much worse failure mode
+    (a 65x390 explosion instead of a 65x6) than simply not adding a
+    second multiplier there. An explicit-range `for strs N to M { ... }`
+    is unaffected by this caveat -- M-N+1 is unambiguous regardless of
+    nesting, confirmed directly against a real nested example (`for xdds
+    { ... for strs 3 to 4 { ... beq Ti5_Ti_beq 1.14414\\` ... } }` in
+    2457_surface_paper_2.inp: the shared 'Ti5_Ti_beq' name already
+    dedupes to one parameter WITHIN one iteration same as any other
+    same-named beq, and this function's job is only to then multiply
+    that by 2 for the two str-index iterations, exactly matching how the
+    xdd-level multiplication already works).
+    """
+    n_str = None
+    n_xdd = None
+    spans = []
+
+    for m in FOR_XDDS_RE.finditer(clean_text):
+        if n_xdd is None:
+            n_xdd = find_xdd_count(clean_text)
+        open_pos = m.end() - 1
+        close_pos = _find_matching_brace(clean_text, open_pos)
+        spans.append((open_pos + 1, close_pos, n_xdd))
+
+    for m in FOR_STRS_ALL_RE.finditer(clean_text):
+        # Skip if this bare 'for strs' is itself nested inside a span
+        # already found above (see the nesting caveat in the docstring).
+        if any(start <= m.start() < end for start, end, _mult in spans):
+            continue
+        if n_str is None:
+            n_str = len(find_str_blocks(clean_text))
+        open_pos = m.end() - 1
+        close_pos = _find_matching_brace(clean_text, open_pos)
+        spans.append((open_pos + 1, close_pos, n_str))
+
+    for m in FOR_STRS_RANGE_RE.finditer(clean_text):
+        lo, hi = int(m.group(1)), int(m.group(2))
+        mult = max(hi - lo + 1, 0)
+        open_pos = m.end() - 1
+        close_pos = _find_matching_brace(clean_text, open_pos)
+        spans.append((open_pos + 1, close_pos, mult))
+
+    return spans
+
+
+def for_loop_multiplier_at(pos, spans):
+    """Product of every span's multiplier that contains character offset
+    `pos` -- nested for-loops multiply together, matching real semantics.
+    `spans` is find_for_loop_multipliers()'s return value."""
+    result = 1
+    for start, end, mult in spans:
+        if start <= pos < end:
+            result *= mult
+    return result
+
+
+def for_loop_multiplier_at_line(line_no, clean_text, spans):
+    """Same as for_loop_multiplier_at, but keyed by 1-indexed line number
+    instead of a character offset -- convenient for callers (like
+    find_refined_params.py) that only tracked a line number, not the
+    original offset, for each parameter they found."""
+    result = 1
+    for start, end, mult in spans:
+        if line_of(clean_text, start) <= line_no <= line_of(clean_text, max(end - 1, start)):
+            result *= mult
+    return result
+
+
 def extract_keyword_form(clean_slice, keyword):
     """
     Find `keyword`'s value/equation at its FIRST occurrence in clean_slice
@@ -1923,75 +3050,54 @@ def resolve_site_coordinates(site_slice, outer_known=None):
     return None, forms
 
 
-def is_name_refined_or_tied_elsewhere(clean_text, name, exclude_pos):
-    """True if `name` (a parameter name attached to a bare, locally-
-    unrefined coordinate/length -- e.g. 'qq' in 'x qq 0.123') is '@'-refined
-    or Get()-tied to ANYWHERE ELSE in the whole file's cleaned text.
-
-    Exists because a bare value's OWN occurrence poses no drift risk by
-    itself (see check_symmetry_constraints' "already tautologically
-    consistent" reasoning) -- but TOPAS scopes parameters by NAME across
-    the entire file: 'x qq 0.123' elsewhere refined via a second 'qq @
-    0.123' declaration, or tied into via 'something = Get(qq);', moves
-    THIS occurrence too, silently reintroducing exactly the drift risk the
-    bare-value case is otherwise correctly exempt from. `exclude_pos` is
-    the char offset of the coordinate's OWN name token (from extract_
-    keyword_form's match_start_offset), excluded so this occurrence isn't
-    mistaken for a second, independent one.
-
-    Deliberately whole-file (not str-block-scoped): a parameter name is a
-    single flat namespace across the entire .inp, not scoped to its str
-    block (TOPAS itself enforces this -- see check_symmetry_constraints'
-    own "same parameter name" comment) -- a refine/tie against this name
-    anywhere, even in a different phase, still causes drift here.
-    """
-    if not name:
-        return False
-    for m in re.finditer(r"@\s*" + re.escape(name) + r"\b", clean_text):
-        if m.start() != exclude_pos:
-            return True
-    for m in re.finditer(r"\bGet\(\s*" + re.escape(name) + r"\s*\)", clean_text):
-        return True
-    return False
-
-
 def check_symmetry_constraints(clean_text, text_with_values, issues):
     """
-    Validate that an existing .inp's site coordinates, ADPs (u11..u23), and
-    lattice parameters actually implement the constraints their own
-    declared space group requires -- e.g. flag a site coordinate refined
-    independently (bare or '@') when site symmetry requires it tied to
-    another via 'y = Get(x);', a lattice length refined independently when
-    the crystal system requires 'b = Get(a);', or an ADP tensor component
-    that isn't correctly tied/zeroed per the site's Wyckoff position.
-    Raised directly by the user (TOPAS-Academic's author): "if 'y=Get(x);'
-    is necessary and the INP file tries to refine on the y coordinate
-    independently, then throw a warning" (coordinates/lattice), followed by
-    "Ensure that warnings are given if ADP constraints are invalid
-    depending on the Wyckoff position" (ADPs).
+    Validate that an existing .inp's ADPs (u11..u23) and lattice parameters
+    actually implement the constraints their own declared space group
+    requires -- e.g. flag a lattice length refined independently when the
+    crystal system requires 'b = Get(a);', or an ADP tensor component that
+    isn't correctly tied/zeroed per the site's Wyckoff position.
+
+    Site COORDINATE (x/y/z) independent-refinement-vs-required-tie checking
+    (e.g. flagging 'y' written independently when site symmetry would tie
+    it to 'y = Get(x);') was originally built at the user's own request
+    ("if 'y=Get(x);' is necessary and the INP file tries to refine on the y
+    coordinate independently, then throw a warning") but was later
+    explicitly REMOVED, again directly by the user (TOPAS-Academic's
+    author), on a real file (test_examples/temp.inp's O1 site) where it
+    flagged a deliberate, valid choice: "the act of refining on x or y
+    independently means that TOPAS will treat these coordinates as being
+    different to each other" -- i.e. writing a coordinate independently
+    (not tied via Get()) is itself the deliberate signal that it should be
+    treated as independent, a normal modeling choice, not an accidental
+    omission worth flagging. This does NOT extend to ADPs or lattice
+    parameters below -- neither has been challenged the same way, and the
+    ADP check in particular is not the same kind of check to begin with
+    (see the note above classify_adps' call site).
 
     The ADP check (symmetry_utils.classify_adps -- see its own docstring)
-    differs from the coordinate/lattice checks in one important way: a
-    coordinate's required 'fixed' value is *derived from that same
+    differs from the (now-removed) coordinate check in one important way: a
+    coordinate's required 'fixed' value was *derived from that same
     coordinate's own written number* (see resolve_site_coordinates), so a
-    bare value can never numerically mismatch it -- only '@'-refining it is
-    a real risk. An ADP's required value is NOT derived from its own
+    bare value could never numerically mismatch it -- only '@'-refining it
+    was a real risk, which is exactly the class of warning that turned out
+    to be unwanted. An ADP's required value is NOT derived from its own
     written number -- it's derived purely from the site's POSITION
     stabilizer, entirely independent of whatever u_ij value happens to be
     written. So a bare ADP value that's numerically wrong (e.g. 'u12 0.02'
     when site symmetry requires 'u12' fixed at 0, or requires it equal to
     'u11/2' but the written number doesn't match) is a genuine static data
-    error, flagged regardless of refinement status -- not a tautology like
-    the coordinate case, and not gated behind "is anything actually being
-    refined."
+    error, flagged regardless of refinement status -- a different situation
+    from the coordinate case that was removed, not just a smaller version
+    of it.
 
     Reuses the exact same crystallography engine as cif_to_str.py
-    (symmetry_utils.py) -- classify_coordinates for per-site Wyckoff
-    constraints, classify_crystal_system/ANGLE_CONSTRAINTS_BY_SYSTEM/
-    LENGTH_TIES_BY_SYSTEM for lattice-parameter constraints -- run here in
-    the opposite direction: instead of generating correct syntax from a
-    CIF, it parses the .inp's OWN already-written syntax and compares it
-    against what the space group requires.
+    (symmetry_utils.py) -- classify_crystal_system/ANGLE_CONSTRAINTS_BY_SYSTEM/
+    LENGTH_TIES_BY_SYSTEM for lattice-parameter constraints, classify_adps
+    for per-site ADP constraints -- run here in the opposite direction:
+    instead of generating correct syntax from a CIF, it parses the .inp's
+    OWN already-written syntax and compares it against what the space
+    group requires.
 
     Space-group operators are resolved via symmetry_utils.resolve_sg_operators
     (TOPAS's own sgcom6.exe / sg/ database) -- an .inp file never carries its
@@ -2159,18 +3265,11 @@ def check_symmetry_constraints(clean_text, text_with_values, issues):
                     continue
                 # Same refinement-status reasoning as the site-coordinate
                 # tie check above: a bare independent length poses no drift
-                # risk unless something can actually move -- including via a
-                # distant '@'-refine or Get()-tie against its own or the
-                # independent length's parameter NAME elsewhere in the file
-                # (see is_name_refined_or_tied_elsewhere).
+                # risk unless something can actually move.
                 if form[0] == "value" and form[1] != "@":
                     indep_form = extract_keyword_form(preamble, indep)
                     indep_refined = indep_form is not None and indep_form[0] == "value" and indep_form[1] == "@"
-                    this_name_elsewhere = is_name_refined_or_tied_elsewhere(
-                        clean_text, form[3], content_start + form[-1])
-                    indep_name_elsewhere = indep_form is not None and indep_form[0] == "value" and \
-                        is_name_refined_or_tied_elsewhere(clean_text, indep_form[3], content_start + indep_form[-1])
-                    if not indep_refined and not this_name_elsewhere and not indep_name_elsewhere:
+                    if not indep_refined:
                         continue
                 kind_desc = f"'{form[0]}'" if form[0] == "equation" else f"an independent {form[0]} ('{form[1] + ' ' if form[1] else ''}{form[2]}')" if form[0] == "value" else form[0]
                 issues.append(
@@ -2199,149 +3298,19 @@ def check_symmetry_constraints(clean_text, text_with_values, issues):
             if point is None:
                 continue
             stabilizer = symmetry_utils.find_stabilizer(point, symops, 0.0015)
-            constraint = symmetry_utils.classify_coordinates(point, stabilizer)
-            for coord in ("x", "y", "z"):
-                kind = constraint[coord]
-                form = forms[coord]
-                if kind[0] in ("free", "complex") or form is None:
-                    continue
-                line_no = line_of(clean_text, content_start + site_pos)
-                if kind[0] == "fixed":
-                    # kind[1] is derived directly from this same coordinate's
-                    # own resolved value (see resolve_site_coordinates), so a
-                    # bare/'value'-form number can never numerically mismatch
-                    # it -- the only real risk is '@' actively refining it
-                    # away from the required exact constant.
-                    if form[0] == "value" and form[1] == "@":
-                        issues.append(
-                            ("warning", line_no,
-                             f"Site '{name}': '{coord}' is refined ('@') independently, but site "
-                             f"symmetry under space_group {symbol!r} fixes it at an exact value "
-                             f"({kind[1]:.6g}) -- refining it risks drifting off the required "
-                             f"special-position value. Consider a bare fixed value instead.")
-                        )
-                    elif form[0] == "value" and form[3] is not None and \
-                            is_name_refined_or_tied_elsewhere(clean_text, form[3], content_start + site_pos + form[-1]):
-                        # Bare here, but this same parameter NAME is '@'-refined
-                        # or Get()-tied somewhere else in the file -- TOPAS
-                        # enforces one value per name across the whole file, so
-                        # this occurrence drifts too even though nothing on
-                        # this line looks refined.
-                        issues.append(
-                            ("warning", line_no,
-                             f"Site '{name}': '{coord}' is a bare value named '{form[3]}', but that "
-                             f"parameter name is '@'-refined or Get()-tied elsewhere in this file -- "
-                             f"site symmetry under space_group {symbol!r} fixes '{coord}' at an exact "
-                             f"value ({kind[1]:.6g}), and TOPAS enforces one shared value per parameter "
-                             f"name, so this occurrence will drift with the other one.")
-                        )
-                elif kind[0] == "tied":
-                    _, other, sign, offset = kind
-                    matches = False
-                    if form[0] == "equation":
-                        tie_m = GET_TIE_RE.match(form[1])
-                        # A Wyckoff position tie is always a pure sign flip
-                        # plus offset (classify_coordinates never derives a
-                        # scaling factor) -- a written tie WITH a multiplier
-                        # can never be the required relationship, so it's
-                        # excluded here rather than silently accepted.
-                        if tie_m and not tie_m.group("mul_x") and not tie_m.group("mul_j"):
-                            ref_other = tie_m.group("name")
-                            ref_sign = -1 if tie_m.group("neg") else 1
-                            ref_offset = float(Fraction(tie_m.group("off_val"))) if tie_m.group("off_sign") else 0.0
-                            if tie_m.group("off_sign") == "-":
-                                ref_offset = -ref_offset
-                            matches = (ref_other == other and ref_sign == sign
-                                       and abs(ref_offset - offset) < 0.0015)
-                    if matches:
-                        continue
-
-                    other_form = forms.get(other)
-
-                    # A coordinate written as a PLAIN NUMERIC CONSTANT (not a
-                    # Get() tie) is tautologically consistent with whatever
-                    # classify_coordinates derived here -- that derivation
-                    # used THIS coordinate's own resolved value (via
-                    # resolve_site_coordinates) in the first place, so a
-                    # fixed number can never numerically contradict a
-                    # requirement computed from itself. A real bug found
-                    # this way on two real files (test_examples/clay.inp,
-                    # test_examples/k-factor/k-factor.inp -- confirmed and
-                    # diagnosed directly by the user, TOPAS-Academic's
-                    # author): both write BOTH tied coordinates as
-                    # independent plain-constant equations (e.g.
-                    # 'x =1/3; y =2/3;', numerically consistent with a
-                    # required 'y = -Get(x);' tie since 2/3 = -1/3 mod 1)
-                    # rather than the literal Get()-tie syntax -- this
-                    # checker flagged them anyway, since only the exact
-                    # 'y = -Get(x);' form was ever accepted as "matching". A
-                    # plain constant can never drift (recomputed identically
-                    # every iteration), so this is always safe to skip,
-                    # unconditionally -- no refinement-status gate needed.
-                    if form[0] == "equation" and parse_plain_numeric_equation(form[1]) is not None:
-                        continue
-
-                    # Two keywords given the SAME parameter name are a
-                    # TOPAS kernel-enforced invariant -- "Parameters with
-                    # the same name must have the same value... an
-                    # exception is thrown if [they] were defined with
-                    # differing values" (Technical_Reference.pdf, section
-                    # 2.4 "Parameter constraints") -- so if this coordinate
-                    # and 'other' share a name (given directly, e.g.
-                    # 'x qq 0.123 y qq 0.123', or via a bare -- not Get() --
-                    # equation reference, e.g. 'y = qq;'), they can never
-                    # numerically diverge no matter how the shared
-                    # parameter is later refined. This only ever expresses
-                    # a sign=+1 (equal-value) relationship, since a shared
-                    # name forces identical values, never a sign flip --
-                    # safe by the same point-derivation tautology as above.
-                    this_name = form[3] if form[0] == "value" else None
-                    other_name = other_form[3] if other_form is not None and other_form[0] == "value" else None
-                    if this_name is not None and this_name == other_name:
-                        continue
-                    if form[0] == "equation" and other_name is not None and form[1].strip() == other_name:
-                        continue
-
-                    # A wrong/mismatched equation is a real structural bug
-                    # regardless of refinement status -- always flag it. A
-                    # bare independent value, though, is by construction
-                    # already numerically consistent with the tie (it's
-                    # exactly what the tie was derived from) and poses zero
-                    # drift risk unless something can actually move: either
-                    # this coordinate itself is '@'-refined, or the
-                    # coordinate it should track ('other') is -- only then
-                    # can the two actually separate during refinement.
-                    other_refined = other_form is not None and other_form[0] == "value" and other_form[1] == "@"
-                    this_refined = form[0] == "value" and form[1] == "@"
-                    # A bare value's own NAME can also carry drift risk if
-                    # that same name is '@'-refined or Get()-tied elsewhere
-                    # in the file (see is_name_refined_or_tied_elsewhere) --
-                    # TOPAS enforces one shared value per parameter name, so
-                    # a second, distant refine/tie against this coordinate's
-                    # name (or the tied-to 'other' coordinate's name) moves
-                    # this occurrence too.
-                    this_name_elsewhere = form[0] == "value" and \
-                        is_name_refined_or_tied_elsewhere(clean_text, form[3], content_start + site_pos + form[-1])
-                    other_name_elsewhere = other_form is not None and other_form[0] == "value" and \
-                        is_name_refined_or_tied_elsewhere(clean_text, other_form[3],
-                                                           content_start + site_pos + other_form[-1])
-                    if form[0] == "value" and not this_refined and not other_refined \
-                            and not this_name_elsewhere and not other_name_elsewhere:
-                        continue
-                    sign_str = "" if sign == 1 else "-"
-                    expr = f"{sign_str}Get({other})"
-                    offset_mod1 = offset % 1.0
-                    if offset_mod1 > 1e-6:
-                        off_snapped, off_exact = symmetry_utils.snap_to_fraction(offset_mod1)
-                        off_disp = f"{off_exact.numerator}/{off_exact.denominator}" if off_exact else f"{off_snapped:.6g}"
-                        expr += f" + {off_disp}" if offset >= 0 else f" - {off_disp}"
-                    issues.append(
-                        ("warning", line_no,
-                         f"Site '{name}': '{coord}' is written as "
-                         f"{'an independent ' + form[0] if form[0] == 'value' else 'a different equation'} "
-                         f"but site symmetry under space_group {symbol!r} requires it tied to "
-                         f"'{coord} = {expr};' -- refining independently risks violating that symmetry.")
-                    )
+            # Coordinate (x/y/z) independent-refinement-vs-required-tie
+            # checking was deliberately REMOVED here (previously flagged a
+            # coordinate refined independently when site symmetry would
+            # otherwise tie/fix it) -- confirmed directly by the user
+            # (TOPAS-Academic's author) as a false-positive class, not a
+            # real risk: "the act of refining on x or y independently means
+            # that TOPAS will treat these coordinates as being different to
+            # each other" -- i.e. writing a coordinate independently is
+            # itself the deliberate signal that it should be treated as
+            # independent, a normal and valid modeling choice, not an
+            # accidental omission worth flagging. ADP (u11..u23)
+            # fixed/tied checking below is unaffected -- only ever
+            # confirmed, never objected to.
 
             adp_forms = {n: extract_keyword_form(site_slice, n) for n in symmetry_utils.ADP_NAMES}
             if any(f is not None for f in adp_forms.values()):
@@ -2417,20 +3386,7 @@ def check_symmetry_constraints(clean_text, text_with_values, issues):
                                 and adp_forms[other][1] == "@"
                                 for _c, other in terms
                             )
-                            # Same name-scoped drift risk as the coordinate
-                            # 'tied' case above: a bare ADP value (or one of
-                            # its tie terms) whose NAME is '@'-refined or
-                            # Get()-tied elsewhere in the file drifts too.
-                            this_name_elsewhere = is_name_refined_or_tied_elsewhere(
-                                clean_text, form[3], content_start + site_pos + form[-1])
-                            other_name_elsewhere = resolvable and any(
-                                adp_forms.get(other) is not None and adp_forms[other][0] == "value"
-                                and is_name_refined_or_tied_elsewhere(
-                                    clean_text, adp_forms[other][3], content_start + site_pos + adp_forms[other][-1])
-                                for _c, other in terms
-                            )
-                            if this_refined or (resolvable and other_refined) \
-                                    or this_name_elsewhere or other_name_elsewhere:
+                            if this_refined or (resolvable and other_refined):
                                 issues.append(
                                     ("warning", line_no,
                                      f"Site '{name}': '{adp_name}' is written as an independent value, "
@@ -2472,7 +3428,7 @@ def check_bom(text, issues):
         )
 
 
-def check_file(path, keywords, library_arities, library_bodiless, single_arg_keywords, e_arg_keywords, extra_text=None):
+def check_file(path, keywords, library_arities, library_bodiless, single_arg_keywords, e_arg_keywords, zero_arg_keywords, extra_text=None):
     with open(path, encoding="utf-8", errors="ignore") as f:
         text = f.read()
     if extra_text:
@@ -2512,6 +3468,7 @@ def check_file(path, keywords, library_arities, library_bodiless, single_arg_key
         merged_arities.setdefault(name, set()).update(counts)
 
     file_bodiless = harvest_bodiless_macro_names(clean)
+    file_fn_names = harvest_fn_names(clean)
     # DEFINER_KEYWORDS ("macro", "prm", "local", "for", "inp_text", "fn") plus
     # "load" are real, low-level TOPAS structural keywords that the
     # bracket-notation harvest from the reference chapters doesn't capture
@@ -2523,12 +3480,18 @@ def check_file(path, keywords, library_arities, library_bodiless, single_arg_key
     # positive from check_space_group_symbol below (found and fixed during
     # development: the full example corpus flagged exactly three distinct
     # false positives -- 'load', 'local', 'macro' -- until this was added).
-    keywords_plus_macros = keywords | set(merged_arities.keys()) | library_bodiless | file_bodiless | DEFINER_KEYWORDS | {"load"}
+    keywords_plus_macros = (
+        keywords | set(merged_arities.keys()) | library_bodiless | file_bodiless | file_fn_names | DEFINER_KEYWORDS | {"load"}
+        | PREPROCESSOR_WORDS | AXIAL_CONV_SUBPARAMS | SUPPLEMENTAL_MISC_KEYWORDS
+        | load_reserved_parameter_names(REFERENCES_DIR)
+    )
 
     check_keyword_typos(clean, keywords_plus_macros, issues)
     check_macro_arity(clean, merged_arities, issues)
     check_single_string_arg_keywords(clean, keywords_plus_macros, single_arg_keywords, issues)
     check_single_e_arg_keywords(clean, keywords_plus_macros, e_arg_keywords, issues)
+    check_zero_arg_keywords(clean, zero_arg_keywords, issues)
+    check_at_sigil_value(clean, issues)
     check_xyz_near_one_third(clean, issues)
     min_max_macro_names = harvest_macros_with_min_max_body(clean)
     check_prm_local_missing_min_max(clean, min_max_macro_names, issues)
@@ -2620,6 +3583,7 @@ def main():
 
     single_arg_keywords = load_single_string_arg_keywords(REFERENCES_DIR) - SINGLE_ARG_FALSE_POSITIVES
     e_arg_keywords = {k for k in load_single_e_arg_keywords(REFERENCES_DIR) if len(k) >= MIN_E_ARG_CHECK_LEN}
+    zero_arg_keywords = load_zero_arg_keywords(REFERENCES_DIR) | ZERO_ARG_KEYWORD_SUPPLEMENT
 
     library_arities, library_bodiless = load_library_macro_arities()
     if not library_arities:
@@ -2647,7 +3611,7 @@ def main():
 
     had_error = False
     for path, extra_text in entries:
-        issues = check_file(path, keywords, library_arities, library_bodiless, single_arg_keywords, e_arg_keywords, extra_text=extra_text)
+        issues = check_file(path, keywords, library_arities, library_bodiless, single_arg_keywords, e_arg_keywords, zero_arg_keywords, extra_text=extra_text)
         errors = [i for i in issues if i[0] == "error"]
         warnings = [i for i in issues if i[0] == "warning"]
         if errors:

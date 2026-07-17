@@ -355,39 +355,39 @@ Full_Axial_Model(filament_cv, sample_cv, detector_cv, psol_cv, ssol_cv)
 
 Accurate model for describing peak asymmetry due to axial divergence of the beam.
 
-[filament_cv]: Tube filament length in [mm].
+(filament_cv): Tube filament length in (mm).
 
-[sample_cv]: Sample length in axial direction in [mm].
+(sample_cv): Sample length in axial direction in (mm).
 
-[detector_cv]: Length of the detector (= receiving) slit in [mm].
+(detector_cv): Length of the detector (= receiving) slit in (mm).
 
-[psol_cv, ssol_cv]: Aperture of the primary and secondary Soller slit in [°].
+(psol_cv, ssol_cv): Aperture of the primary and secondary Soller slit in (°).
 
 Finger_et_al(s2, h2)
 
 Finger et al. 1994. model for describing peak asymmetry due to axial divergence.
 
-[s2, h2]: Sample length, receiving slit length.
+(s2, h2): Sample length, receiving slit length.
 
-Tube_Tails(source_width_c, source_width_v, z1_c, z1_v, z2_c, z2_v, 1z2_h_c, z1z2_h_v)
+Tube_Tails(source_width_c, source_width_v, z1_c, z1_v, z2_c, z2_v, z1z2_h_c, z1z2_h_v)
 
 Model for description of tube tails (Bergmann, 2000).
 
-[source_width_c, source_width_v]: Tube filament width in [mm].
+(source_width_c, source_width_v): Tube filament width in (mm).
 
-[z1_c, z1_v]: Effective width of tube tails in the equatorial plane perpendicular to the X-ray beam - negative z-direction [mm].
+(z1_c, z1_v): Effective width of tube tails in the equatorial plane perpendicular to the X-ray beam - negative z-direction (mm).
 
-[z2_c, z2_v]: Effective width of tube tails in the equatorial plane perpendicular to the X-ray beam - positive z-direction [mm].
+(z2_c, z2_v): Effective width of tube tails in the equatorial plane perpendicular to the X-ray beam - positive z-direction (mm).
 
-[z1_z2_h_c, z1_z2_h_v]: Fractional height of the tube tails relative to the main beam.
+(z1_z2_h_c, z1_z2_h_v): Fractional height of the tube tails relative to the main beam.
 
 UVW(u, uv, v, vv, w, wv)
 
 Cagliotti relation (Cagliotti et al., 1958).
 
-[u, v, w]: Parameter names.
+(u, v, w): Parameter names.
 
-[uv, vv, wv]: Halfwidth value.
+(uv, vv, wv): Halfwidth value.
 
 
 ### Phase peak_type's
@@ -429,7 +429,7 @@ LP_Factor(c, v)
 
 Lorentz and Lorentz-Polarisation factor.
 
-[c, v]: Monochromator angle in [°2]
+(c, v): Monochromator angle in (°2)
 
 Values for most common monochromators (Cu radiation) are:
 
@@ -453,9 +453,9 @@ Preferred_Orientation(c, v, ang, hkl) or PO(c, v, ang, hkl)
 
 Preferred orientation correction based on March (1932).
 
-[c, v]: March parameter value.
+(c, v): March parameter value.
 
-[ang, hkl]: Lattice direction.
+(ang, hkl): Lattice direction.
 
 **The March-Dollase ratio parameter and the texture (J) index** (not in the Technical Reference manual — sourced from Dinnebier, Leineweber & Evans, 2018, §2.3.7): the refined March parameter is a ratio between the correction factor applied to crystallites oriented with the chosen `hkl` perpendicular to the preferred-orientation axis versus those oriented parallel to it — a value of 1 means no preferred orientation (random powder), values below 1 describe increasing platy/needle-like alignment. Beyond looking at the raw parameter value, the standard scalar severity metric used in the literature to summarize "how much preferred orientation is present" (regardless of which model — March-Dollase or spherical harmonics — was used to correct for it) is the **texture index J**, always ≥1, with J=1 meaning a perfectly random powder and larger J meaning more severe texture; this is the number worth quoting/comparing across refinements or samples, rather than the raw March ratio or spherical-harmonic coefficients directly, which aren't directly comparable to each other.
 
@@ -463,21 +463,21 @@ PO_Two_Directions(c1, v1, ang1, hkl1, c2, v2, ang2, hkl2,  w1c, w1v)
 
 Preferred orientation correction based on March (1932) considering two preferred orientation directions.
 
-[c1, v1]: March parameter value for the first preferred orientation direction.
+(c1, v1): March parameter value for the first preferred orientation direction.
 
-[ang1, hkl1]: Parameter name and lattice plane for the first preferred orientation direction.
+(ang1, hkl1): Parameter name and lattice plane for the first preferred orientation direction.
 
-[c2, v2]: March parameter value for the second preferred orientation direction.
+(c2, v2): March parameter value for the second preferred orientation direction.
 
-[ang2, hkl2]: Lattice direction for the second preferred orientation direction.
+(ang2, hkl2): Lattice direction for the second preferred orientation direction.
 
-[w1c, w1v]: Fraction of crystals oriented into first preferred orientation direction.
+(w1c, w1v): Fraction of crystals oriented into first preferred orientation direction.
 
 PO_Spherical_Harmonics(sh, order)
 
 Preferred orientation correction based on spherical harmonics according to Järvinen (1993).
 
-[(sh, order)]: Parameter name, spherical harmonics order.
+(sh, order): Parameter name, spherical harmonics order.
 
 
 ### Bondlength penalty functions
@@ -488,13 +488,13 @@ AI_Anti_Bump(s1, s2, ro, wby, num_cycle_iters), AI_Anti_Bump(s1, s2, ro, wby)
 
 Applies a penalty function as a function of the distance between atoms. The closer the atoms are the higher the penalty is.
 
-[ton]: Sets to_N of box_interaction.
+(ton): Sets to_N of box_interaction.
 
-[s1, s2]: Sites.
+(s1, s2): Sites.
 
-[ro]: Distance.
+(ro): Distance.
 
-[wby]: Relative weighting given to the penalty function.
+(wby): Relative weighting given to the penalty function.
 
 For more details refer to box_interaction and ai_anti_bump.
 
@@ -502,29 +502,29 @@ Parabola_N(n1, n2, s1, s2, ro, wby)
 
 Applies a penalty function as a function of the distance between atoms. The closer the atoms are the higher the penalty is.
 
-[n1]: The closest n1 number of atoms of type s2 is soft constrained to a distance ro away from s1 .
+(n1): The closest n1 number of atoms of type s2 is soft constrained to a distance ro away from s1 .
 
-[n2]: The closest n2 number of atoms of type s2 (excluding the closest n1 number of atoms of type s2) is repelled from s1, for distances between s1 and s2 less than ro.
+(n2): The closest n2 number of atoms of type s2 (excluding the closest n1 number of atoms of type s2) is repelled from s1, for distances between s1 and s2 less than ro.
 
-[s1, s2]: Sites.
+(s1, s2): Sites.
 
-[ro]: Distance.
+(ro): Distance.
 
-[wby]: Relative weighting given to the penalty function.
+(wby): Relative weighting given to the penalty function.
 
 Grs_Interaction(s1, s2, wqi, wqj, c, ro, n)
 
 Penalty function applying the GRS series according to Coelho & Cheary (1997).
 
-[s1, s2]: Sites.
+(s1, s2): Sites.
 
-[wqi, wqj]: Valence charge of the atoms.
+(wqi, wqj): Valence charge of the atoms.
 
-[c]: Name of the GRS.
+(c): Name of the GRS.
 
-[ro]: Distance.
+(ro): Distance.
 
-[n]: The exponent of the repulsion part of the Lennard-Jones potential.
+(n): The exponent of the repulsion part of the Lennard-Jones potential.
 
 For more details refer to grs_interaction.
 
@@ -532,25 +532,25 @@ Grs_No_Repulsion(s1, s2, wqi, wqj, c)
 
 Used for calculating the Madelung constants.
 
-[s1, s2]: Sites.
+(s1, s2): Sites.
 
-[wqi, wqj]: Valence charge of the atoms.
+(wqi, wqj): Valence charge of the atoms.
 
-[c]: Name of the GRS.
+(c): Name of the GRS.
 
 Grs_BornMayer(s1, s2, wqi, wqj, c, ro, b)
 
 Uses the GRS series with a Born-Mayer equation for the repulsion term.
 
-[s1, s2]: Sites.
+(s1, s2): Sites.
 
-[wqi, wqj]: Valence charge of the atoms.
+(wqi, wqj): Valence charge of the atoms.
 
-[c]: Name of the GRS.
+(c): Name of the GRS.
 
-[ro]: Mean distance.
+(ro): Mean distance.
 
-[b]: b-constant for the repulsion part of the Born-Mayer potential.
+(b): b-constant for the repulsion part of the Born-Mayer potential.
 
 Distance_Restrain(sites, t, t_calc, tol, wscale)
 
@@ -607,15 +607,15 @@ Absorption_With_Sample_Thickness_mm_Shape_Intensity(u, uv, d, dv)
 
 Corrects the peak intensity for absorption effects.
 
-[u, uv]: Parameter name, absorption coefficient in cm-1.
+(u, uv): Parameter name, absorption coefficient in cm-1.
 
-[d, dv]: Parameter name, sample thickness in [mm].
+(d, dv): Parameter name, sample thickness in (mm).
 
 CS_L(c,v) or Crystallite_Size(c, v) or CS(c, v)
 
 Applies a Lorentzian convolution with a FWHM that varies according to the relation lor_fwhm = 0.1 Rad Lam / (c Cos(Th)).
 
-[c, v]: Parameter name, crystallite size in [nm].
+(c, v): Parameter name, crystallite size in (nm).
 
 **Physical background** (not in the Technical Reference manual — sourced from Dinnebier, Leineweber & Evans, 2018, §1.3/§2.5): this `1/Cos(Th)` size-broadening dependence is the Scherrer relation. Its physical origin is the same finite-crystal-size argument behind the Laue interference function: a finite crystallite means the interference condition isn't satisfied by exactly one direction in reciprocal space but by a small volume around it, and that volume's angular extent scales inversely with crystallite dimension — smaller crystals give broader peaks. The refined `c` here is a *volume-weighted mean column height*, not a literal particle diameter — the two coincide only for a specific idealized shape/shape-constant assumption (the FWHM-based Scherrer shape constant `kf` defaults to 0.89, appropriate for a sphere; see `LVol_FWHM_CS_G_L` below for where this constant is actually applied). A common debugging mistake: comparing a `CS_L`/`CS_G`-derived size directly against an independent measurement (e.g. TEM/SEM particle size) without accounting for (a) the IRF not having been fully subtracted first, (b) `fwhm` being in radians in the underlying formula despite being entered/reported in degrees elsewhere, or (c) the shape-constant mismatch above — any of these can make a Scherrer-derived size look "wrong" when the refinement itself is fine.
 
@@ -627,7 +627,7 @@ Applies a Gaussian convolution with a FWHM that varies according to the relation
 | gauss_fwhm = 0.1 Rad Lam / (c Cos(Th)); |
 | --- |
 
-[c, v]: Parameter name, crystallite size in [nm].
+(c, v): Parameter name, crystallite size in (nm).
 
 Strain_L(c, v) or Microstrain(c, v) or MS(c, v)
 
@@ -641,13 +641,13 @@ LVol_FWHM_CS_G_L(k, lvol, kf, lvolf, csgc, csgv, cslc, cslv)
 
 Calculates FWHM and IB (integral breadth) based volume-weighted column heights (LVol). For details refer to section 20.13.
 
-[k, lvol]: shape factor (fixed to 1), integral breadth based LVol.
+(k, lvol): shape factor (fixed to 1), integral breadth based LVol.
 
-[kf, lvolf]: shape factor (defaults to 0.89), FWHM based LVol.
+(kf, lvolf): shape factor (defaults to 0.89), FWHM based LVol.
 
-[csgc, csgv]: Parameter name, Gaussian component.
+(csgc, csgv): Parameter name, Gaussian component.
 
-[cslc, cslv]: Parameter name, Lorentzian component.
+(cslc, cslv): Parameter name, Lorentzian component.
 
 **`Stephens_triclinic`, `Stephens_monoclinic`, `Stephens_orthorhombic`, `Stephens_tetragonal_low`, `Stephens_tetragonal_high`, `Stephens_trigonal_low`, `Stephens_trigonal_high`, `Stephens_trigonal_high_2`, `Stephens_hexagonal`, `Stephens_cubic`** — this family is not documented in the TOPAS Technical Reference manual at all; it's sourced from Dinnebier, Leineweber & Evans, *Rietveld Refinement: Practical Powder Diffraction Pattern Analysis using TOPAS* (2018), §4.3.2, which covers the underlying theory in more depth than can be reproduced here.
 

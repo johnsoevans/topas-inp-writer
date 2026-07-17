@@ -338,7 +338,7 @@ Asymmetry at low r is typically difficult to model, but the ADP_n approach captu
 
 CREATE_USING_unns: creates a simulated single crystal pattern from normal unn parameters for one atom. neutron_data is to negate the effects of atomic scattering factors.
 
-FIT_USING_ADPs_5: fits to the simulated pattern using the ADPs-7 approach. This refinement then saves the calculated ADPs-7 pattern created to a file called sim-2.hkl.
+FIT_USING_ADPs_5: fits to the simulated pattern using the ADPs-5 approach. This refinement then saves the calculated ADPs-5 pattern created to a file called sim-2.hkl.
 
 DETERMINE_unns_FROM_ADPs_5: fits normal unn parameters to sim-2.hkl.
 
@@ -353,7 +353,7 @@ Two extreme cases have been performed; results for the first case - the refined 
 | ADPs {  0.39524 0.39690  0.40143 -0.18277 -0.19009 -0.19268	} ' refined    ADPs {  0.4     0.4      0.4     -0.19    -0.19	   -0.19 }   ' original |
 | --- |
 
-The refined values, from the DETERMINE_unns_FROM_ADPs_7 operation, show good agreement with the original values. The FIT_USING_ADPs_7 operation produces a fit that looks like:
+The refined values, from the DETERMINE_unns_FROM_ADPs_5 operation, show good agreement with the original values. The FIT_USING_ADPs_5 operation produces a fit that looks like:
 
 A further extreme example is:
 

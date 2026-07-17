@@ -313,13 +313,13 @@ Set_Length(s0, s1, r, xc, yc, zc, cva, cvb)
 
 Fixes the distance between two sites.
 
-[s0, s1]: Site names.
+(s0, s1): Site names.
 
-[r]: Distance in Å.
+(r): Distance in Å.
 
-[xc, yc, zc]: The parameter names for the coordinates of s0.
+(xc, yc, zc): The parameter names for the coordinates of s0.
 
-[cva, cvb]: Parameter names and values for rotations about the x and y axes
+(cva, cvb): Parameter names and values for rotations about the x and y axes
 
 Set_Lengths(s0, s1, s2, r, xc, yc, zc, cva1, cvb1, cva2, cvb2)
 
@@ -339,25 +339,25 @@ Triangle(s0, s1, s2, s3, r, xc, yc, zc, cva, cvb, cvc)
 
 Defines a regular triangle without and with a central atom (s0).
 
-[s0, s1, s2, s3]: Site names. s0 is the central atom of the triangle.
+(s0, s1, s2, s3): Site names. s0 is the central atom of the triangle.
 
-[r]: Distance in Å.
+(r): Distance in Å.
 
-[xc, yc, zc]: Parameter names for the coordinates for the central atom.
+(xc, yc, zc): Parameter names for the coordinates for the central atom.
 
-[cva, cvb, cvc]: Parameter names and values for rotations about the x, y and z axes.
+(cva, cvb, cvc): Parameter names and values for rotations about the x, y and z axes.
 
 Tetrahedra(s0, s1, s2, s3, s4, r, xc, yc, zc, cva, cvb, cvc)
 
 Defines a tetrahedra with a central atom.
 
-[s0, s1, s2, s3, s4]: Site names. s0 is the central atom of the tetrahedra.
+(s0, s1, s2, s3, s4): Site names. s0 is the central atom of the tetrahedra.
 
-[r]: Distance in Å.
+(r): Distance in Å.
 
-[xc, yc, zc]: Parameter names for the coordinates for the central atom.
+(xc, yc, zc): Parameter names for the coordinates for the central atom.
 
-[cva, cvb, cvc]: Parameter names and values for rotations about the x, y and z axes.
+(cva, cvb, cvc): Parameter names and values for rotations about the x, y and z axes.
 
 Octahedra(s0, s1, s2, s3, s4, s5, s6, r)
 
@@ -365,13 +365,13 @@ Octahedra(s0, s1, s2, s3, s4, s5, s6, r, xc, yc, zc, cva, cvb, cvc)
 
 Defines an octahedra with a central atom.
 
-[s0, s1, s2, s3, s4, s5, s6]: Site names. s0 is the central atom of the octahedra.
+(s0, s1, s2, s3, s4, s5, s6): Site names. s0 is the central atom of the octahedra.
 
-[r]: Distance in Å.
+(r): Distance in Å.
 
-[xc, yc, zc]: Parameter names for the coordinates for the central atom.
+(xc, yc, zc): Parameter names for the coordinates for the central atom.
 
-[cva, cvb, cvc]: Parameter names and values for rotations about the x, y and z axes.
+(cva, cvb, cvc): Parameter names and values for rotations about the x, y and z axes.
 
 Hexagon_sitting_on_point_in_xy_plane(s1, s2, s3, s4, s5, s6, a)
 
@@ -379,9 +379,9 @@ Hexagon_sitting_on_side_in_xy_plane(s1, s2, s3, s4, s5, s6, a)
 
 Defines a regular hexagon, where the hexagon is sitting on a point or on a side in the x-y plane, respectively.
 
-[s1, s2, s3, s4, s5, s6]: Site names.
+(s1, s2, s3, s4, s5, s6): Site names.
 
-[a]: Distance in Å.
+(a): Distance in Å.
 
 Translate(acv, bcv, ccv)
 
@@ -389,17 +389,17 @@ Translate(acv, bcv, ccv, ops)
 
 Performs a translation of the rigid body.
 
-[acv, bcv, ccv]: Amount of the translation in fractional coordinates.
+(acv, bcv, ccv): Amount of the translation in fractional coordinates.
 
-[ops]: Operates on previously defined sites in “ops”.
+(ops): Operates on previously defined sites in “ops”.
 
 Translate_with_site_start_values(s0, xc, yc, zc)
 
 Performs a translation using the coordinates of s0 as start values.
 
-[s0]: Site name.
+(s0): Site name.
 
-[xc, yc, zc]: Parameter names for the coordinates of s0.
+(xc, yc, zc): Parameter names for the coordinates of s0.
 
 Rotate_about_points(cv, a, b)
 
@@ -407,11 +407,11 @@ Rotate_about_points(cv, a, b, pts)
 
 Performs a rotation about a rotation vector specified by two sites.
 
-[cv]: Amount the rigid body is rotated about the specified rotation vector in degrees.
+(cv): Amount the rigid body is rotated about the specified rotation vector in degrees.
 
-[a, b]: Rotation vector defined by the sites a and b.
+(a, b): Rotation vector defined by the sites a and b.
 
-[pts]: Operates on previously defined point_for_site(s).
+(pts): Operates on previously defined point_for_site(s).
 
 Note: Do not include points rotated about in the “operate on points” list of the Rotate_about_points macro. For example, in
 
@@ -425,11 +425,11 @@ Rotate_about_these_points(cv, a, b, ops)
 
 Performs a rotation about a rotation vector specified by two sites.
 
-[cv]: Amount the rigid body is rotated about the specified rotation vector in degrees.
+(cv): Amount the rigid body is rotated about the specified rotation vector in degrees.
 
-[a, b]: Rotation vector defined by the sites a and b.
+(a, b): Rotation vector defined by the sites a and b.
 
-[ops]: Operates on previously defined point_for_site(s).
+(ops): Operates on previously defined point_for_site(s).
 
 Rotate_about_axies(cva, cvb)
 

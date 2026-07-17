@@ -182,13 +182,24 @@ def _in_any_span(pos, spans):
 
 
 class Node:
-    def __init__(self, node_id, display, kind, line, expr=None, fixed=False):
+    def __init__(self, node_id, display, kind, line, expr=None, fixed=False, scoped=False):
         self.node_id = node_id       # unique key, e.g. "b1#3" for the 3rd 'local b1'
         self.display = display       # human label, e.g. "b1" or "beq (site D1)"
         self.kind = kind             # 'independent' | 'dependent' | 'fixed_constant'
         self.line = line
         self.expr = expr             # raw equation text, dependent nodes only
         self.fixed = fixed           # True if '!'-prefixed (not itself further refined)
+        self.scoped = scoped         # True if this node does NOT have a single name shared
+                                      # across the whole file -- 'local' (re-scoped per xdd/
+                                      # phase) and anonymous '@'/positional-ADP forms both
+                                      # qualify, and both get a genuinely fresh instance per
+                                      # for-loop iteration if declared inside one. False for
+                                      # a bare NAMED 'prm' or other bare-named keyword value --
+                                      # TOPAS's kernel-enforced 'same name = same value' rule
+                                      # keeps those as ONE shared parameter across every
+                                      # for-loop iteration. Both halves of this rule were
+                                      # confirmed empirically, not assumed -- see
+                                      # find_refined_params.loop_multiplier()'s own docstring.
         self.refs = []                # node_ids this node's equation references (dependent only)
 
 
@@ -239,9 +250,9 @@ def parse_all_prm_local(clean_text):
             spans.append((m.start(), end + 1))
             plain = cis.parse_plain_numeric_equation(expr)
             if plain is not None:
-                nodes.append(Node(node_id, name, "independent", line, fixed=(sigil == "!")))
+                nodes.append(Node(node_id, name, "independent", line, fixed=(sigil == "!"), scoped=scoped))
             else:
-                node = Node(node_id, name, "dependent", line, expr=expr, fixed=(sigil == "!"))
+                node = Node(node_id, name, "dependent", line, expr=expr, fixed=(sigil == "!"), scoped=scoped)
                 nodes.append(node)
             continue
 
@@ -251,9 +262,9 @@ def parse_all_prm_local(clean_text):
         end = k + val_m.end()
         spans.append((m.start(), end))
         if sigil == "!":
-            nodes.append(Node(node_id, name, "fixed_constant", line, fixed=True))
+            nodes.append(Node(node_id, name, "fixed_constant", line, fixed=True, scoped=scoped))
         else:
-            nodes.append(Node(node_id, name, "independent", line))
+            nodes.append(Node(node_id, name, "independent", line, scoped=scoped))
     return nodes, spans
 
 
@@ -436,22 +447,35 @@ def parse_inline_z_matrix_rows(clean_text, exclude_spans):
 
 
 def collect_independent_from_frp(clean_text, prm_local_spans):
-    """Reuses find_refined_params.py's own 4 non-prm/local independent-
-    parameter finders (direct '@' keywords, ADP load blocks, other named
-    keyword values) so this script's leaf set matches that script's
-    definition of 'independent' exactly -- one source of truth, not a
-    second, potentially-drifting reimplementation."""
+    """Reuses find_refined_params.py's own non-prm/local independent-
+    parameter finders (direct '@' keywords -- now including site x/y/z,
+    beq/ADP components, mlx/mly/mlz, Flack, rigid-body transform
+    keywords; ADP load blocks; Pawley/hkl_Is intensity load blocks; occ
+    values; other named keyword values) so this script's leaf set matches
+    that script's definition of 'independent' exactly -- one source of
+    truth, not a second, potentially-drifting reimplementation."""
     nodes = []
     direct_at = frp.parse_direct_at_keywords(clean_text, prm_local_spans)
     for p in direct_at:
         label = p["keyword"]
-        nodes.append(Node(label, label, "independent", p["line"]))
+        nodes.append(Node(label, label, "independent", p["line"], scoped=True))
     adp_loads = frp.parse_adp_load_blocks(clean_text, prm_local_spans)
     for p in adp_loads:
         # multiple ADP sites share keyword names (u11, u22, ...) -- keep
         # each occurrence distinct by line, like local's #occurrence.
         label = f"{p['keyword']}@L{p['line']}"
-        nodes.append(Node(label, p["keyword"], "independent", p["line"]))
+        nodes.append(Node(label, p["keyword"], "independent", p["line"], scoped=True))
+    hkl_i_loads = frp.parse_hkl_intensity_load_blocks(clean_text, prm_local_spans)
+    for p in hkl_i_loads:
+        label = f"{p['keyword']}@L{p['line']}"
+        nodes.append(Node(label, p["keyword"], "independent", p["line"], scoped=True))
+    occ_values = frp.parse_occ_values(clean_text, prm_local_spans)
+    for p in occ_values:
+        if p["name"]:
+            nodes.append(Node(p["name"], p["name"], "independent", p["line"]))
+        else:
+            label = f"occ@L{p['line']}"
+            nodes.append(Node(label, "occ", "independent", p["line"], scoped=True))
     named_direct = frp.parse_named_keyword_values(clean_text, prm_local_spans)
     for p in named_direct:
         nodes.append(Node(p["name"], p["name"], "independent", p["line"]))
@@ -525,7 +549,7 @@ def build_graph(inp_file, run_number=0):
 
     relabel_autonamed(all_nodes, clean)
 
-    return all_nodes, warnings
+    return all_nodes, warnings, clean
 
 
 AUTONAME_RE = re.compile(r"^[mu][0-9a-f]{8}_\d+$")
@@ -558,9 +582,14 @@ def render_dependent_tree(all_nodes, out, max_depth=25):
         (n for n in all_nodes.values() if n.kind == "dependent"),
         key=lambda nd: (nd.line, nd.display),
     )
+    rendered = set()
     for root in dependents:
         out.append(_format_root(root))
-        _render_children(root, all_nodes, out, prefix="  ", visited={root.node_id}, depth=1, max_depth=max_depth)
+        if root.node_id in rendered:
+            out.append("  (already shown above -- see its own entry)")
+        else:
+            rendered.add(root.node_id)
+            _render_children(root, all_nodes, out, prefix="  ", visited={root.node_id}, depth=1, max_depth=max_depth, rendered=rendered)
         out.append("")
 
 
@@ -575,9 +604,14 @@ def render_independent_tree(all_nodes, out, max_depth=25):
         (n for n in all_nodes.values() if n.kind == "independent"),
         key=lambda nd: (nd.display, nd.line),
     )
+    rendered = set()
     for root in roots:
         out.append(_format_root(root))
-        _render_dependents(root, all_nodes, reverse, out, prefix="  ", visited={root.node_id}, depth=1, max_depth=max_depth)
+        if root.node_id in rendered:
+            out.append("  (already shown above -- see its own entry)")
+        else:
+            rendered.add(root.node_id)
+            _render_dependents(root, all_nodes, reverse, out, prefix="  ", visited={root.node_id}, depth=1, max_depth=max_depth, rendered=rendered)
         out.append("")
 
 
@@ -596,7 +630,20 @@ def _tag(node):
     return f" [dependent{fixedbit}]{exprbit}"
 
 
-def _render_children(node, all_nodes, out, prefix, visited, depth, max_depth):
+def _render_children(node, all_nodes, out, prefix, visited, depth, max_depth, rendered):
+    """See _children_json's docstring for the full reasoning (a real,
+    confirmed hang on a densely cross-referenced file, found via
+    faulthandler.dump_traceback_later()). Mirrors that same "expand a
+    shared node's subtree in full only the FIRST time, note '(already
+    shown above)' every time after" fix for plain-text output -- an
+    earlier attempt here only memoized and re-emitted the same cached
+    LINES at every reuse, which fixed the CPU cost of re-walking the
+    graph but not the output-size cost of re-printing a big shared
+    subtree's text at every position it's referenced from; this fix
+    bounds total output size by the number of distinct nodes, not by
+    how many times they're referenced. `rendered` (global, not
+    path-specific) tracks that; `visited` (path-specific) still decides
+    cycle detection fresh on every call, unaffected by this."""
     if depth > max_depth:
         out.append(prefix + "... (max depth reached)")
         return
@@ -610,16 +657,20 @@ def _render_children(node, all_nodes, out, prefix, visited, depth, max_depth):
         last = i == len(node.refs) - 1
         branch = "`-- " if last else "|-- "
         cycle = child.node_id in visited
-        cyclebit = "  (cycle, stopping)" if cycle else ""
-        out.append(prefix + branch + child.display + _tag(child) + f"  (line {child.line})" + cyclebit)
-        if cycle:
+        already = (not cycle) and child.node_id in rendered
+        note = "  (cycle, stopping)" if cycle else ("  (already shown above, see its own entry)" if already else "")
+        out.append(prefix + branch + child.display + _tag(child) + f"  (line {child.line})" + note)
+        if cycle or already:
             continue
-        new_prefix = prefix + ("    " if last else "|   ")
         if child.kind == "dependent":
-            _render_children(child, all_nodes, out, new_prefix, visited | {child.node_id}, depth + 1, max_depth)
+            rendered.add(child.node_id)
+            new_prefix = prefix + ("    " if last else "|   ")
+            _render_children(child, all_nodes, out, new_prefix, visited | {child.node_id}, depth + 1, max_depth, rendered)
 
 
-def _render_dependents(node, all_nodes, reverse, out, prefix, visited, depth, max_depth):
+def _render_dependents(node, all_nodes, reverse, out, prefix, visited, depth, max_depth, rendered):
+    """See _render_children's docstring -- same "expand once" fix,
+    mirrored for the reverse-edge (independent -> dependents) tree."""
     if depth > max_depth:
         out.append(prefix + "... (max depth reached)")
         return
@@ -631,12 +682,14 @@ def _render_dependents(node, all_nodes, reverse, out, prefix, visited, depth, ma
         last = i == len(children_ids) - 1
         branch = "`-- " if last else "|-- "
         cycle = child.node_id in visited
-        cyclebit = "  (cycle, stopping)" if cycle else ""
-        out.append(prefix + branch + child.display + _tag(child) + f"  (line {child.line})" + cyclebit)
-        if cycle:
+        already = (not cycle) and child.node_id in rendered
+        note = "  (cycle, stopping)" if cycle else ("  (already shown above, see its own entry)" if already else "")
+        out.append(prefix + branch + child.display + _tag(child) + f"  (line {child.line})" + note)
+        if cycle or already:
             continue
+        rendered.add(child.node_id)
         new_prefix = prefix + ("    " if last else "|   ")
-        _render_dependents(child, all_nodes, reverse, out, new_prefix, visited | {child.node_id}, depth + 1, max_depth)
+        _render_dependents(child, all_nodes, reverse, out, new_prefix, visited | {child.node_id}, depth + 1, max_depth, rendered)
 
 
 def _tag_kind(node):
@@ -658,25 +711,62 @@ def _node_json(node):
         "line": node.line,
         "cycle": False,
         "unresolved": False,
+        "already_shown": False,
         "children": [],
     }
 
 
-def _children_json(node, all_nodes, visited, depth, max_depth):
+def _children_json(node, all_nodes, visited, depth, max_depth, rendered):
+    """`rendered` is a set of node_ids already fully expanded ONCE,
+    anywhere in this whole tree (not path-specific like `visited`).
+    A node referenced from many places (extremely common: several
+    equations all sharing one underlying parameter, e.g. the same
+    physical constant used across many pressure points) is expanded
+    in full only the FIRST time it's reached; every later reference to
+    that same node_id is rendered as a compact "already_shown" pointer
+    instead of re-embedding its whole subtree again.
+
+    This fixes TWO distinct problems, found via faulthandler.
+    dump_traceback_later() on a genuine, confirmed hang processing
+    test_examples/sp/serine_i_evans_n_ta_bang_rot.inp (7 pressure
+    points, heavy sharing of common parameters across all of them) --
+    a file whose near-identical companion (...-z.inp) completed in
+    seconds, during this skill's own curated-corpus regression sweep:
+    (1) naive re-expansion is exponential in fan-out for a densely
+    cross-referenced dependency DAG (the first fix attempted here only
+    memoized the computed Python structure, which fixed the CPU-time
+    blowup but not problem 2); (2) json.dumps() has no concept of a
+    shared reference -- even a memoized, O(1)-to-reuse Python list still
+    gets its full text written out again at EVERY position it's
+    embedded, so the serialized output size (and json.dumps's own walk
+    of it) is still unbounded by fan-out alone. Marking every repeat
+    occurrence as a short pointer instead of a full re-embed bounds
+    total output size by the number of DISTINCT nodes actually in the
+    graph, not by how many times they're referenced.
+
+    Whether descending into a child AT ALL is still decided fresh every
+    time from the PATH-specific `visited` set (so an immediate cycle
+    back to an ancestor on THIS path is always caught, distinct from
+    `rendered`, which only tracks "already shown in full once" and has
+    nothing to do with cycle detection)."""
     if depth > max_depth:
         return [{"display": "... (max depth reached)", "tag": "note", "expr": None,
-                  "line": None, "cycle": False, "unresolved": False, "children": []}]
+                  "line": None, "cycle": False, "unresolved": False, "already_shown": False, "children": []}]
     result = []
     for ref_id in node.refs:
         child = all_nodes.get(ref_id)
         if child is None:
             result.append({"display": ref_id, "tag": "note", "expr": None, "line": None,
-                            "cycle": False, "unresolved": True, "children": []})
+                            "cycle": False, "unresolved": True, "already_shown": False, "children": []})
             continue
         entry = _node_json(child)
         entry["cycle"] = child.node_id in visited
         if not entry["cycle"] and child.kind == "dependent":
-            entry["children"] = _children_json(child, all_nodes, visited | {child.node_id}, depth + 1, max_depth)
+            if child.node_id in rendered:
+                entry["already_shown"] = True
+            else:
+                rendered.add(child.node_id)
+                entry["children"] = _children_json(child, all_nodes, visited | {child.node_id}, depth + 1, max_depth, rendered)
         result.append(entry)
     return result
 
@@ -686,18 +776,29 @@ def build_dependent_tree_json(all_nodes, max_depth=25):
         (n for n in all_nodes.values() if n.kind == "dependent"),
         key=lambda nd: (nd.line, nd.display),
     )
+    rendered = set()
     roots = []
     for root in dependents:
         entry = _node_json(root)
-        entry["children"] = _children_json(root, all_nodes, {root.node_id}, 1, max_depth)
+        if root.node_id in rendered:
+            entry["already_shown"] = True
+        else:
+            rendered.add(root.node_id)
+            entry["children"] = _children_json(root, all_nodes, {root.node_id}, 1, max_depth, rendered)
         roots.append(entry)
     return roots
 
 
-def _dependents_json(node, all_nodes, reverse, visited, depth, max_depth):
+def _dependents_json(node, all_nodes, reverse, visited, depth, max_depth, rendered):
+    """See _children_json's docstring -- same "expand once, point to it
+    afterward" fix, same reason (a shared independent parameter
+    referenced from many dependent equations, e.g. one constant used
+    across several pressure points, would otherwise have its whole
+    reverse-dependents subtree re-embedded in full on every one of
+    those references)."""
     if depth > max_depth:
         return [{"display": "... (max depth reached)", "tag": "note", "expr": None,
-                  "line": None, "cycle": False, "unresolved": False, "children": []}]
+                  "line": None, "cycle": False, "unresolved": False, "already_shown": False, "children": []}]
     result = []
     for cid in reverse.get(node.node_id, []):
         child = all_nodes.get(cid)
@@ -706,7 +807,11 @@ def _dependents_json(node, all_nodes, reverse, visited, depth, max_depth):
         entry = _node_json(child)
         entry["cycle"] = child.node_id in visited
         if not entry["cycle"]:
-            entry["children"] = _dependents_json(child, all_nodes, reverse, visited | {child.node_id}, depth + 1, max_depth)
+            if child.node_id in rendered:
+                entry["already_shown"] = True
+            else:
+                rendered.add(child.node_id)
+                entry["children"] = _dependents_json(child, all_nodes, reverse, visited | {child.node_id}, depth + 1, max_depth, rendered)
         result.append(entry)
     return result
 
@@ -721,10 +826,15 @@ def build_independent_tree_json(all_nodes, max_depth=25):
         (n for n in all_nodes.values() if n.kind == "independent"),
         key=lambda nd: (nd.display, nd.line),
     )
+    rendered = set()
     result = []
     for root in roots:
         entry = _node_json(root)
-        entry["children"] = _dependents_json(root, all_nodes, reverse, {root.node_id}, 1, max_depth)
+        if root.node_id in rendered:
+            entry["already_shown"] = True
+        else:
+            rendered.add(root.node_id)
+            entry["children"] = _dependents_json(root, all_nodes, reverse, {root.node_id}, 1, max_depth, rendered)
         result.append(entry)
     return result
 
@@ -804,11 +914,17 @@ HTML_PAGE_TEMPLATE = """<!doctype html>
   .children.open {{ display: block; }}
   .legend {{ display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; font-size: 0.78rem; color: var(--ink-muted); }}
   .legend span.swatch {{ display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }}
+  .stat-badge {{ display: inline-flex; align-items: baseline; gap: 6px; margin: 6px 0 10px;
+    padding: 6px 14px; border-radius: 8px; background: var(--independent-bg);
+    border: 1px solid var(--independent); }}
+  .stat-badge .stat-num {{ font-size: 1.3rem; font-weight: 700; color: var(--independent); font-variant-numeric: tabular-nums; }}
+  .stat-badge .stat-label {{ font-size: 0.82rem; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.03em; }}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>{title_escaped}</h1>
+  <div class="stat-badge"><span class="stat-num">{n_refineable}</span><span class="stat-label">refineable independent parameters</span></div>
   <div class="meta">{ndependent} dependent roots &middot; {nindependent} independent roots &middot; {file_escaped}</div>
   <div class="toolbar">
     <input id="search" type="text" placeholder="Filter by name...">
@@ -855,6 +971,11 @@ function renderNode(node) {{
     cycleSpan.className = 'cycle-note';
     cycleSpan.textContent = '  (cycle, stopping)';
     toggle.appendChild(cycleSpan);
+  }} else if (node.already_shown) {{
+    const shownSpan = document.createElement('span');
+    shownSpan.className = 'cycle-note';
+    shownSpan.textContent = '  (already shown above, see its own entry)';
+    toggle.appendChild(shownSpan);
   }}
   li.appendChild(toggle);
   if (node.expr) {{
@@ -943,17 +1064,42 @@ document.getElementById('search').addEventListener('input', (e) => {{
 """
 
 
-def build_html(all_nodes, inp_file, max_depth=25):
+def build_html(all_nodes, inp_file, clean, max_depth=25):
     tree1 = build_dependent_tree_json(all_nodes, max_depth=max_depth)
     tree2 = build_independent_tree_json(all_nodes, max_depth=max_depth)
     ndependent = sum(1 for n in all_nodes.values() if n.kind == "dependent")
-    nindependent = sum(1 for n in all_nodes.values() if n.kind == "independent")
+    # "independent" here means "not a dependent equation" -- it includes
+    # BOTH refined ('@'/bare-named) AND '!'-fixed independent parameters
+    # (see _tag()). The highlighted badge is specifically the REFINEABLE
+    # subset (kind == independent and not fixed) -- the same definition
+    # find_refined_params.py uses -- since that's what "how many parameters
+    # is this refinement actually varying" means; a '!'-fixed independent
+    # parameter never moves, so counting it there would overstate it.
+    #
+    # Both counts additionally weight by for-loop repetition ('for xdds
+    # { ... }' / 'for strs [N to M] { ... }') -- a node declared once in a
+    # loop body is really node.scoped and True ? multiple independent
+    # copies at runtime : still just one shared parameter (TOPAS's 'same
+    # name = same value' rule), confirmed empirically against a real file
+    # -- see find_refined_params.loop_multiplier()'s docstring for the
+    # full evidence. cis.for_loop_multiplier_at_line returns 1 for any
+    # node not inside such a loop at all, so this is a no-op elsewhere.
+    for_loop_spans = cis.find_for_loop_multipliers(clean)
+
+    def node_mult(n):
+        if not n.scoped:
+            return 1
+        return cis.for_loop_multiplier_at_line(n.line, clean, for_loop_spans)
+
+    nindependent = sum(node_mult(n) for n in all_nodes.values() if n.kind == "independent")
+    n_refineable = sum(node_mult(n) for n in all_nodes.values() if n.kind == "independent" and not n.fixed)
     title = f"Parameter dependency trees -- {os.path.basename(inp_file)}"
     return HTML_PAGE_TEMPLATE.format(
         title_escaped=title.replace("<", "&lt;").replace(">", "&gt;"),
         file_escaped=inp_file.replace("<", "&lt;").replace(">", "&gt;"),
         ndependent=ndependent,
         nindependent=nindependent,
+        n_refineable=n_refineable,
         tree1_json=json.dumps(tree1),
         tree2_json=json.dumps(tree2),
     )
@@ -969,10 +1115,10 @@ def main():
                          help="don't open/focus the report in VS Code afterward (default: do open it, only when -o is given)")
     args = parser.parse_args()
 
-    all_nodes, warnings = build_graph(args.inp_file, run_number=args.run_number)
+    all_nodes, warnings, clean = build_graph(args.inp_file, run_number=args.run_number)
 
     if args.output and os.path.splitext(args.output)[1].lower() in (".html", ".htm"):
-        html = build_html(all_nodes, args.inp_file)
+        html = build_html(all_nodes, args.inp_file, clean)
         with open(args.output, "w", encoding="utf-8") as f:
             f.write(html)
         print(f"Written to {args.output}", file=sys.stderr)

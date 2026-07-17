@@ -56,8 +56,6 @@ Coelho, A.A. (2021). Acta Cryst. D77, 98-107. “Ab initio structure solution of
 
 Coelho, A. A., Chater, P. A. & Evans, M. J. (2021). J. Appl. Cryst. 54, 444-453. “Generating the atomic pair distribution function without instrument or emission profile contributions”. https://doi.org/10.1107/S1600576721000765
 
-Baerlocher, C; Gramm, F.; Massüger, L; McCusker, L; He, Z; Hovmöller, S & Zou, X. (2007). SCIENCE VOL 315 23 FEBRUARY 2007.
-
 Burla, C.B; Carrozzini, B.; Cascarano, G. L.; Giacovazzo C. & Polidori, G. (2011). J. Appl. Cryst. 44, 1143–1151
 
 Chernick, M. R. (1999). Bootstrap Methods, A Practitioner’s Guide, Wiley, New York.

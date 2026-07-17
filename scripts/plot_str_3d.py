@@ -5,7 +5,12 @@ self-contained, interactive 3D HTML page (drag to rotate, wheel/pinch to
 zoom): the unit cell as a wireframe box, atoms as colored spheres
 (symmetry-expanded across the whole cell from each written site), and
 best-effort bonds drawn between atoms closer than a covalent-radius-sum
-cutoff.
+cutoff. A site whose u11/u22/u33/u12/u13/u23 ADP tensor all resolve to
+concrete numbers is drawn as a real oriented 50%-probability thermal
+ellipsoid instead of a plain sphere (site-symmetry-related images get
+their own correctly reoriented copy of the same ellipsoid, not just a
+translated one -- see uij_to_u_cart/rotate_u_cart below). A site with
+only `beq` (or nothing) keeps the plain covalent-radius sphere.
 
 Method, reusing this skill's existing crystallography/parsing engine
 rather than re-deriving it:
@@ -33,6 +38,23 @@ rather than re-deriving it:
   - Fractional -> Cartesian uses the standard triclinic cell matrix (a
     along x; standard crystallographic convention), so any crystal
     system renders correctly, not just orthogonal ones.
+  - ADP ellipsoids: u11..u23 are the standard IUCr/CIF "U_cif" convention
+    (referenced to the reciprocal cell edges a*/b*/c*); converted to a
+    genuine Cartesian tensor via the standard nomenclature-report
+    transform U_cart = A.(N.U_cif.N).A^T (A = the same cell matrix as
+    positions use, N = diag(a*,b*,c*)) -- sanity-checked against the
+    trivial cubic case, where U_cart reduces to exactly U_cif with no
+    correction needed. Each symmetry-equivalent IMAGE of a site gets its
+    OWN correctly reoriented tensor, R_cart.U_cart.R_cart^T with
+    R_cart = A.R_frac.A^-1, rather than copying the original site's
+    ellipsoid unrotated -- a site related to the original by a genuine
+    rotation/rotoinversion (not just a translation) has a differently-
+    oriented (but same-shaped) thermal ellipsoid. Rendered at the 50%-
+    probability surface (scale factor 1.5382, the standard ORTEP/VESTA
+    default) -- the JS side needs no 3D mesh at all: the orthographic
+    projection of a 3D ellipsoid is exactly the 2D ellipse given by the
+    top-left 2x2 submatrix of the view-space tensor, solved in closed
+    form (see projectedEllipse()).
 
 Element colors/covalent radii are an approximate built-in table (Jmol/
 CPK-style colors, Cordero-style single-bond covalent radii) covering
@@ -248,6 +270,147 @@ def frac_to_cart(m, p):
 
 
 # ---------------------------------------------------------------------------
+# ADP (u11..u23) -> Cartesian thermal-ellipsoid tensor
+#
+# TOPAS's u11/u22/u33/u12/u13/u23 are the standard IUCr/CIF "U_cif"
+# convention (referenced to the RECIPROCAL cell edge lengths a*/b*/c*, the
+# same convention SHELX/CIF use), defined via the Debye-Waller factor
+# exp(-2*pi^2 * sum_ij U_ij h_i h_j a*_i a*_j). Converting to a genuine
+# Cartesian (Angstrom^2) displacement tensor -- the standard IUCr
+# nomenclature-report transform (Trueblood et al., 1996, Acta Cryst A52):
+#
+#   U* = N . U_cif . N          N = diag(a*, b*, c*)
+#   U_cart = A . U* . A^T       A = cell_matrix() (direct-cell columns)
+#
+# Sanity-checked against the trivial cubic case (A = diag(a,a,a),
+# N = diag(1/a,1/a,1/a)): U_cart reduces to exactly U_cif, matching the
+# well-known fact that U_cif needs no correction at all for a cubic cell.
+# ---------------------------------------------------------------------------
+
+def mat3_mul(A, B):
+    return tuple(
+        tuple(sum(A[i][k] * B[k][j] for k in range(3)) for j in range(3))
+        for i in range(3)
+    )
+
+
+def mat3_transpose(A):
+    return tuple(tuple(A[j][i] for j in range(3)) for i in range(3))
+
+
+def mat3_inverse(A):
+    a, b, c = A[0]
+    d, e, f = A[1]
+    g, h, i = A[2]
+    det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+    if abs(det) < 1e-12:
+        return None
+    k = 1.0 / det
+    return (
+        ((e * i - f * h) * k, (c * h - b * i) * k, (b * f - c * e) * k),
+        ((f * g - d * i) * k, (a * i - c * g) * k, (c * d - a * f) * k),
+        ((d * h - e * g) * k, (b * g - a * h) * k, (a * e - b * d) * k),
+    )
+
+
+def reciprocal_lengths(a, b, c, al, be, ga):
+    al_r, be_r, ga_r = math.radians(al), math.radians(be), math.radians(ga)
+    cos_al, cos_be, cos_ga = math.cos(al_r), math.cos(be_r), math.cos(ga_r)
+    sin_al, sin_be, sin_ga = math.sin(al_r), math.sin(be_r), math.sin(ga_r)
+    v_sq = 1 - cos_al ** 2 - cos_be ** 2 - cos_ga ** 2 + 2 * cos_al * cos_be * cos_ga
+    vol = a * b * c * math.sqrt(max(v_sq, 0.0))
+    if vol < 1e-9:
+        return None
+    return (b * c * sin_al / vol, a * c * sin_be / vol, a * b * sin_ga / vol)
+
+
+def uij_to_u_cart(adps, cell_m, recip_lengths):
+    """adps: dict with u11/u22/u33/u12/u13/u23. Returns the 3x3 Cartesian
+    tensor (Angstrom^2, symmetric) -- see module note above."""
+    astar, bstar, cstar = recip_lengths
+    n = ((astar, 0.0, 0.0), (0.0, bstar, 0.0), (0.0, 0.0, cstar))
+    u_cif = (
+        (adps["u11"], adps["u12"], adps["u13"]),
+        (adps["u12"], adps["u22"], adps["u23"]),
+        (adps["u13"], adps["u23"], adps["u33"]),
+    )
+    u_star = mat3_mul(mat3_mul(n, u_cif), n)
+    return mat3_mul(mat3_mul(cell_m, u_star), mat3_transpose(cell_m))
+
+
+def rotate_u_cart(u_cart, rows_frac, cell_m, cell_m_inv):
+    """Reorient a Cartesian ADP tensor for a symmetry-equivalent image
+    generated by a space-group operator whose rotation part (in fractional
+    coordinates) is `rows_frac` -- a site related to the original by a
+    genuine rotation/rotoinversion (not just a translation) has its
+    thermal ellipsoid reoriented to match, even though both are the same
+    physical shape. R_cart = A . R_frac . A^-1 (since cart = A . frac),
+    then U_cart' = R_cart . U_cart . R_cart^T."""
+    r_cart = mat3_mul(mat3_mul(cell_m, rows_frac), cell_m_inv)
+    return mat3_mul(mat3_mul(r_cart, u_cart), mat3_transpose(r_cart))
+
+
+def _resolve_adp_forms(forms, tag=""):
+    known = {}
+    for n, form in forms.items():
+        if form[0] == "value":
+            known[n] = form[2]
+        elif form[0] == "equation":
+            plain = cis.parse_plain_numeric_equation(form[1])
+            if plain is not None:
+                known[n] = plain
+    for n, form in forms.items():
+        if n in known or form[0] != "equation":
+            continue
+        tie_m = cis.GET_TIE_RE.match(form[1])
+        if not tie_m:
+            continue
+        # A tagged site's own tie (e.g. 'u22C1 = Get(u11C1);') references
+        # the OTHER tagged name, not the bare canonical key `known` is
+        # indexed by -- strip the same tag back off before looking it up.
+        ref = tie_m.group("name")
+        other = ref[: -len(tag)] if tag and ref.endswith(tag) else ref
+        if other in known:
+            known[n] = cis.get_tie_value(tie_m, known[other])
+    return known if len(known) == 6 else None
+
+
+def resolve_site_adps(site_slice, site_name=None):
+    """Extract a site's u11/u22/u33/u12/u13/u23, resolving simple same-site
+    'u_ij = Get(other_u_ij)[*mult][+-offset];' ties (the exact pattern
+    insert_adps.py itself writes, e.g. 'u22 = Get(u11);') and plain-
+    constant equations, the same way resolve_site_coordinates resolves
+    x/y/z. Returns a dict of all 6 names -> float only if every one
+    resolves to a concrete number (never guesses at a reference to
+    something outside the site itself); None otherwise.
+
+    Tries the bare keyword names first ('u11 ...'); if that doesn't fully
+    resolve and `site_name` is given, also tries each name with the site's
+    own tag appended directly ('u11C1 ...' for a site named 'C1') -- a
+    real, common convention for giving every atom's ADPs a globally
+    unique parameter name inside an 'ADPs { u11C1 ... u23C1 }' block
+    (TOPAS enforces 'same name = same value' globally, not just per-site,
+    so a many-atom refinement needs each site's u_ij distinctly named to
+    stay independent). Confirmed as real corpus syntax, not a guess --
+    e.g. test_examples/sp2/alanine/cif2ta.inp's 'ADPs { u11C1 0.01
+    u22C1 0.01 ... }', and already known to check_inp_syntax.py's own
+    false-positive handling for this exact pattern."""
+    names = symmetry_utils.ADP_NAMES
+    forms = {n: cis.extract_keyword_form(site_slice, n) for n in names}
+    if all(forms.values()):
+        result = _resolve_adp_forms(forms)
+        if result is not None:
+            return result
+    if site_name:
+        tagged_forms = {n: cis.extract_keyword_form(site_slice, n + site_name) for n in names}
+        if all(tagged_forms.values()):
+            result = _resolve_adp_forms(tagged_forms, tag=site_name)
+            if result is not None:
+                return result
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Site / symmetry expansion
 # ---------------------------------------------------------------------------
 
@@ -268,16 +431,25 @@ NEAR_ZERO_TOL = 1e-3
 def expand_site_orbit(point, symops, tol=1e-4):
     """All symmetry-equivalent points of `point` reduced into [0,1), plus
     boundary-mirrored duplicates (a coordinate ~0 also gets a copy at ~1)
-    so the unit cell box looks visually complete."""
+    so the unit cell box looks visually complete. Returns a list of
+    (frac_point, rows) pairs -- `rows` is the fractional-coordinate
+    rotation part of the space-group operator that generated that image,
+    needed to reorient an ADP ellipsoid for images related by a genuine
+    rotation/rotoinversion rather than just a translation (see
+    rotate_u_cart). A boundary-mirrored duplicate inherits its
+    un-mirrored counterpart's `rows` -- it's a redraw of the same image
+    for visual completeness, not a new symmetry operation."""
     seen = []
+    seen_rows = []
     for rows, translation in symops:
         img = symmetry_utils.apply_symop(rows, translation, point)
         img = tuple(symmetry_utils.mod1(v) for v in img)
         if not any(symmetry_utils.points_equal_mod1(img, s, tol) for s in seen):
             seen.append(img)
+            seen_rows.append(rows)
 
     expanded = []
-    for p in seen:
+    for p, rows in zip(seen, seen_rows):
         near_zero_axes = [i for i in range(3) if p[i] < NEAR_ZERO_TOL or p[i] > 1 - NEAR_ZERO_TOL]
         base = [0.0 if p[i] < NEAR_ZERO_TOL or p[i] > 1 - NEAR_ZERO_TOL else p[i] for i in range(3)]
         variants = [list(base)]
@@ -290,12 +462,12 @@ def expand_site_orbit(point, symops, tol=1e-4):
                     new_variants.append(nv)
             variants = new_variants
         for v in variants:
-            expanded.append(tuple(v))
+            expanded.append((tuple(v), rows))
     # de-dup exact (post-mirroring) duplicates
     uniq = []
-    for p in expanded:
-        if not any(all(abs(p[i] - q[i]) < 1e-6 for i in range(3)) for q in uniq):
-            uniq.append(p)
+    for p, rows in expanded:
+        if not any(all(abs(p[i] - q[i]) < 1e-6 for i in range(3)) for q, _ in uniq):
+            uniq.append((p, rows))
     return uniq
 
 
@@ -337,6 +509,8 @@ def gather_atoms(inp_path, phase_index, warnings):
                           "Cubic/Tetragonal/Hexagonal/Trigonal/Rhombohedral macro).")
     a, b, c, al, be, ga = cell
     m = cell_matrix(a, b, c, al, be, ga)
+    m_inv = mat3_inverse(m)
+    recip = reciprocal_lengths(a, b, c, al, be, ga)
 
     str_scope = cis.resolve_str_scope_values(preamble)
     sites_clean = cis.find_sites(block_clean)
@@ -351,9 +525,24 @@ def gather_atoms(inp_path, phase_index, warnings):
         if element is None:
             warnings.append(f"Site '{name}': couldn't parse an element from its 'occ' -- shown as unknown.")
             element = "X"
-        for frac in expand_site_orbit(point, symops):
+
+        u_cart_original = None
+        if m_inv is not None and recip is not None:
+            adps = resolve_site_adps(slice_clean, site_name=name)
+            if adps is not None:
+                u_cart_original = uij_to_u_cart(adps, m, recip)
+            elif re.search(r"\bu(?:11|22|33|12|13|23)[A-Za-z0-9_]*\b", slice_clean):
+                warnings.append(f"Site '{name}': has some u11..u23 ADP keywords but they didn't all "
+                                 f"resolve to concrete numbers -- shown as a plain sphere instead of an ellipsoid.")
+
+        for frac, rows in expand_site_orbit(point, symops):
             cart = frac_to_cart(m, frac)
-            atoms.append({"label": name, "element": element, "frac": frac, "cart": cart})
+            atom = {"label": name, "element": element, "frac": frac, "cart": cart}
+            if u_cart_original is not None:
+                u_cart_image = rotate_u_cart(u_cart_original, rows, m, m_inv)
+                atom["u_cart"] = (u_cart_image[0][0], u_cart_image[1][1], u_cart_image[2][2],
+                                   u_cart_image[0][1], u_cart_image[0][2], u_cart_image[1][2])
+            atoms.append(atom)
 
     if not atoms:
         raise SystemExit("No plottable atoms found in this str block (see warnings).")
@@ -557,6 +746,50 @@ function project(p) {{
   ];
 }}
 
+// ADP thermal-ellipsoid rendering: an atom carrying `u_cart` (the
+// Cartesian ADP tensor, Angstrom^2, computed Python-side -- see
+// uij_to_u_cart/rotate_u_cart) is drawn as a real oriented ellipse rather
+// than a plain sphere. The projection of a 3D Gaussian/ellipsoid dropped
+// onto a 2D plane (orthographic) is exactly the top-left 2x2 submatrix of
+// the VIEW-space tensor R.U_cart.R^T -- no meshing needed, just a closed-
+// form 2x2 eigendecomposition for the projected ellipse's semi-axes/angle.
+const ADP_PROB_SCALE = 1.5382; // 50%-probability ellipsoid surface (standard ORTEP/VESTA convention)
+
+function rotationMatrix() {{
+  // rotate() is a fixed linear map (no per-call state beyond rotX/rotY) --
+  // its matrix columns are just rotate() applied to the standard basis.
+  const ex = rotate([1, 0, 0]), ey = rotate([0, 1, 0]), ez = rotate([0, 0, 1]);
+  return [
+    [ex[0], ey[0], ez[0]],
+    [ex[1], ey[1], ez[1]],
+    [ex[2], ey[2], ez[2]],
+  ];
+}}
+
+function projectedEllipse(uCart, R) {{
+  const U = [
+    [uCart[0], uCart[3], uCart[4]],
+    [uCart[3], uCart[1], uCart[5]],
+    [uCart[4], uCart[5], uCart[2]],
+  ];
+  const RU = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {{
+    let s = 0; for (let k = 0; k < 3; k++) s += R[i][k] * U[k][j];
+    RU[i][j] = s;
+  }}
+  let a = 0, d = 0, b = 0; // top-left 2x2 of RU . R^T -- the only entries we need
+  for (let k = 0; k < 3; k++) {{
+    a += RU[0][k] * R[0][k];
+    d += RU[1][k] * R[1][k];
+    b += RU[0][k] * R[1][k];
+  }}
+  const tr = (a + d) / 2, diff = (a - d) / 2;
+  const disc = Math.sqrt(Math.max(0, diff * diff + b * b));
+  const l1 = Math.max(tr + disc, 1e-8), l2 = Math.max(tr - disc, 1e-8);
+  const angle = 0.5 * Math.atan2(2 * b, a - d);
+  return {{ rx: Math.sqrt(l1) * ADP_PROB_SCALE, ry: Math.sqrt(l2) * ADP_PROB_SCALE, angle }};
+}}
+
 function centerOf(pts) {{
   let cx = 0, cy = 0, cz = 0;
   for (const p of pts) {{ cx += p[0]; cy += p[1]; cz += p[2]; }}
@@ -571,6 +804,7 @@ function draw() {{
   const rotPt = p => rotate([p[0] - CENTER[0], p[1] - CENTER[1], p[2] - CENTER[2]]);
   const cornersR = CORNERS.map(rotPt);
   const cornersP = cornersR.map(project);
+  const ROT_M = rotationMatrix();
 
   ctx.strokeStyle = 'rgba(140,158,216,0.55)';
   ctx.lineWidth = 1.4 * devicePixelRatio;
@@ -603,6 +837,39 @@ function draw() {{
       ctx.beginPath(); ctx.moveTo(pa[0], pa[1]); ctx.lineTo(mx, my); ctx.stroke();
       ctx.strokeStyle = d.b.color;
       ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(pb[0], pb[1]); ctx.stroke();
+    }} else if (d.a.u_cart) {{
+      const p = project(d.a.rot);
+      const pxScale = Math.min(canvas.width, canvas.height) * 0.16 * zoom * p[3];
+      const ell = projectedEllipse(d.a.u_cart, ROT_M);
+      const rx = Math.max(ell.rx * pxScale, 1), ry = Math.max(ell.ry * pxScale, 1);
+
+      ctx.save();
+      ctx.translate(p[0], p[1]);
+      ctx.rotate(ell.angle);
+      const grad = ctx.createRadialGradient(-rx * 0.35, -ry * 0.35, Math.min(rx, ry) * 0.1, 0, 0, Math.max(rx, ry));
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.25, d.a.color);
+      grad.addColorStop(1, d.a.color);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 1 * devicePixelRatio;
+      ctx.stroke();
+      ctx.restore();
+
+      if (showLabels) {{
+        const fontPx = 11 * devicePixelRatio;
+        ctx.font = `600 ${{fontPx}}px ui-monospace, "SF Mono", Consolas, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 3 * devicePixelRatio;
+        ctx.strokeStyle = 'rgba(10,13,19,0.85)';
+        ctx.strokeText(d.a.label, p[0], p[1]);
+        ctx.fillStyle = '#f5f2ea';
+        ctx.fillText(d.a.label, p[0], p[1]);
+      }}
     }} else {{
       const p = project(d.a.rot);
       const r = d.a.radius * Math.min(canvas.width, canvas.height) * 0.075 * zoom * p[3];
@@ -654,6 +921,7 @@ def build_html(atoms, corners, bonds, symbol, cell, title, phase_index, phase_to
             "cart": list(atom["cart"]),
             "color": ELEMENT_TABLE.get(atom["element"], DEFAULT_ELEMENT)[0],
             "radius": ELEMENT_TABLE.get(atom["element"], DEFAULT_ELEMENT)[1],
+            **({"u_cart": list(atom["u_cart"])} if "u_cart" in atom else {}),
         }
         for atom in atoms
     ])
@@ -715,9 +983,10 @@ def main():
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
 
+    n_ellipsoids = sum(1 for atom in atoms if "u_cart" in atom)
     for w in warnings:
         print(f"Note: {w}", file=sys.stderr)
-    print(f"{len(atoms)} atoms, {len(bonds)} bonds. Written to {out_path}", file=sys.stderr)
+    print(f"{len(atoms)} atoms ({n_ellipsoids} as ADP ellipsoids), {len(bonds)} bonds. Written to {out_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

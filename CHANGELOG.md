@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.3 — 2026-07-17
+Updates from Alan
+
 ## 1.0.2 — 2026-07-16
 Exclude README.md and CHANGELOG.md from the release zip — skill installs
 no longer include repo-maintenance docs, only the actual skill payload.

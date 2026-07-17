@@ -116,7 +116,7 @@ import argparse
 import subprocess
 import shutil
 
-from fix_columns import fix_columns  # same directory; run first so site/lam keywords line up
+from fix_columns import fix_columns, LAM_LINE_RE  # same directory; run first so site/lam keywords line up
 import topas_keyword_tree as tkt      # same directory; reuses its Data-structures schema parser
 
 INDENT_UNIT = "   "  # exactly 3 spaces, never a tab
@@ -335,18 +335,21 @@ def normalize_line_whitespace(bare_line):
     """
     Collapse unnecessary whitespace on a single line (not inside a comment
     or a quoted string, and never on a "site ..." line -- see
-    SITE_LINE_RE): any run of whitespace collapses to a single space,
-    except it's dropped entirely right after '(', right before ')', right
-    before a ',', and right before any '(' (so "Keyword   (" becomes
-    "Keyword(", "Radius(          173)" becomes "Radius(173)"); a ','
-    keeps exactly one following space (unless immediately followed by
-    ')'). Content inside /* */, '...', or "..." passes through completely
-    unchanged, e.g. a quoted filename with spaces is never touched.
+    SITE_LINE_RE -- or a "la ... lo ... lh ..." lam emission-profile line
+    -- see LAM_LINE_RE, imported from fix_columns.py so the two scripts'
+    idea of "this line's alignment must survive" can never drift apart):
+    any run of whitespace collapses to a single space, except it's
+    dropped entirely right after '(', right before ')', right before a
+    ',', and right before any '(' (so "Keyword   (" becomes "Keyword(",
+    "Radius(          173)" becomes "Radius(173)"); a ',' keeps exactly
+    one following space (unless immediately followed by ')'). Content
+    inside /* */, '...', or "..." passes through completely unchanged,
+    e.g. a quoted filename with spaces is never touched.
 
     Only tracks paren depth within a single line -- a call whose '(' and
     ')' land on different lines won't have its whitespace normalized.
     """
-    if SITE_LINE_RE.match(bare_line):
+    if SITE_LINE_RE.match(bare_line) or LAM_LINE_RE.match(bare_line):
         return bare_line
 
     out = []

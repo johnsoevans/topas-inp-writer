@@ -1,35 +1,6 @@
 # The Minimization Routines
 
-
-```
-TMinimization
-    [line_min] [use_extrapolation] [no_normal_equations] [use_LU]
-    [approximate_A]
-        [A_matrix_memory_allowed_in_Mbytes !E]
-        [A_matrix_elements_tollerance !E]
-        [A_matrix_report_on]
-    [approximate_A_check_for_must_be_zero #n]
-    [chi2 !E]
-    [chi2_convergence_criteria !E]
-    [continue_after_convergence]
-    [bootstrap_errors !Ecycles]
-        [fraction_of_yobs_to_resample !E]
-        [determine_values_from_samples]
-        [resample_from_current_ycalc]
-    [do_errors]
-    [do_errors_include_restraints]
-    [do_errors_include_penalties]
-    [only_penalties]
-    [percent_zeros_before_sparse_A #]
-    [penalty !E]...
-    [penalties_weighting_K1 !E]
-    [pen_weight !E]
-    [quick_refine !E [quick_refine_remove !E] ]
-    [randomize_on_errors]
-    [restraint !E]
-    [save_best_chi2]
-    [use_LU_for_errors]
-```
+For the full `TMinimization` keyword-dependency tree (bracket notation), see `references/21-keyword-index.md`'s "Data structures" section — this file focuses on the narrative explanation of what each keyword does and why.
 
 | Get(number_independent_parameters) |
 | --- |

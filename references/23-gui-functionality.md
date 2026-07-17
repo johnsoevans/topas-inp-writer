@@ -134,7 +134,7 @@ Pressing the Middle Mouse Button and moving the mouse changes the x and y offset
 
 ### Display hkl ticks on Surface plots
 
-hkl ticks with z-axis height can be displayed on surface plots as seen in the following for \test_examples\je-para\d8_02999_35_annotate_04.inp:
+hkl ticks with z-axis height can be displayed on surface plots as seen in the following:
 
 And in PlanView:
 

@@ -269,12 +269,6 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | `indexing/ex9.inp` | 0.6 KB | (unclassified — open to inspect) |  |
 | `indexing/template.inp` | 0.8 KB | (unclassified — open to inspect) | All crystal systems |
 
-## je-para/
-
-| File | Size | Detected topics | Notes |
-| --- | --- | --- | --- |
-| `je-para/d8_02999_35_annotate_04.inp` | 194.7 KB | Rietveld/structure, Quantitative analysis | -------------------------------w------------------- Schematic topas .inp file for parametric Rietvel |
-
 ## k-factor/
 
 | File | Size | Detected topics | Notes |
@@ -407,7 +401,6 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | File | Size | Detected topics | Notes |
 | --- | --- | --- | --- |
 | `rigid-errors/aniline_i_100k_x.inp` | 106.7 KB | Rietveld/structure, Quantitative analysis, Rigid bodies |  |
-| `rigid-errors/aniline_i_8kbar_n.inp` | 76.7 KB | Rietveld/structure, Quantitative analysis, Rigid bodies, Restraints/penalties | num_runs 10 Directly code Z matrix |
 
 ## single-crystal/
 

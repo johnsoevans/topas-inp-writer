@@ -63,10 +63,21 @@ list -- see extract_bracket_groups()'s own docstring for the two-pass
 recovery this triggered.
 
 Usage:
-    python3 topas_keyword_tree.py                 # uses the bundled reference file
+    python3 topas_keyword_tree.py                 # -> <TOPAS_DIR>/topas_keyword_tree.html (skipped if it already exists)
+    python3 topas_keyword_tree.py --force          # regenerate even if the output file already exists
     python3 topas_keyword_tree.py -o out.html
     python3 topas_keyword_tree.py --no-open
     python3 topas_keyword_tree.py --references-dir path/to/references   # defaults to the bundled references/ dir
+
+Default output lives directly under TOPAS_DIR (topas_install.get_keyword_tree_html()),
+the same "lives in the real install, not the skill" spot as macro_browser.html and
+kernel_structure_tree.html -- and, unlike those two, this one IS a maintained,
+re-runnable generator (it only needs this skill's own bundled reference files, no
+external doc), so by default it skips regenerating if the file is already there --
+this tree doesn't change unless the manual/reference files do, so treat an existing
+copy as current rather than silently overwriting it every "show keyword tree" ask.
+Pass --force to regenerate anyway (e.g. after editing a reference chapter). If
+TOPAS_DIR isn't set, -o must be given explicitly.
 """
 
 import sys
@@ -79,6 +90,9 @@ import subprocess
 import argparse
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import topas_install
 REFERENCES_DIR = os.path.join(SCRIPT_DIR, "..", "references")
 DEFAULT_REFERENCE = os.path.join(REFERENCES_DIR, "21-keyword-index.md")
 
@@ -762,9 +776,33 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--reference", default=DEFAULT_REFERENCE, help="path to 21-keyword-index.md (default: bundled copy)")
     parser.add_argument("--references-dir", default=REFERENCES_DIR, help="directory of all reference chapters for the 'by topic' scan (default: bundled references/ dir)")
-    parser.add_argument("-o", "--output", default="topas_keyword_tree.html", help="output HTML path")
+    parser.add_argument("-o", "--output", default=None, help="output HTML path (default: topas_keyword_tree.html directly under TOPAS_DIR)")
+    parser.add_argument("--force", action="store_true", help="regenerate even if the output file already exists")
     parser.add_argument("--no-open", action="store_true", help="don't open the result in the browser afterward")
     args = parser.parse_args()
+
+    output_path = args.output
+    if output_path is None:
+        topas_dir, dir_found = topas_install.get_topas_dir()
+        if not dir_found:
+            print("ERROR: no -o/--output given and TOPAS_DIR isn't set, so there's nowhere to "
+                  "default the output to. Either set TOPAS_DIR or pass -o explicitly.", file=sys.stderr)
+            sys.exit(1)
+        output_path = os.path.join(topas_dir, topas_install.KEYWORD_TREE_HTML_BASENAME)
+
+    if not args.force and os.path.isfile(output_path):
+        print(f"{output_path} already exists -- skipping regeneration (pass --force to rebuild it).",
+              file=sys.stderr)
+        if not args.no_open:
+            abs_path = os.path.abspath(output_path)
+            if os.name == "nt":
+                os.startfile(abs_path)
+            else:
+                opener = "open" if sys.platform == "darwin" else "xdg-open"
+                opener_path = shutil.which(opener)
+                if opener_path:
+                    subprocess.run([opener_path, abs_path], check=False)
+        return
 
     with open(args.reference, encoding="utf-8") as f:
         md_text = f.read()
@@ -782,9 +820,9 @@ def main():
 
     html = build_html(type_defs, orphans, chapters, nstructural, "TOPAS keyword hierarchy")
 
-    with open(args.output, "w", encoding="utf-8") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"Written to {args.output} ({nstructural} structural types, {len(orphans)} orphan root(s): {orphans}, "
+    print(f"Written to {output_path} ({nstructural} structural types, {len(orphans)} orphan root(s): {orphans}, "
           f"{len(chapters)} by-topic chapters)", file=sys.stderr)
 
     if not args.no_open:
@@ -792,7 +830,7 @@ def main():
         # reports from param_dependency_trees.py/format_inp_hierarchy.py,
         # which open in VS Code instead (see this skill's own established
         # convention for each output type).
-        abs_path = os.path.abspath(args.output)
+        abs_path = os.path.abspath(output_path)
         if os.name == "nt":
             os.startfile(abs_path)
         else:
