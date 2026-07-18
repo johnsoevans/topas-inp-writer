@@ -1,6 +1,10 @@
 # Changelog
 
-## 1.04 — 2026-07-17
+## 1.0.5 — 2026-07-18
+- Add references/space_group_symbols.html: browsable, searchable reference of
+  every space group symbol TOPAS's space_group keyword accepts, click-to-copy.
+
+## 1.0.4 — 2026-07-17
 - Compressed skill.md significantly
 - New example_inp_file readme
 - New symmetrize_str.py for topas-editor use
