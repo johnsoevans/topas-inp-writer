@@ -1,0 +1,70 @@
+' This is equivalent to file d5_05005_fit_01 from tutorial https://topas.webspace.durham.ac.uk/vscode_riet_pawley/
+' It is a default Rietveld fit to low quality laboratory data on TiO2 by following topas-editor menus
+' A TCHZ peak shape is used by default with CuKa2_analyt
+' It is configured with the TCHZ peak shape in a for strs loop as would be used for multi-phase Rietveld
+' Here the TCHZ peak shape parameters are refined,
+' but they could be replaced with fixed values for the Instrument Resolution Function and simple size/microstrain contributions refined
+
+r_wp  13.7288896 r_exp  10.8706535 r_p  9.47492827 weighted_Durbin_Watson  1.34692378 gof  1.26293139
+iters 1000
+chi2_convergence_criteria 0.001
+do_errors
+
+xdd d5_05005.RAW
+	x_calculation_step = Yobs_dx_at(Xo); convolution_step 4
+	bkg @  26.2528454`_0.146280301 -19.9915013`_0.263308753  8.06853488`_0.229971566 -2.64050247`_0.220481971  0.968381`_0.18179929  0.933770977`_0.183437946
+	Simple_Axial_Model(axial, 9.23173929`_0.133128144)
+	'Bragg Brentano  Cu Ka1/a2 graphite diffracted beam mono scint analytical peak shape
+	LP_Factor(!th2_monochromator, 26.6)
+	CuKa2_analyt(0.0001)
+	Specimen_Displacement(height,-0.0718993566`_0.00144476699)
+
+	'Structural information from z:\data\topas_workshop\tio2_rietveld\rutile.cif
+	str
+		a lpa  4.593278`_0.000064
+		b lpa  4.593278`_0.000064
+		c lpc  2.957953`_0.000044
+		al 90.      
+		be 90.      
+		ga 90.      
+		space_group "P42/mnm"
+		site Ti1    x 0.00000               y 0.00000               z 0.00000       occ Ti    1.00000    beq @  0.69163`_0.03251
+		site O1     x xo1  0.30653`_0.00028 y xo1  0.30653`_0.00028 z 0.00000       occ O     1.00000    beq @  0.12566`_0.04726
+
+		scale @  0.00859630644`_4.326e-05
+		r_bragg  3.69000603
+		Phase_Density_g_on_cm3( 4.25014236`_0.000133542443)
+		phase_name rutile
+		local !CIF_PHASE_ID  1`
+		'Refine sample size/strain contributions here IF TCHZ fixed to Instrumental Resolution Function
+		'LVol_FWHM_CS_G_L(1, 100, 0.89, 100, csgc1, 100, cslc1, 100)
+		'e0_from_Strain( 0.001, sgc1, 0.001, slc1, 0.001)
+
+	for strs {
+		TCHZ_Peak_Type(pku, 0.00659249534`_0.00441957787,pkv, -0.00957469221`_0.00471305525,pkw,  0.00297466875`_0.00120982108,!pkz, 0.0000,pkx, 0.0465714453`_0.00534879623, pky, 0.0635882971`_0.00235706876)
+	}
+
+'Out_pdCIF(pdCIFplotter.cif, "proc")
+C_matrix_normalized
+{
+                             1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19
+bkg_rec2338A6A25C8_    1:  100 -31  61 -17  40   0   4  -3   4   3   2  13   1  13   2  -3   3  -9   3
+bkg_rec2338A6A2670_    2:  -31 100 -31  62 -14  43  -3   2  11  -1  -1  15   2  16  -3   2  -2 -14  12
+bkg_rec2338A6A2718_    3:   61 -31 100 -33  56  -7  -7   6  11  -3  -4   9   2   9  -3   3  -3 -10  12
+bkg_rec2338A6A27C0_    4:  -17  62 -33 100 -32  49   5  -4  -4   2   2  -2   2   3   0  -1   1   4  -6
+bkg_rec2338A6A2868_    5:   40 -14  56 -32 100 -18  -4   4   5  -2  -2   5   2   9  -2   0   0  -9   8
+bkg_rec2338A6A2910_    6:    0  43  -7  49 -18 100  -2   1   7  -0  -1   8   2  13  -8   7  -6 -10   9
+axial                  7:    4  -3  -7   5  -4  -2 100 -79 -10  44  46  -6  -0  -4 -13  17 -21  22 -28
+height                 8:   -3   2   6  -4   4   1 -79 100   8 -80 -65   5   0   3  11 -15  18 -14  20
+scale2338A7178A0_      9:    4  11  11  -4   5   7 -10   8 100  -4  -5  81 -12  48  -4   4  -4 -18  18
+lpa                   10:    3  -1  -3   2  -2  -0  44 -80  -4 100  40  -2  -0  -1  -6   9 -11   5  -9
+lpc                   11:    2  -1  -4   2  -2  -1  46 -65  -5  40 100  -3  -0  -2  -7   9 -12   5  -9
+beq2338A717B70_       12:   13  15   9  -2   5   8  -6   5  81  -2  -3 100 -12  40  -2   2  -2 -21  18
+xo1                   13:    1   2   2   2   2   2  -0   0 -12  -0  -0 -12 100  -5  -1   1  -0  -2   2
+beq2338A717E40_       14:   13  16   9   3   9  13  -4   3  48  -1  -2  40  -5 100  -1   1  -1 -17  14
+pku                   15:    2  -3  -3   0  -2  -8 -13  11  -4  -6  -7  -2  -1  -1 100 -98  92  40 -47
+pkv                   16:   -3   2   3  -1   0   7  17 -15   4   9   9   2   1   1 -98 100 -98 -37  49
+pkw                   17:    3  -2  -3   1   0  -6 -21  18  -4 -11 -12  -2  -0  -1  92 -98 100  40 -53
+pkx                   18:   -9 -14 -10   4  -9 -10  22 -14 -18   5   5 -21  -2 -17  40 -37  40 100 -94
+pky                   19:    3  12  12  -6   8   9 -28  20  18  -9  -9  18   2  14 -47  49 -53 -94 100
+}

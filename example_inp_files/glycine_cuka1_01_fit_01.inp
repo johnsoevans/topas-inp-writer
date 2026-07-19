@@ -1,0 +1,230 @@
+' Rigid bodies using z-matrices
+'
+' This INP goes with tutorial https://topas.webspace.durham.ac.uk/tutorial_zmatrix/
+' It describes doing a Rietveld fit using a z-matrix with simulated data from glycine
+' It is set up so you can choose various different rigid body definitions as discussed in the tutorial via #define rigid_* lines
+' The different rigid bodies are derived in different ways
+' rigid_start and rigid_perfect_fit have no refined torsion angles
+' rigid_ideal, rigid_babel and rigid_babel_zwitter refine a single torsion angle
+' You can choose to just match coordinates with #define match_sites line
+' In a normal real-world example you wouldn't need to define these different groups
+'
+' When I tested I got the following chi2/Rwp values for matching and Rietveld fitting
+'	- rigid_start was a first guess z-matrix from the topas structure viewer with no refined torsions and gvies Rwp 8.3%
+'   - rigid_ideal has regular distances and angles and gives chi2 0.178 / Rwp 3.850%
+'   - rigid_perfect_fit has rigid body defined to perfectly fit the data with no refined parameters and gives chi2 0.00 / Rwp 3.666%
+'   - rigid_babel is from a mercury sketch to mol to babel to gzmat to convert.py and needs different site labels chi2 0.42 / Rwp 4.658%
+'   - rigid_babel_zwitter is from a babel smiles to 3d geneation chi2 0.20 / Rwp 3.827%
+'
+' JSOE Feb 2026
+
+r_wp  8.28177449 r_exp  3.63005014 r_p  5.7708774 weighted_Durbin_Watson  0.397945512 gof  2.28144906
+iters 100000
+chi2_convergence_criteria 0.000001
+continue_after_convergence
+
+' Choose here to match sites for rigid body location by uncommenting the next line
+'#define match_sites
+
+' Choose which rigid body you want to use here, for babel bodies also select sites_babel:
+
+#define rigid_start
+'#define rigid_ideal
+'#define rigid_perfect_fit
+
+'#define rigid_babel
+'#define rigid_babel_zwitter
+'#define sites_babel
+
+xdd glycine_cuka1_01.xye
+	start_X 5
+	finish_X 90
+	x_calculation_step = Yobs_dx_at(Xo); convolution_step 4
+	bkg @  509.295975`  1.12610351`  40.468504` -17.9598612`  16.7540313` -5.30472877`
+	Simple_Axial_Model(!axial, 0.0001)
+	' Bragg Brentano Cu Ka1 Ge(111) mono PSD
+	LP_Factor(!th2_monochromator, 27.26)
+	CuKa1(0.0001)
+
+	' Structural information originally from z:\data\topas_workshop\glycine_z_matrix\glycine_865358.cif
+	str
+		space_group "P21/n"
+		a 5.0840   
+		b 11.780   
+		c 5.4589   
+		al 90.00    
+		be 112.04   
+		ga 90.00    
+		volume  303.039 
+		#ifdef sites_babel 'use these sites if rigid body has numbering scheme from open babel
+			site N1     x  0.29197 y  0.08887 z  0.73657 occ N     1          beq bcno  0.37119
+			site C2     x  0.05254 y  0.14771 z  0.78332 occ C     1          beq bh    0.47588
+			site C3     x  0.07341 y  0.12553 z  1.06385 occ C     1          beq bh    0.47588
+			site O4     x  0.30395 y  0.09320 z  1.23675 occ O     1          beq bh    0.47588
+			site O5     x -0.14828 y  0.14118 z  1.10979 occ O     1          beq bcno  0.37119
+			site H6     x  0.29207 y  0.10000 z  0.55033 occ H     1          beq bh    0.47588
+			site H7     x  0.28728 y  0.00318 z  0.77386 occ H     1          beq bh    0.47588
+			site H8     x  0.48352 y  0.11597 z  0.87394 occ H     1          beq bcno  0.37119
+			site H9     x -0.14419 y  0.11265 z  0.64070 occ H     1          beq bcno  0.37119
+			site H10    x  0.07428 y  0.23824 z  0.75214 occ H     1          beq bcno  0.37119
+		#else 'use these sites if rigid body has numbering scheme from original cif
+			site N1     x  0.68825` y  0.09640` z  0.25151` occ N     1          beq bcno  0.87955`
+			site H3     x  0.63940` y  0.01374` z  0.18307` occ H     1          beq bh    10.21063`
+			site H4     x  0.52822` y  0.15069` z  0.13705` occ H     1          beq bh    10.21063`
+			site H5     x  0.70575` y  0.10080` z  0.44715` occ H     1          beq bh    10.21063`
+			site C1     x  0.96086` y  0.13054` z  0.23337` occ C     1          beq bcno  0.87955`
+			site H1     x  1.14132` y  0.06932` z  0.36244` occ H     1          beq bh    10.21063`
+			site H2     x  1.01594` y  0.22376` z  0.31054` occ H     1          beq bh    10.21063`
+			site C2     x  0.93545` y  0.12415` z -0.05075` occ C     1          beq bcno  0.87955`
+			site O1     x  1.14760` y  0.15019` z -0.11177` occ O     1          beq bcno  0.87955`
+			site O2     x  0.70174` y  0.09268` z -0.23069` occ O     1          beq bcno  0.87955`
+			view_structure
+		#endif
+		scale @  0.0103408817`
+		r_bragg  5.76873641
+		Phase_Density_g_on_cm3( 1.64534479)
+		phase_name glycine_865358
+		local !CIF_PHASE_ID  1`
+
+		#ifdef rigid_start
+			rigid
+				z_matrix N1  
+				z_matrix C1   N1    1.48170
+				z_matrix H3   N1    1.03915 C1    109.4912
+				z_matrix H4   N1    1.03915 C1    109.4912 H3     240.0000
+				z_matrix H5   N1    1.03915 C1    109.4912 H3     120.0000
+				z_matrix C2   C1    1.50913 N1    109.4912 H3      60.0000
+				z_matrix H1   C1    1.17186 N1    109.4912 H4     180.0000
+				z_matrix H2   C1    1.17186 N1    109.4912 H3     180.0000
+				z_matrix O1   C2    1.27987 C1    120.0000 N1      180.000
+				z_matrix O2   C2    1.27987 C1    120.0000 O1     180.0000
+			macro rotcon {val_on_continue = Rand(-180,180);}
+			'Rotate_about_axies(!xrot -60 rotcon, !yrot 0 rotcon, !zrot 70 rotcon )
+			'Translate(!xtrans  0.30 , !ytrans  0.1 , !ztrans  0.75)
+			Rotate_about_axies(xrota -62.36470` rotcon, yrota -176.30937` rotcon, zrota -85.42204` rotcon )
+			Translate(xtransa  0.68825` , ytransa  0.09640` , ztransa  0.25151`)
+		#endif
+
+		#ifdef rigid_ideal
+			prm d_CN  1.48051747 min 1 max 1.6
+			prm d_NH  1.04262098 min 1 max 1.6
+			prm d_CC  1.50894262 min 1 max 1.6
+			prm d_CH  1.16277196 min 1 max 1.6
+			prm d_CO  1.27940825 min 1 max 1.6
+			rigid
+				z_matrix N1  
+				z_matrix C1   N1    =d_CN;:1.48052
+				z_matrix H3   N1    =d_NH;:1.04262 C1    109.4912
+				z_matrix H4   N1    =d_NH;:1.04262 C1    109.4912 H3     240.0000
+				z_matrix H5   N1    =d_NH;:1.04262 C1    109.4912 H3     120.0000
+				z_matrix C2   C1    =d_CC;:1.50894 N1    109.4912 H3      60.0000
+				z_matrix H1   C1    =d_CH;:1.16277 N1    109.4912 H4     180.0000
+				z_matrix H2   C1    =d_CH;:1.16277 N1    109.4912 H3     180.0000
+				z_matrix O1   C2    =d_CO;:1.27941 C1    120.0000 N1  @  -160.68239
+				z_matrix O2   C2    =d_CO;:1.27941 C1    120.0000 O1     180.0000
+			macro rotcon {val_on_continue = Rand(-180,180);}
+			Rotate_about_axies(xrota -61.93217 rotcon, yrota -1.42539 rotcon, zrota   68.81819 rotcon )
+			Translate(xtransa  0.29672 , ytransa  0.08694 , ztransa  0.74246)			
+		#endif
+		#ifdef rigid_perfect_fit
+			rigid
+				z_matrix N1  
+				z_matrix C1   N1    1.48184
+				z_matrix H3   N1    1.03629 C1    110.77331
+				z_matrix H4   N1    1.04373 C1    111.52955 H3     241.43921
+				z_matrix H5   N1    1.05608 C1    112.19979 H3     119.59466
+				z_matrix C2   C1    1.52792 N1    111.49799 H3     57.63571
+				z_matrix H1   C1    1.09296 N1    109.34375 H4    -182.93362
+				z_matrix H2   C1    1.09454 N1    108.73642 H3    -182.71009
+				z_matrix O1   C2    1.25642 C1    117.12677 N1    -161.16390
+				z_matrix O2   C2    1.25795 C1    117.35342 O1    -179.44492
+			macro rotcon {val_on_continue = Rand(-180,180);}
+			Rotate_about_axies(xrota -59.43300 rotcon, yrota -0.04933 rotcon, zrota   71.17966 rotcon )
+			Translate(xtransa  0.29492 , ytransa  0.08820 , ztransa  0.74031)				
+		#endif
+
+		#ifdef rigid_babel
+			rigid
+				load z_matrix {
+					N1
+					C2 N1  1.4938
+					C3 C2  1.5104 N1  114.46
+					O4 C3  1.2490 C2  118.95 N1 @  377.89789
+					O5 C3  1.2489 C2  118.95 O4  180'N1 @  201.79065
+					H6 N1  1.0880 C2  110.76 C3  180.00
+					H7 N1  1.0881 C2  110.75 C3   60.01
+					H8 N1  1.0880 C2  110.77 C3  300.01
+					H9 C2  1.0970 N1  108.64 C3  238.45
+					H10 C2 1.0970 N1  108.64 C3  121.53
+				}
+			macro rotcon {val_on_continue = Rand(-180,180);}
+			Rotate_about_axies(xrota  192.77000 rotcon, yrota  217.52829 rotcon, zrota   135.16133 rotcon )
+			Translate(xtransa  0.30289 , ytransa  0.08847 , ztransa  0.73479)
+		#endif
+		#ifdef rigid_babel_zwitter
+			'took the babel zmatrix, deleted H11 on O5.  changed o5-c3 from 1.34 to 1.2567.  added a single torsion angle
+			rigid
+				load z_matrix {
+					N1
+					C2 N1  1.5035
+					C3 C2  1.5175 N1  109.72
+					O4 C3  1.2567 C2  120.16 N1 tor1  19.32112
+					O5 C3  1.2567 C2  116.60 N1  =180+tor1;
+					H6 N1  1.0253 C2  114.27 C3  180.00
+					H7 N1  1.0318 C2  109.72 C3   56.94
+					H8 N1  1.0318 C2  109.72 C3  303.07
+					H9 C2  1.0921 N1  106.73 C3  240.06
+					H10 C2 1.0921 N1  106.74 C3  119.93
+				}
+			macro rotcon {val_on_continue = Rand(-180,180);}
+			Rotate_about_axies(xrota  12.56321 rotcon, yrota -83.01635 rotcon, zrota -45.86182 rotcon )
+			Translate(xtransa  0.29197 , ytransa  0.08887 , ztransa  0.73657)
+		#endif
+
+		'this section lets you match the rigid body to a set of coordinates
+		#ifdef match_sites
+			only_penalties
+			'ideal coordinates from single crystal structure to match to
+			site N1_m     x 0.29501       y 0.08830       z -0.25953      occ N     0        
+			site H3_m     x 0.2923        y 0.00181       z -0.2258       occ H     0        
+			site H4_m     x 0.4916        y 0.11821       z -0.1309       occ H     0        
+			site H5_m     x 0.2839        y 0.09861       z -0.4553       occ H     0        
+			site C1_m     x 0.05795       y 0.14585       z -0.21433      occ C     0        
+			site H1_m     x -0.1437       y 0.11556       z -0.3590       occ H     0        
+			site H2_m     x 0.0735        y 0.23727       z -0.2423       occ H     0        
+			site C2_m     x 0.06920       y 0.12527       z 0.06578       occ C     0        
+			site O1_m     x -0.15495      y 0.14232       z 0.10651       occ O     0        
+			site O2_m     x 0.30223       y 0.09361       z 0.23646       occ O     0  
+			'the 4 in the macro is the number of molecules in the cell, this means final value in macro is distance between atoms
+			Match_Site(N1_m, N*, 1,  , 4, 0.0221326416)
+			Match_Site(H3_m, H*, 1,  , 4, 0.0296391439)
+			Match_Site(H4_m, H*, 1,  , 4, 0.0624116228)
+			Match_Site(H5_m, H*, 1,  , 4, 0.0444855656)
+			Match_Site(C1_m, C*, 1,  , 4, 0.0337141799)
+			Match_Site(H1_m, H*, 1,  , 4, 0.0344161913)
+			Match_Site(H2_m, H*, 1,  , 4, 0.0340206987)
+			Match_Site(C2_m, C*, 1,  , 4, 0.0273388281)
+			Match_Site(O1_m, O*, 1,  , 4, 0.0345707072)
+			Match_Site(O2_m, O*, 1,  , 4, 0.00959288178)
+
+			' Match site macro will try and match a site in a rigid body or z-matrix to predefined coordinates
+			' These could come from a partial structure solution or a previous Rietveld model
+			' It uses bond distance penalties to try and minimise differences between the rigid body coordinates and the target
+			macro Match_Site(s1, s2, wby, c, Z, Rcalc)
+			{
+				#m_ifarg c ""
+					#m_unique_not_refine c
+				#m_endif
+				box_interaction to_N 0 s1 s2 c = R;
+				local =c/Z;: Rcalc
+				penalty = (wby) c^2;
+			}
+
+		#endif
+
+	for strs {
+		TCHZ_Peak_Type(pku, 0.0078538806`,pkv, -0.0105128175`,pkw,  0.00018839881`,!pkz, 0.0000,pkx, 0.00963966659`, pky, 0.0926094978`)
+	}
+
+'Out_pdCIF(pdCIFplotter.cif, "proc")
+

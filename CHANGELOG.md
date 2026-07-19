@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.6 — 2026-07-19
+- Added example_inp_files with z matrices, restrained organic molecules
+- Added tio2 lab rietveld and pawley examples from tutorials
+- Added a reference skill on bond distance and angle restraints and how to generate: restraints-and-penalties.md
+
 ## 1.0.5 — 2026-07-18
 - Add references/space_group_symbols.html: browsable, searchable reference of
   every space group symbol TOPAS's space_group keyword accepts, click-to-copy.

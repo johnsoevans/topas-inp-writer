@@ -91,7 +91,9 @@ Usage:
 """
 
 import sys
+import os
 import re
+import math
 import argparse
 from fractions import Fraction
 
@@ -116,15 +118,23 @@ from symmetry_utils import (
 # ---------------------------------------------------------------------------
 
 def strip_cif_uncertainty(s):
-    """'5.410278(11)' -> '5.410278'; also handles a bare number unchanged."""
-    return re.sub(r"\(\d+\)", "", s).strip()
+    """'5.410278(11)' -> '5.410278'; also strips a non-numeric uncertainty
+    placeholder like '0.010(X)' -> '0.010' (real value, undetermined
+    uncertainty -- seen in the wild). Bare numbers pass through unchanged."""
+    return re.sub(r"\([^)]*\)", "", s).strip()
 
 
 def parse_cif_value(s):
     s = strip_cif_uncertainty(s)
     if s in (".", "?", ""):
         return None
-    return float(s)
+    try:
+        return float(s)
+    except ValueError:
+        # Malformed numeric field (e.g. a stray '..0794' typo) -- treat as
+        # missing rather than crashing the whole file's conversion; callers
+        # already handle None (e.g. per-site skip for missing coordinates).
+        return None
 
 
 def read_cif_lines(path):
@@ -194,22 +204,140 @@ def parse_cif_loop(lines, required_tags):
 # CIF-specific helper
 # ---------------------------------------------------------------------------
 
-def guess_element_symbol(label):
+def parse_formula_elements(formula_sum):
+    """Bare element symbols appearing in a CIF's _chemical_formula_sum
+    (e.g. \"Na4 Al2 Si2 O61 S6 Cl0.4\" -> {'Na','Al','Si','O','S','Cl'}) --
+    used by guess_element_symbol to disambiguate an ambiguous 2-letter site
+    label against elements the structure is actually reported to contain."""
+    if not formula_sum:
+        return set()
+    s = formula_sum.strip().strip("'\"")
+    return {m.group(1) for m in re.finditer(r"([A-Z][a-z]?)\d*\.?\d*", s)}
+
+
+def guess_element_symbol(label, formula_elements=None):
     """
     Fallback when the CIF has no _atom_site_type_symbol column: strip a
     trailing digit/suffix off the site label (CIF convention: 'O1', 'O2',
     'Fe2' name distinct sites of the same element) to recover a plausible
     scattering-factor name for TOPAS's `occ` keyword. Not guaranteed correct
     for unusual labels -- callers should surface this as a warning.
+
+    Prefers the 2-letter reading when it's a real tabulated element (e.g.
+    'PT1' -> 'Pt', not 'P') -- a case-sensitive first-letter-only match
+    misreads any ALL-CAPS two-letter-element label this way. BUT this is
+    genuinely ambiguous when the 2-letter reading collides with an
+    unrelated element that's implausible for the structure -- confirmed in
+    the wild: label 'OS1' (a common "Oxygen of Sulfate" site-naming
+    convention) was misread as Osmium 'Os' purely because Os happens to be
+    tabulated, when the CIF's own formula contained no osmium at all. If
+    `formula_elements` (the CIF's own _chemical_formula_sum, parsed via
+    parse_formula_elements) is given and disambiguates -- one reading
+    matches a real element in the formula, the other doesn't -- that
+    reading wins over the bare tabulated-element check. Falls back to the
+    tabulated-element heuristic if formula_elements doesn't resolve it
+    (not given, or both/neither reading appears in the formula), or to 1
+    letter if the 2-letter reading isn't a real element at all.
     """
-    m = re.match(r"^([A-Z][a-z]?)", label)
-    return m.group(1) if m else label
+    m = re.match(r"^([A-Za-z]{1,2})", label)
+    if not m:
+        return label
+    candidate = m.group(1)
+    if len(candidate) == 2:
+        two_letter = candidate[0].upper() + candidate[1].lower()
+        one_letter = candidate[0].upper()
+        if formula_elements:
+            two_in = two_letter in formula_elements
+            one_in = one_letter in formula_elements
+            if one_in and not two_in:
+                return one_letter
+            if two_in and not one_in:
+                return two_letter
+        table = load_atmscat_symbols()
+        if not table or two_letter in table:
+            return two_letter
+    return candidate[0].upper()
 
 
 ADP_CIF_TAGS = {
     "u11": "_atom_site_aniso_U_11", "u22": "_atom_site_aniso_U_22", "u33": "_atom_site_aniso_U_33",
     "u12": "_atom_site_aniso_U_12", "u13": "_atom_site_aniso_U_13", "u23": "_atom_site_aniso_U_23",
 }
+
+
+def normalize_species_symbol(symbol):
+    """
+    CIF's _atom_site_type_symbol writes oxidation state as
+    <element><magnitude><sign> (e.g. 'Te6+', 'O2-', 'Fe3+'), but TOPAS's
+    atmscat.txt / `occ` keyword expects <element><sign><magnitude> (e.g.
+    'Te+6', 'O-2', 'Fe+3') -- confirmed directly against atmscat.txt entries
+    (Na+1, Cl-1, Ti+4, ...). Passed straight through unchanged if it's
+    already TOPAS-order, has no charge, or doesn't match either pattern.
+    """
+    symbol = symbol.strip()
+    m = re.match(r"^([A-Za-z]{1,2})(\d*)([+-])$", symbol)
+    if m:
+        el, num, sign = m.groups()
+        return f"{el}{sign}{num or '1'}"
+    m = re.match(r"^([A-Za-z]{1,2})([+-])(\d*)$", symbol)
+    if m:
+        el, sign, num = m.groups()
+        return f"{el}{sign}{num or '1'}"
+    return symbol
+
+
+_ATMSCAT_SYMBOLS = None
+
+
+def load_atmscat_symbols():
+    """Cached set of every species name (element or ionic) atmscat.txt has
+    scattering-factor coefficients for -- used to check a species before
+    emitting it, rather than letting tc.exe fail at runtime."""
+    global _ATMSCAT_SYMBOLS
+    if _ATMSCAT_SYMBOLS is not None:
+        return _ATMSCAT_SYMBOLS
+    _ATMSCAT_SYMBOLS = set()
+    try:
+        import topas_install
+        topas_dir, found = topas_install.get_topas_dir()
+        if found:
+            path = os.path.join(topas_dir, "atmscat.txt")
+            if os.path.isfile(path):
+                with open(path, encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        m = re.match(r"^\s*([A-Za-z]{1,2}(?:[+-]\d+)?)\s", line)
+                        if m:
+                            _ATMSCAT_SYMBOLS.add(m.group(1))
+    except Exception:
+        pass
+    return _ATMSCAT_SYMBOLS
+
+
+def resolve_scattering_species(symbol):
+    """
+    Returns (species_to_emit, warning_or_None). If `symbol` (after CIF->TOPAS
+    oxidation-notation normalization) is a tabulated atmscat.txt species, use
+    it as-is. Otherwise fall back to the bare neutral element -- the same
+    manual workaround applied for V+4 in the first pilot batch -- with an
+    explicit warning rather than silently emitting a species tc.exe will
+    reject at runtime. If atmscat.txt can't be located at all, the symbol is
+    passed through unchecked (no TOPAS_DIR -- can't verify either way).
+    """
+    normalized = normalize_species_symbol(symbol)
+    table = load_atmscat_symbols()
+    if not table or normalized in table:
+        return normalized, None
+    bare = re.match(r"^([A-Za-z]{1,2})", normalized)
+    bare = bare.group(1) if bare else normalized
+    if bare in table:
+        return bare, (
+            f"species '{normalized}' (from CIF symbol '{symbol}') is not in atmscat.txt -- "
+            f"falling back to neutral '{bare}' for the scattering factor."
+        )
+    return normalized, (
+        f"species '{normalized}' (from CIF symbol '{symbol}') is not in atmscat.txt, and neither "
+        f"is the neutral element '{bare}' -- this site will likely fail at runtime, VERIFY."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +358,8 @@ def convert(path, tol=0.0015):
         sg = find_scalar_tag(lines, "_space_group_name_H-M_alt")
     if sg is None:
         sg = find_scalar_tag(lines, "_space_group")  # nonstandard but seen in the wild
+
+    formula_elements = parse_formula_elements(find_scalar_tag(lines, "_chemical_formula_sum"))
 
     sym_tags, sym_rows = parse_cif_loop(lines, ["_symmetry_equiv_pos_as_xyz"])
     if sym_rows == []:
@@ -295,17 +425,40 @@ def convert(path, tol=0.0015):
         if "_atom_site_type_symbol" in row:
             type_symbol = row["_atom_site_type_symbol"]
         else:
-            type_symbol = guess_element_symbol(label)
+            type_symbol = guess_element_symbol(label, formula_elements)
             warnings.append(
                 f"{label}: CIF has no _atom_site_type_symbol column -- guessed scattering "
                 f"species '{type_symbol}' from the site label. Verify this is the correct "
                 f"element/ion for the occ keyword."
             )
+        type_symbol, species_warning = resolve_scattering_species(type_symbol)
+        if species_warning:
+            warnings.append(f"{label}: {species_warning}")
         x = parse_cif_value(row.get("_atom_site_fract_x", "0"))
         y = parse_cif_value(row.get("_atom_site_fract_y", "0"))
         z = parse_cif_value(row.get("_atom_site_fract_z", "0"))
+        if x is None or y is None or z is None:
+            warnings.append(
+                f"{label}: fractional coordinate missing/unparseable "
+                f"(x={row.get('_atom_site_fract_x')!r}, y={row.get('_atom_site_fract_y')!r}, "
+                f"z={row.get('_atom_site_fract_z')!r}) -- site skipped entirely."
+            )
+            continue
         occ = parse_cif_value(row.get("_atom_site_occupancy", "1")) or 1.0
-        beq = parse_cif_value(row.get("_atom_site_B_iso_or_equiv", "")) if "_atom_site_B_iso_or_equiv" in row else None
+        if "_atom_site_B_iso_or_equiv" in row:
+            beq = parse_cif_value(row.get("_atom_site_B_iso_or_equiv", ""))
+        elif "_atom_site_U_iso_or_equiv" in row:
+            u_iso = parse_cif_value(row.get("_atom_site_U_iso_or_equiv", ""))
+            if u_iso is not None:
+                beq = 8 * math.pi ** 2 * u_iso
+                warnings.append(
+                    f"{label}: CIF gives _atom_site_U_iso_or_equiv (U_iso={u_iso:.6g}) rather than "
+                    f"B_iso_or_equiv -- converted to beq = 8*pi^2*U_iso = {beq:.6g}."
+                )
+            else:
+                beq = None
+        else:
+            beq = None
         cif_mult = row.get("_atom_site_site_symmetry_multiplicity")
         cif_mult = int(cif_mult) if cif_mult and cif_mult.isdigit() else None
 
@@ -359,18 +512,18 @@ def convert(path, tol=0.0015):
                     coord_parts.append(f"{coord} {snapped:.10g}")
             elif kind[0] == "tied":
                 _, other, sign, offset = kind
-                sign_str = "" if sign == 1 else "-"
+                tie_body = format_adp_tie([(Fraction(sign), other)])
                 if abs(offset) < 1e-6:
-                    coord_parts.append(f"{coord} = {sign_str}Get({other});")
+                    coord_parts.append(f"{coord} = {tie_body};")
                 else:
                     off_snapped, off_exact = snap_to_fraction(offset % 1.0, tol)
                     op = "+" if offset >= 0 else "-"
                     if off_exact is not None:
                         coord_parts.append(
-                            f"{coord} = {sign_str}Get({other}) {op} {off_exact.numerator}/{off_exact.denominator};"
+                            f"{coord} = {tie_body} {op} {off_exact.numerator}/{off_exact.denominator};"
                         )
                     else:
-                        coord_parts.append(f"{coord} = {sign_str}Get({other}) {op} {abs(off_snapped):.10g};")
+                        coord_parts.append(f"{coord} = {tie_body} {op} {abs(off_snapped):.10g};")
             else:  # complex
                 has_complex = True
                 coord_parts.append(f"{coord} @ {val:.10g}  ' complex site-symmetry constraint, verify manually")

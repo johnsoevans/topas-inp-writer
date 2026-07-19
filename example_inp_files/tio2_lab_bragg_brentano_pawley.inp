@@ -1,0 +1,53 @@
+' This is equivalent to file d5_05005_pawley_01.inp from tutorial https://topas.webspace.durham.ac.uk/vscode_riet_pawley/
+' It is a default Pawley fit to low quality laboratory data on TiO2 by following topas-editor menus
+' A TCHZ peak shape is used by default with CuKa2_analyt
+
+r_wp  13.0913765 r_exp  10.8487919 r_p  8.44178353 weighted_Durbin_Watson  1.4802614 gof  1.20671284
+iters 1000
+chi2_convergence_criteria 0.001
+
+xdd d5_05005.RAW
+	x_calculation_step = Yobs_dx_at(Xo); convolution_step 4
+	bkg @  26.2697718` -19.9723063`  7.99401098` -2.61184453`  0.89547755`  0.901217055`
+	Simple_Axial_Model(axial, 9.25089675`)
+	'Bragg Brentano  Cu Ka1/a2 graphite diffracted beam mono scint analytical peak shape
+	LP_Factor(!th2_monochromator, 26.6)
+	CuKa2_analyt(0.0001)
+	Specimen_Displacement(height,-0.0719062345`)
+
+	hkl_Is
+		phase_name tio2_pawley
+		TCHZ_Peak_Type(pku, 0.00666567944`,pkv, -0.00967304773`,pkw,  0.00301493601`,!pkz, 0.0000,pkx, 0.0477054602`,pky, 0.0630384406`)
+		a lpa  4.593279`
+		b lpa  4.593279`
+		c lpc  2.957944`
+		al 90
+		be 90
+		ga 90
+		space_group P42/mnm
+		load hkl_m_d_th2 I 
+		{
+			    1    1    0    4     3.247939       27.43861     @  51.3364321`
+			    1    0    1    8     2.486897       36.08749     @  36.9770175`
+			    2    0    0    4     2.296640       39.19405     @  6.41054764`
+			    1    1    1    8     2.186934       41.24729     @  24.0267649`
+			    2    1    0    8     2.054177       44.04758     @  10.6724304`
+			    2    1    1   16     1.687226       54.32910     @  124.530617`
+			    2    2    0    4     1.623969       56.63160     @  41.8730507`
+			    0    0    2    2     1.478972       62.77643     @  22.7183521`
+			    3    1    0    8     1.452522       64.05391     @  25.8330412`
+			    2    2    1    8     1.423537       65.51933     @  2.33443772`
+			    3    0    1    8     1.359733       69.01407     @  74.5085728`
+			    1    1    2    8     1.345995       69.82010     @  35.1259053`
+			    3    1    1   16     1.303805       72.42877     @  4.26051062`
+			    3    2    0    8     1.273946       74.40814     @  0.827789512`
+			    2    0    2    8     1.243448       76.55723     @  9.19844049`
+			    2    1    2   16     1.200246       79.84996     @  5.09458991`
+			    3    2    1   16     1.170044       82.34841     @  21.5841325`
+			    4    0    0    4     1.148320       84.25850     @  15.2727252`
+			    4    1    0    8     1.114034       87.49004     @  5.45258126`
+			    2    2    2    8     1.093467       89.57119     @  38.8194902`
+		}
+
+
+

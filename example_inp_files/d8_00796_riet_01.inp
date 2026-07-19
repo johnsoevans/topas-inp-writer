@@ -1,0 +1,134 @@
+ 
+'-------------------------------------------------------------- 
+'This example is from https://topas.webspace.durham.ac.uk/tutorial_organicriet/
+'It shows how to refine an organic structure using distance and angle restraints and restraints to flatten rings
+'Later parts of the same tutorial discuss using rigid bodies and z-matrices on the same example
+'Data are a short data collection on a Bruker d8 diffractometer witha Ge 111 incident beam monochromator
+'-------------------------------------------------------------- 
+ 
+r_wp  7.8724362 r_exp  4.57193677 r_p  6.28416406 r_wp_dash  18.4279758 r_p_dash  20.7413416 r_exp_dash  10.7020925 weighted_Durbin_Watson  0.717081363 gof  1.721904
+iters 100000 
+chi2_convergence_criteria 0.001 
+'do_errors 
+ 
+'-------------------------------------------------------------- 
+'Information on datafile etc here 
+'-------------------------------------------------------------- 
+xdd d8_00796.RAW 
+	start_X 4 
+	finish_X 50 
+	x_calculation_step = Yobs_dx_at(Xo); 
+	bkg @  376.021607` -248.985641`  99.1763386` -83.2963296`  86.3209339` -30.7615786` 
+	'Cu radiation, Ge(111) monochromator linear psd
+	LP_Factor(!th2_monochromator, 27.26) 
+	Simple_Axial_Model(axial, 9.87702319`) 
+	CuKa1(0.001) 
+	Zero_Error(zero, 0.0252331891`) 
+ 
+'-------------------------------------------------------------- 
+'Information on structure 
+'-------------------------------------------------------------- 
+	str 
+		space_group "Pna21" 
+		volume  1510.000` 
+		a @  6.121794`
+		b @  7.472376`
+		c @  33.009547`
+		al 90.00 
+		be 90.00 
+		ga 90.00 
+		site N1     x @  0.84428`      y @  0.53041`      z @  0.65637`     occ N     1       beq bvalue  4.32439`
+		site O1     x @ -0.29959`      y @  0.43823`      z @  0.30235`     occ O     1       beq bvalue  4.32439`
+		site C1     x @  0.46380`      y @  0.46592`      z @  0.51726`    occ C     1       beq bvalue  4.32439`
+		site C2     x @  0.37956`      y @  0.50868`      z @  0.47558`    occ C     1       beq bvalue  4.32439`
+		site O2     x @  0.03051`      y @  0.55004`      z @  0.28110`     occ O     1       beq bvalue  4.32439`
+		site C3     x @  1.03858`      y @  0.63769`      z @  0.66928`    occ C     1       beq bvalue  4.32439`
+		site C4     x @  0.69990`      y @  0.43204`      z @  0.69070`    occ C     1       beq bvalue  4.32439`
+		site C5     x @ -0.08545`      y @  0.48245`      z @  0.30774`    occ C     1       beq bvalue  4.32439`
+		site C6     x @ -0.40156`      y @  0.47601`      z @  0.26208`    occ C     1       beq bvalue  4.32439`
+		site C11    x @  0.59524`      y @  0.52270`      z @  0.54181`    occ C     1       beq bvalue  4.32439`
+		site C12    x @  0.78661`      y @  0.61778`      z @  0.55011`    occ C     1       beq bvalue  4.32439`
+		site C13    x @  0.87354`      y @  0.57798`      z @  0.58825`    occ C     1       beq bvalue  4.32439`
+		site C14    x @  0.71491`      y @  0.47279`      z @  0.62146`    occ C     1       beq bvalue  4.32439`
+		site C15    x @  0.52662`      y @  0.40159`      z @  0.60924`    occ C     1       beq bvalue  4.32439`
+		site C16    x @  0.44384`      y @  0.40964`      z @  0.57214`    occ C     1       beq bvalue  4.32439`
+		site C21    x @  0.25372`      y @  0.53114`      z @  0.42754`    occ C     1       beq bvalue  4.32439`
+		site C22    x @  0.36000`      y @  0.57954`      z @  0.39368`    occ C     1       beq bvalue  4.32439`
+		site C23    x @  0.25972`      y @  0.57050`      z @  0.35253`    occ C     1       beq bvalue  4.32439`
+		site C24    x @  0.05338`      y @  0.51425`      z @  0.34882`    occ C     1       beq bvalue  4.32439`
+		site C25    x @ -0.06291`      y @  0.41996`      z @  0.38285`    occ C     1       beq bvalue  4.32439`
+		site C26    x @  0.02178`      y @  0.44878`      z @  0.42681`    occ C     1       beq bvalue  4.32439`
+		scale @  0.000179140358`
+		r_bragg  1.2699686 
+		TCHZ_Peak_Type(pku, 0.118518533`,pkv, -0.0353206734`,pkw,  0.00714086883`,!pkz, 0.0000,pkx, 0.164521029`,pky, 0.012057379`)
+
+		Phase_Density_g_on_cm3( 1.15335222`) 
+		 
+		'restrain distances and angles on one benzene rinng and flatten ring to keep planar	 
+		'in this case all the sites are in the asymmetric unit so the format is simple
+		'to restrain to symmetry generated atoms you need the full site label
+		'for C11 this would be C11 0 0 0 0 in this case,
+		'where the first number refers to the symmetry operator and the last three to unit cell offsets
+		'the labels can be found from a distance and angles calculation and the format is at the end of the file.
+		Distance_Restrain(C11 C12, 1.400, 1.3972402`, 0, 1) 
+		Distance_Restrain(C12 C13, 1.400, 1.39877626`, 0, 1) 
+		Distance_Restrain(C13 C14, 1.400, 1.66214106`, 0, 1) 
+		Distance_Restrain(C14 C15, 1.400, 1.3320902`, 0, 1) 
+		Distance_Restrain(C15 C16, 1.400, 1.32651322`, 0, 1) 
+		Distance_Restrain(C16 C11, 1.400, 1.60480338`, 0, 1) 
+			
+		Angle_Restrain(C11 C12 C13,120, 112.78568`,0, .001) 
+		Angle_Restrain(C12 C13 C14,120, 118.15927`,0, .001) 
+		Angle_Restrain(C13 C14 C15,120, 119.651666`,0, .001) 
+		Angle_Restrain(C14 C15 C16,120, 126.293943`,0, .001) 
+		Angle_Restrain(C15 C16 C11,120, 112.284585`,0, .001) 
+		Angle_Restrain(C16 C11 C12,120, 129.02292`,0, .001) 
+
+		Flatten(C11 C12 C13 C14 C15 C16, 0.0255633122`, 0.0052320798,10) 
+ 
+		'restrain  distances and angles on second benzene ring and flatten ring to keep planar		 
+		Distance_Restrain(C21 C22, 1.400, 1.34283365`, 0, 1) 
+		Distance_Restrain(C22 C23, 1.400, 1.49201844`, 0, 1) 
+		Distance_Restrain(C23 C24, 1.400, 1.33691272`, 0, 1) 
+		Distance_Restrain(C24 C25, 1.400, 1.50483526`, 0, 1) 
+		Distance_Restrain(C25 C26, 1.400, 1.55606755`, 0, 1) 
+		Distance_Restrain(C26 C21, 1.400, 1.54776494`, 0, 1) 
+			
+		Angle_Restrain(C21 C22 C23,120, 123.098641`,0, .001) 
+		Angle_Restrain(C22 C23 C24,120, 119.099787`,0, .001) 
+		Angle_Restrain(C23 C24 C25,120, 121.728423`,0, .001) 
+		Angle_Restrain(C24 C25 C26,120, 118.27209`,0, .001) 
+		Angle_Restrain(C25 C26 C21,120, 112.026862`,0, .001) 
+		Angle_Restrain(C26 C21 C22,120, 122.601382`,0, .001) 
+			
+		Flatten(C21 C22 C23 C24 C25 C26, 0.0367937101`, 0.0193627754,10) 
+
+		'restrain central linking group		 
+		Distance_Restrain(C21 C2 , 1.430, 1.77112626`, 0, 1) 
+		Distance_Restrain(C11 C1 , 1.430, 1.21837502`, 0, 1) 
+		Distance_Restrain(C2  C1 , 1.200, 1.50350679`, 0, 1) 
+
+		'restrain distances on nme2 group and keep it planar
+		Distance_Restrain(C14 N1 , 1.380, 1.46313523`, 0, 1) 
+		Distance_Restrain(N1  C3 , 1.450, 1.49635818`, 0, 1) 
+		Distance_Restrain(N1  C4 , 1.450, 1.61425024`, 0, 1) 
+			
+		Flatten(N1 C3 C4 C14, 0.002609014`, 0.00189953319,10) 
+
+		'restrain distances on CO2CH3 group 
+		Distance_Restrain(C24 C5 , 1.500, 1.61793036`, 0, 1) 
+		Distance_Restrain(C5  O1 , 1.350, 1.36359251`, 0, 1) 
+		Distance_Restrain(C5  O2 , 1.200, 1.23788862`, 0, 1) 
+		Distance_Restrain(O1  C6 , 1.440, 1.49534153`, 0, 1) 
+ 
+
+/*
+'Typical format of bond distances and angles around C11
+C11:0     C1:0       0   0   0   1.21838 
+          C12:0      0   0   0   1.39724  149.453 
+          C16:0      0   0   0   1.60480  129.023  81.393  
+          C13:0      0   0   0   2.32867  96.039   33.628   169.374 
+          C15:0      0   0   0   2.43917  65.869   30.213   98.872   111.352 
+          C2:0       0   0   0   2.55613  132.554  161.470  102.343  128.431  22.423  
+          C14:0      0   0   0   2.75464  161.466  28.913   36.984   59.122   70.049   139.768 
+*/

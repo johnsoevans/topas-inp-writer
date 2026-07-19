@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-symmetrize_selection.py -- Given an .inp file and a highlighted line range
+symmetrize_str.py -- Given an .inp file and a highlighted line range
 (the site lines a user selected in an editor), find the containing str
 block's space_group, resolve its symmetry operators, and classify what the
 cell parameters (a/b/c/al/be/ga) and the selected sites' coordinates
@@ -39,17 +39,17 @@ string; this tool always normalizes to the canonical form outright and
 emits a structured verdict (+ a ready-to-apply text replacement) instead.
 
 Usage:
-    python3 symmetrize_selection.py file.inp --lines 25-26
-    python3 symmetrize_selection.py file.inp --lines 25-26 --json
-    python3 symmetrize_selection.py file.inp --lines 25 -o report.json --json
-    python3 symmetrize_selection.py file.inp --lines 25-26 --write
+    python3 symmetrize_str.py file.inp --lines 25-26
+    python3 symmetrize_str.py file.inp --lines 25-26 --json
+    python3 symmetrize_str.py file.inp --lines 25 -o report.json --json
+    python3 symmetrize_str.py file.inp --lines 25-26 --write
         (applies every 'fix' item directly, writing file_symmetrized.inp
         alongside file.inp -- CLI convenience only, see apply_fixes/--write)
-    python3 symmetrize_selection.py file.inp --write
+    python3 symmetrize_str.py file.inp --write
         (--lines omitted defaults to the whole file -- only valid when the
         file contains a single str block; multi-phase files must pass an
         explicit --lines range)
-    python3 symmetrize_selection.py file.inp --lines 25-26 --refineall --write
+    python3 symmetrize_str.py file.inp --lines 25-26 --refineall --write
         (every FREE cell parameter/coordinate/ADP in range gets named with
         NO sigil -- i.e. left free to actually refine -- instead of the
         default '!name'; see --refineall below)
@@ -105,14 +105,6 @@ def line_offsets(text):
         acc += len(line)
     offsets.append(acc)  # sentinel, so line N's end is offsets[N] for the last real line too
     return offsets
-
-
-def offset_range_for_lines(offsets, line_start, line_end):
-    """Absolute [start, end) char offset spanning physical lines
-    line_start..line_end inclusive (1-indexed)."""
-    start = offsets[line_start - 1]
-    end = offsets[min(line_end, len(offsets) - 1)]
-    return start, end
 
 
 def line_text_at(text, offsets, line_no):
@@ -303,11 +295,17 @@ def resolve_and_span(text, offsets, abs_pos, keyword):
 
 
 def evaluate_coordinate(coord, kind, form, forms, text, offsets, content_start, site_pos, symbol, system,
-                         site=None, refineall=False):
+                         site=None, refineall=False, known_value=None):
     """Mirrors check_symmetry_constraints' coordinate branch (both 'fixed'
     and 'tied') term-for-term, but returns a verdict dict instead of
     appending a warning string. See module docstring for the scope gaps
-    deliberately mirrored rather than "improved on" here."""
+    deliberately mirrored rather than "improved on" here.
+
+    `known_value`: this coordinate's own already-resolved numeric value
+    (the same number resolve_site_coordinates computed for it, e.g. by
+    walking a Get() tie) -- used only to check an equation-form coordinate
+    against a 'fixed' requirement (see that branch below); every other
+    branch derives what it needs from `form`/`kind` directly."""
     if kind[0] == "complex" or form is None:
         return make_item("site", coord, None, "skip",
                           "constraint too complex for this tool's simple per-coordinate model -- verify manually")
@@ -350,10 +348,25 @@ def evaluate_coordinate(coord, kind, form, forms, text, offsets, content_start, 
                                   reason + " (couldn't locate a single-line replaceable span)")
             line_no, sc, ec, old_text = resolved
             return make_item("site", coord, line_no, "fix", reason, old_text, new_text, sc, ec)
-        # Equation form under a 'fixed' requirement: check_symmetry_constraints
-        # itself has no branch for this case (a known, deliberately mirrored
-        # gap -- see module docstring) -- report skip rather than inventing
-        # a check the sibling tool doesn't perform either.
+        # Equation form under a 'fixed' requirement (e.g. 'y = -Get(x);' on
+        # a coordinate that's actually pinned to a constant). check_symmetry_
+        # constraints has no branch for the general case, but `known_value`
+        # (already resolved through any Get() tie) lets this tool answer the
+        # narrower question of whether the equation already evaluates to the
+        # required value -- if so, rewrite to the canonical bare/fraction
+        # form; otherwise fall back to the same verify-manually skip.
+        if known_value is not None and abs(known_value - value) < 1e-6:
+            is_eq, val_text = format_fixed_value(value)
+            new_text = f"{coord} = {val_text};" if is_eq else f"{coord} {val_text}"
+            reason = (f"written as an equation ({form[1]!r}), but site symmetry under space_group "
+                      f"{symbol!r} fixes it at an exact value ({value:.6g}) with nothing to refine -- "
+                      f"a fixed special-position coordinate should carry no parameter name or "
+                      f"equation at all, so it's rewritten to a bare value.")
+            if resolved is None:
+                return make_item("site", coord, None, "skip",
+                                  reason + " (couldn't locate a single-line replaceable span)")
+            line_no, sc, ec, old_text = resolved
+            return make_item("site", coord, line_no, "fix", reason, old_text, new_text, sc, ec)
         return make_item("site", coord, None, "skip",
                           "written as an equation; this tool (matching check_inp_syntax.py's own "
                           "scope) doesn't validate an equation-form coordinate against a 'fixed' "
@@ -660,13 +673,26 @@ def analyze_selection(path, line_start, line_end, refineall=False):
     n_lines = len(offsets) - 1
     if line_start < 1 or line_end < line_start or line_start > n_lines:
         return {"error": f"--lines {line_start}-{line_end} is out of range for a {n_lines}-line file."}
-    sel_start, sel_end = offset_range_for_lines(offsets, line_start, line_end)
 
     clean = cis.strip_opaque_blocks(cis.strip_inactive_ifdef_branches(cis.strip_comments_and_strings(text)))
     text_with_values = cis.strip_opaque_blocks(cis.strip_inactive_ifdef_branches(cis.strip_comments_only(text)))
 
     str_blocks = cis.find_str_blocks(clean)
-    containing = [b for b in str_blocks if not (b[1] <= sel_start or b[0] >= sel_end)]
+    # Overlap is decided in LINE space, not raw character offsets. A str
+    # block terminated by another str keyword has its content_end land on
+    # the NEXT block's own 'str' line (see find_str_blocks), so a plain
+    # line_of(text, b_end) would count that boundary line as belonging to
+    # both blocks. Trimming trailing whitespace before computing the
+    # line-end recovers the true last line of real content instead (a
+    # block terminated by `for`/EOF has no trailing whitespace to trim, so
+    # is unaffected).
+    containing = []
+    for b_start, b_end in str_blocks:
+        b_line_start = cis.line_of(text, b_start)
+        trimmed_end = b_start + len(clean[b_start:b_end].rstrip())
+        b_line_end = cis.line_of(text, trimmed_end) if trimmed_end > b_start else b_line_start
+        if not (b_line_end < line_start or b_line_start > line_end):
+            containing.append((b_start, b_end))
     if len(containing) == 0:
         return {"error": f"Lines {line_start}-{line_end} don't fall inside any str block."}
     if len(containing) > 1:
@@ -718,10 +744,10 @@ def analyze_selection(path, line_start, line_end, refineall=False):
 
         stabilizer = symmetry_utils.find_stabilizer(point, symops, 0.0015)
         constraint = symmetry_utils.classify_coordinates(point, stabilizer)
-        for coord in ("x", "y", "z"):
+        for coord_idx, coord in enumerate(("x", "y", "z")):
             item = evaluate_coordinate(coord, constraint[coord], forms[coord], forms,
                                         text, offsets, content_start, site_pos, symbol, system,
-                                        site=name, refineall=refineall)
+                                        site=name, refineall=refineall, known_value=point[coord_idx])
             item["site"] = name
             if item["line"] is None:
                 item["line"] = site_line

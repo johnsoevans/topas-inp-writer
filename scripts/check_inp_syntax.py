@@ -852,6 +852,22 @@ def strip_inactive_ifdef_branches(clean_text):
             elif kind == "endif":
                 if stack:
                     stack.pop()
+            # The directive's own matched text (e.g. '#ifdef NAME', '#endif')
+            # is never real TOPAS code to brace/paren-check either way, so it
+            # is always blanked here -- but it MUST still be emitted as its
+            # own piece (real bug, found by tracing a genuine offset drift on
+            # a real corpus file: the loop previously jumped straight from
+            # m.start() to pos = m.end() without ever emitting a piece for
+            # [m.start(), m.end()), silently DELETING the directive's own
+            # character span from the reconstructed line instead of blanking
+            # it -- contradicting this function's own docstring promise to
+            # preserve line lengths. Confirmed on a real file with 8 such
+            # directives before a given str block: the cumulative dropped
+            # length shifted every absolute character offset after them,
+            # which in turn made symmetrize_str.py look up the wrong
+            # physical line number for a site several hundred characters
+            # later in the file).
+            pieces.append((m.group(0), False))
             pos = m.end()
         pieces.append((line[pos:], currently_active()))
 

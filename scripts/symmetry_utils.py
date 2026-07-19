@@ -112,6 +112,26 @@ def points_equal_mod1(p, q, tol):
 # own operator list at all -- only a space_group symbol).
 # ---------------------------------------------------------------------------
 
+def strip_rhombohedral_axes_suffix(symbol):
+    """
+    CIF's rhombohedral-axes-choice annotation (':H' hexagonal axes, ':R'
+    rhombohedral axes -- e.g. 'R_3_2_:H', 'R_-3_c_:H') is dropped entirely
+    by sgcom6.exe/tc.exe, which resolve the bare symbol straight to the
+    hexagonal-axes .sg file either way (confirmed empirically for two
+    independent symbols: 'R_-3_c_:H' -> r-3c.sg, 'R_3_2_:H' -> r32.sg --
+    NOT 'r-3c:h.sg'/'r32:h.sg' as a naive concatenation would predict).
+    Deliberately narrow: only ':H'/':R' are handled this way. CIF's other
+    colon-suffix convention, the origin-choice qualifier on centrosymmetric
+    groups like P4/n (':1'/':2', e.g. 'P_4/n_b_m_:1'), is NOT touched here
+    -- sgcom6 renders those under its own unpredictable naming (confirmed
+    empirically to NOT be a simple 'append the digit' or 'drop it' rule),
+    and guessing wrong there risks silently resolving the WRONG origin
+    setting relative to the CIF's own atom coordinates, which is worse
+    than an honest failure.
+    """
+    return re.sub(r":\s*[HhRr]\s*$", "", symbol)
+
+
 def sg_filename_for_symbol(symbol):
     """
     Predicts the .sg filename sgcom6.exe writes for a given space-group
@@ -120,6 +140,7 @@ def sg_filename_for_symbol(symbol):
     Windows filename, e.g. symbol 'p21/n' -> file 'p21on.sg'; the stored
     `symbol` field *inside* the file keeps the real '/' unchanged).
     """
+    symbol = strip_rhombohedral_axes_suffix(symbol)
     s = re.sub(r"[\s_]", "", symbol).lower()
     return s.replace("/", "o") + ".sg"
 
@@ -291,6 +312,47 @@ def classify_coordinates(point, stabilizer):
                     complex_idx[i] = (row, float(translation[i]))
             else:
                 complex_idx[i] = (row, float(translation[i]))
+
+    # A pair (j, k) can receive MULTIPLE tie contributions -- one per
+    # distinct stabilizing operator row that happens to relate them -- and
+    # those contributions are not guaranteed to agree with each other. Real
+    # bug, found and confirmed on a real site (Al2O3/corundum's Al1 at
+    # (0,0,z) under R-3c, a genuine 3-fold axis): two different stabilizing
+    # operators each produce a valid single-row (x,y) tie -- one gives
+    # sign=-1 (y=-x), the other sign=2 (y=2x) -- and the original code just
+    # kept whichever edge bfs_component's traversal happened to visit
+    # first, silently discarding the other. y=-x and y=2x are only BOTH
+    # true when x=y=0 -- i.e. the pair isn't a genuine one-parameter tied
+    # line at all, it's jointly FIXED at the point's own value, the same
+    # way classify_adps's homogeneous system already resolves an
+    # over-determined case by solving everything together rather than
+    # picking one contributing equation. Detected here by checking every
+    # pair of tie contributions for the same (j, k) actually agree (within
+    # tolerance) on both sign and offset; a real disagreement marks BOTH
+    # coordinates fixed (their tie edges are then dropped so
+    # bfs_component never sees the inconsistent pair as tied) rather than
+    # silently trusting an arbitrary one of the conflicting equations.
+    # Verified against the real R-3c case: Al1's x/y are now both
+    # correctly reported 'fixed' (matching the crystallographic fact that
+    # a 3-fold axis pins a site to a single point, not a tied line) instead
+    # of the previous wrong 'y tied to x with sign=2', which format_tie_expr
+    # then further mangled into an invalid 'y = -Get(x);' equation.
+    conflicted = set()
+    for j in range(3):
+        seen = {}
+        for (k, sign, offset) in tie_adj[j]:
+            prior = seen.get(k)
+            if prior is not None:
+                prior_sign, prior_offset = prior
+                if prior_sign != sign or abs(prior_offset - offset) > 1e-6:
+                    conflicted.add(j)
+                    conflicted.add(k)
+            else:
+                seen[k] = (sign, offset)
+    if conflicted:
+        fixed_idx |= conflicted
+        for i in conflicted:
+            tie_adj[i] = [(k, s, o) for (k, s, o) in tie_adj[i] if k not in conflicted]
 
     constraint = {}
     visited = set()
