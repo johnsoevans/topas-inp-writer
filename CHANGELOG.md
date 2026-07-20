@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.7 - 2026-07-20
+- Changes to skills.md
+- Added 27-rietveld-workflow-conventions.md
+
 ## 1.0.6 — 2026-07-19
 - Added example_inp_files with z matrices, restrained organic molecules
 - Added tio2 lab rietveld and pawley examples from tutorials

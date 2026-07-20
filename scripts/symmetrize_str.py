@@ -194,6 +194,66 @@ def format_tie_expr(other, sign, offset):
 CELL_PARAM_NAMES = {"a": "lp_a", "b": "lp_b", "c": "lp_c", "al": "lp_al", "be": "lp_be", "ga": "lp_ga"}
 
 
+OCC_RE = re.compile(r"\bocc\b\s+([A-Za-z][A-Za-z0-9+\-]*)\s*")
+
+
+def extract_occ_entries(site_slice):
+    """
+    Find every 'occ ATOM [name] value' (or 'occ ATOM = expr;') statement in
+    a site's text -- a site can carry more than one 'occ' line for partial/
+    mixed occupancy (e.g. 'occ Zr+4 0.5 ... occ Ti+4 0.5 ...', Table 2-1's
+    own worked example), so this returns a list, not a single result the
+    way extract_keyword_form does for single-tag keywords.
+
+    Returns a list of (atom, value_or_None, note_or_None) tuples: value is
+    the resolved occupancy fraction (from a bare/@/!-value, or an equation
+    that reduces to a plain constant via parse_plain_numeric_equation);
+    None with a note explaining why otherwise (e.g. an equation referencing
+    another parameter by name -- not evaluated, since that needs the same
+    kind of scope walk as a coordinate Get() tie and this tool doesn't
+    attempt it for occ specifically).
+    """
+    entries = []
+    for m in OCC_RE.finditer(site_slice):
+        atom = m.group(1)
+        pos = m.end()
+        n = len(site_slice)
+        if pos < n and site_slice[pos] == "=":
+            end = site_slice.find(";", pos)
+            if end == -1:
+                entries.append((atom, None, "equation has no terminating ';' on this slice -- skipped."))
+                continue
+            expr = site_slice[pos + 1:end].strip()
+            v = cis.parse_plain_numeric_equation(expr)
+            if v is None:
+                entries.append((atom, None, f"occupancy written as equation '{expr}' -- not a plain "
+                                             f"constant, so not evaluated."))
+            else:
+                entries.append((atom, v, None))
+            continue
+
+        tok_m = re.match(r"(?:[!@]?[A-Za-z_]\w*|[!@])", site_slice[pos:])
+        val_start = pos
+        if tok_m and tok_m.group(0):
+            k = pos + tok_m.end()
+            while k < n and site_slice[k] in " \t\r\n":
+                k += 1
+            probe = cis.E_ARG_NUMBER_TOKEN_RE.match(site_slice[k:])
+            if probe and probe.group(0):
+                val_start = k
+        val_m = cis.E_ARG_NUMBER_TOKEN_RE.match(site_slice[val_start:])
+        if not val_m or not val_m.group(0):
+            entries.append((atom, None, "no numeric occupancy value found after the atom tag -- skipped."))
+            continue
+        try:
+            v = float(val_m.group(0).split("`")[0])
+        except ValueError:
+            entries.append((atom, None, "occupancy value couldn't be parsed as a number -- skipped."))
+            continue
+        entries.append((atom, v, None))
+    return entries
+
+
 def auto_name_for(scope, keyword, site):
     """The name a free (unconstrained-by-symmetry) parameter gets when it
     doesn't already have one -- 'coord' + lowercased site name for a site
@@ -726,6 +786,9 @@ def analyze_selection(path, line_start, line_end, refineall=False):
 
     items = evaluate_cell(text, offsets, content_start, preamble, symbol, system, refineall=refineall)
 
+    unit_cell_contents = {}   # species -> running total count across the unit cell
+    unit_cell_notes = []      # per-site occupancy that couldn't be counted, for transparency
+
     sites_seen = []
     for name, site_slice, site_pos in cis.find_sites(block_clean):
         site_abs_pos = content_start + site_pos
@@ -740,9 +803,17 @@ def analyze_selection(path, line_start, line_end, refineall=False):
                                     "couldn't resolve x/y/z to concrete numbers (an equation "
                                     "references something other than a simple Get() tie or a plain "
                                     "constant) -- verify manually.", site=name))
+            unit_cell_notes.append(f"site '{name}' (line {site_line}): skipped -- x/y/z didn't "
+                                    f"resolve, so its symmetry multiplicity couldn't be computed.")
             continue
 
         stabilizer = symmetry_utils.find_stabilizer(point, symops, 0.0015)
+        multiplicity = len(symops) // len(stabilizer)
+        for atom, occ_value, note in extract_occ_entries(site_slice):
+            if occ_value is None:
+                unit_cell_notes.append(f"site '{name}' (line {site_line}), occ {atom}: {note}")
+                continue
+            unit_cell_contents[atom] = unit_cell_contents.get(atom, 0.0) + occ_value * multiplicity
         constraint = symmetry_utils.classify_coordinates(point, stabilizer)
         for coord_idx, coord in enumerate(("x", "y", "z")):
             item = evaluate_coordinate(coord, constraint[coord], forms[coord], forms,
@@ -782,6 +853,8 @@ def analyze_selection(path, line_start, line_end, refineall=False):
         "sites_in_range": sites_seen,
         "items": items,
         "summary": summary,
+        "unit_cell_contents": {atom: round(count, 6) for atom, count in unit_cell_contents.items()},
+        "unit_cell_content_notes": unit_cell_notes,
     }
 
 
@@ -809,6 +882,17 @@ def format_text(result):
     lines.append("")
     s = result["summary"]
     lines.append(f"{s['ok']} ok, {s['fix']} fix, {s['skip']} skip.")
+
+    contents = result.get("unit_cell_contents") or {}
+    lines.append("")
+    lines.append("Unit cell contents (occupancy x symmetry multiplicity, summed per species):")
+    if contents:
+        for atom in sorted(contents):
+            lines.append(f"  {atom}: {contents[atom]:g}")
+    else:
+        lines.append("  (none -- no 'occ' entries resolved among the sites in range)")
+    for note in result.get("unit_cell_content_notes") or []:
+        lines.append(f"  ! {note}")
     return "\n".join(lines)
 
 
