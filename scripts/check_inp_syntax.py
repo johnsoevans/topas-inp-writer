@@ -2504,31 +2504,29 @@ def check_macro_arity(clean_text, library_arities, issues):
 
 
 GET_TIE_RE = re.compile(
-    r"^\s*(?P<neg>-)?\s*Get\(\s*(?P<name>[A-Za-z_]\w*)\s*\)\s*"
+    r"^\s*(?P<neg>-)?\s*(?:(?P<mul_pre>[\d.]+)\s*\*\s*)?Get\(\s*(?P<name>[A-Za-z_]\w*)\s*\)\s*"
     r"(?:(?P<mul_op>[*/])\s*(?P<mul_x>[\d.]+)|(?P<mul_j>[\d.]+))?\s*"
     r"(?:(?P<off_sign>[+-])\s*(?P<off_val>[\d./]+))?\s*$"
 )
-# Named groups (not purely positional -- see below) since a tie can now
-# carry an optional multiplier/divisor as well as the original optional
-# offset:
+# Named groups (not purely positional) for a tie's optional multiplier/
+# divisor and additive offset:
 #   neg      -- leading '-' before Get(...), if any
+#   mul_pre  -- a multiplier written BEFORE Get(...) with an explicit '*'
+#               ('3 * Get(u11)', '2 * Get(y)') -- the form
+#               symmetry_utils.format_adp_tie emits for any non-unit
+#               coefficient, used for both ADP ties and (via
+#               cif_to_str.py's coordinate-tie branch) coordinate ties.
 #   name     -- the referenced coordinate/parameter name
-#   mul_op / mul_x -- an explicit '* 0.99' or '/ 100' -- mul_op holds
-#                      which operator, mul_x the factor.
+#   mul_op / mul_x -- an explicit '* 0.99' or '/ 100' AFTER Get(...) --
+#                      mul_op holds which operator, mul_x the factor.
 #   mul_j    -- a multiplier written with NO operator at all, via bare
 #               juxtaposition ('Get(x) .99') -- confirmed as real, valid
-#               TOPAS equation syntax by running an .inp with exactly
-#               this form ('z = Get(x) .99 + 0.1625;') through a live
-#               tc.exe: it parsed and refined with no syntax error.
-#               Division has no such implicit form -- only '/' is ever a
-#               divisor, never juxtaposition.
+#               TOPAS equation syntax via a live tc.exe run.
 #   off_sign / off_val -- an optional additive offset ('+ 0.1625')
-# A tie with neither mul_x nor mul_j set (just 'Get(name)', optionally
-# negated) is the original "bare" tie this regex handled before
-# multiplier/divisor support was added -- callers checking for that exact
-# form (e.g. a lattice length REQUIRED to equal 'Get(a);' with no
-# scaling) must explicitly check mul_x/mul_j are both absent, not just
-# rely on the offset groups.
+# A tie with neither mul_pre, mul_x, nor mul_j set (just 'Get(name)',
+# optionally negated) is an unscaled "bare" tie -- callers requiring
+# exactly that form (e.g. a lattice length tied to 'Get(a);' with no
+# scaling) must check all three multiplier groups are absent.
 def get_tie_value(tie_match, known_value):
     """Resolve a GET_TIE_RE match against the already-known numeric value
     of the coordinate/parameter it references -- sign * known_value,
@@ -2536,6 +2534,8 @@ def get_tie_value(tie_match, known_value):
     offset if present."""
     sign = -1 if tie_match.group("neg") else 1
     val = sign * known_value
+    if tie_match.group("mul_pre"):
+        val = val * float(tie_match.group("mul_pre"))
     mul_str = tie_match.group("mul_x") or tie_match.group("mul_j")
     if mul_str:
         factor = float(mul_str)
@@ -2838,7 +2838,15 @@ def for_loop_multiplier_at_line(line_no, clean_text, spans):
 def extract_keyword_form(clean_slice, keyword):
     """
     Find `keyword`'s value/equation at its FIRST occurrence in clean_slice
-    (a str-block-scoped slice of the fully-cleaned text). Returns one of:
+    (a str-block-scoped slice of the fully-cleaned text) -- but skipping any
+    occurrence that falls inside a 'Get( ... )' call, since that's a
+    REFERENCE to another keyword's value, not its own declaration. Without
+    this, a site written as 'x = 2*Get(y); y @ -0.16832;' would have
+    `keyword='y'` wrongly match the 'y' inside 'Get(y)' first -- textually
+    earlier than the real 'y @ -0.16832' declaration -- fail to parse a
+    value there, and return None even though 'y' really is declared later
+    on the same line. This ordering (a tied coordinate written before the
+    free one it references) is common in cif_to_str.py output. Returns one of:
       ('equation', expr_string, match_start_offset)
       ('value', sigil, numeric_value, name_or_None, match_start_offset)
           -- sigil in ('', '@', '!'); name is the parameter name given
@@ -2847,12 +2855,28 @@ def extract_keyword_form(clean_slice, keyword):
              kernel-enforced invariant (always equal, see check_symmetry_
              constraints' 'tied' handling), distinct from an anonymous
              bare value.
-      None  -- keyword not found, or its form couldn't be parsed as a
-              single bare/@/equation value (e.g. followed immediately by
-              another keyword with no value at all -- not this function's
-              concern, just means nothing to check).
+      None  -- keyword not found (outside any Get(...) call), or its form
+              couldn't be parsed as a single bare/@/equation value (e.g.
+              followed immediately by another keyword with no value at all
+              -- not this function's concern, just means nothing to check).
     """
-    m = re.search(r"\b" + re.escape(keyword) + r"\b", clean_slice)
+    m = None
+    for cand in re.finditer(r"\b" + re.escape(keyword) + r"\b", clean_slice):
+        get_m = re.search(r"\bGet\(\s*$", clean_slice[:cand.start()])
+        if get_m:
+            close = clean_slice.find(")", cand.end())
+            # A match is "inside Get(...)" only if this occurrence is the
+            # sole/first token after 'Get(' -- i.e. nothing but whitespace
+            # between 'Get(' and the match, and the next non-whitespace
+            # after it is the closing ')'. This mirrors Get()'s own
+            # single-argument grammar rather than just checking for ANY
+            # later ')' on the slice, which could belong to an unrelated
+            # enclosing expression.
+            after = clean_slice[cand.end():close] if close != -1 else ""
+            if close != -1 and after.strip() == "":
+                continue  # this occurrence is Get(keyword) -- a reference, not the declaration
+        m = cand
+        break
     if not m:
         return None
     pos = m.end()
@@ -3272,11 +3296,12 @@ def check_symmetry_constraints(clean_text, text_with_values, issues):
                     continue
                 tie_m = GET_TIE_RE.match(form[1]) if form[0] == "equation" else None
                 # A length tie must be the exact bare form ('c = Get(a);') --
-                # no negation, multiplier, or offset -- since the crystal
-                # system requires equality, not a scaled/shifted relationship.
-                ok = (bool(tie_m) and not tie_m.group("neg") and not tie_m.group("mul_x")
-                      and not tie_m.group("mul_j") and not tie_m.group("off_sign")
-                      and tie_m.group("name") == indep)
+                # no negation, multiplier (pre- or post-Get), or offset --
+                # since the crystal system requires equality, not a
+                # scaled/shifted relationship.
+                ok = (bool(tie_m) and not tie_m.group("neg") and not tie_m.group("mul_pre")
+                      and not tie_m.group("mul_x") and not tie_m.group("mul_j")
+                      and not tie_m.group("off_sign") and tie_m.group("name") == indep)
                 if ok:
                     continue
                 # Same refinement-status reasoning as the site-coordinate

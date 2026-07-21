@@ -95,8 +95,10 @@ import os
 import re
 import math
 import argparse
+import subprocess
 from fractions import Fraction
 
+import topas_install
 from symmetry_utils import (
     parse_symop_string,
     find_stabilizer,
@@ -105,12 +107,112 @@ from symmetry_utils import (
     determine_fixed_angles,
     determine_length_ties,
     resolve_sg_operators,
+    parse_sg_file,
     snap_to_fraction,
     classify_adps,
     format_adp_tie,
     ADP_NAMES,
     COORD_NAME,
 )
+
+
+# ---------------------------------------------------------------------------
+# Colon-suffixed space-group symbol resolution (':1'/':2' centrosymmetric
+# origin choice, ':H'/':R' rhombohedral axes choice) -- deliberately kept
+# local to this script rather than in symmetry_utils.py, which is the
+# shared, externally-maintained skill file this workflow doesn't modify.
+# symmetry_utils.resolve_sg_operators's own .sg-filename prediction has no
+# special handling for these suffixes (it only strips whitespace/underscores
+# and maps '/' -> 'o'), which silently mispredicts the real filename
+# sgcom6.exe/tc.exe use for a colon-suffixed symbol -- confirmed empirically
+# against sgcom5.txt and live tc.exe runs for four independent space groups
+# (125 P4/nbm, 68 Ccca, 70 Fddd, 166 R-3m) before trusting this as general:
+#
+# - ':H' (hexagonal axes) and ':1' (origin choice 1) are NOT real symbols in
+#   sgcom5.txt at all -- both are simply the bare/unmarked table entry.
+#   sgcom6.exe rejects 'symbol:H'/'symbol:1' outright ("Space group not
+#   found in sgcom5.txt"), so the suffix must be stripped entirely before
+#   generation.
+# - ':R' (rhombohedral axes) and ':2'/':N>=2' (origin choice 2+) ARE real,
+#   separately-listed sgcom5.txt entries (e.g. 'r-3mr = 166r',
+#   'p4/nbm:2 = 125:2') -- sgcom6.exe accepts the raw symbol with the
+#   suffix unchanged for GENERATION, but its own output filename replaces
+#   the suffix with 'r' (axes) or 'qN' (origin), e.g. 'r-3mr.sg',
+#   'p4onbmq2.sg' -- not a naive concatenation of the suffix.
+# ---------------------------------------------------------------------------
+
+def parse_colon_suffix(symbol):
+    """Split a trailing CIF colon-suffix off `symbol`. Returns
+    (base_symbol, kind, value): kind is 'axes' (value 'H'/'R') or 'origin'
+    (value the digit string) or None (value None) if there was none."""
+    m = re.search(r":\s*([HhRr]|\d+)\s*$", symbol)
+    if not m:
+        return symbol, None, None
+    val = m.group(1)
+    base = symbol[: m.start()]
+    if val.upper() in ("H", "R"):
+        return base, "axes", val.upper()
+    return base, "origin", val
+
+
+def generation_symbol_for_colon_suffix(symbol):
+    """The symbol to actually pass to sgcom6.exe -- bare (suffix stripped)
+    for ':H'/':1', unchanged for ':R'/':2'+."""
+    base, kind, val = parse_colon_suffix(symbol)
+    if (kind == "axes" and val == "H") or (kind == "origin" and val == "1"):
+        return base
+    return symbol
+
+
+def sg_filename_for_colon_symbol(base, kind, val):
+    """Predicts the .sg filename sgcom6.exe itself writes for a
+    colon-suffixed symbol already split via parse_colon_suffix."""
+    s = re.sub(r"[\s_]", "", base).lower().replace("/", "o")
+    if kind == "axes":
+        return s + ".sg" if val == "H" else s + "r.sg"
+    return s + ".sg" if val == "1" else s + "q" + val + ".sg"
+
+
+def resolve_colon_suffixed_sg_operators(symbol):
+    """
+    Local replacement for symmetry_utils.resolve_sg_operators, used only
+    for colon-suffixed symbols (everything else still goes through the
+    normal, unmodified function) -- generates/reads the .sg file under the
+    correct filename per the module-level note above, then reuses
+    symmetry_utils.parse_sg_file (a dumb text parser with no symbol
+    prediction of its own) to read its operators. Returns
+    (symops, header, message), matching resolve_sg_operators's own shape.
+    """
+    topas_dir, found = topas_install.get_topas_dir()
+    if not found:
+        return [], {}, "TOPAS_DIR is not set -- cannot resolve symmetry operators via sgcom6.exe."
+    sgcom6_path = os.path.join(topas_dir, "sgcom6.exe")
+    sg_dir = os.path.join(topas_dir, "sg")
+    if not os.path.isfile(sgcom6_path):
+        return [], {}, f"sgcom6.exe not found under TOPAS_DIR ({topas_dir})."
+
+    base, kind, val = parse_colon_suffix(symbol)
+    gen_symbol = generation_symbol_for_colon_suffix(symbol)
+    filename = sg_filename_for_colon_symbol(base, kind, val)
+    sg_path = os.path.join(sg_dir, filename)
+
+    if not os.path.isfile(sg_path):
+        try:
+            subprocess.run(
+                [sgcom6_path, gen_symbol, "-dir", "sg"],
+                cwd=topas_dir, capture_output=True, timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError) as e:
+            return [], {}, f"Failed to run sgcom6.exe for symbol {symbol!r}: {e}"
+
+    if not os.path.isfile(sg_path):
+        return [], {}, (
+            f"sgcom6.exe did not produce a .sg file for symbol {symbol!r} "
+            f"(expected {sg_path})."
+        )
+
+    symops, header = parse_sg_file(sg_path)
+    return symops, header, f"Resolved via TOPAS's own space-group database: {sg_path}"
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +477,10 @@ def convert(path, tol=0.0015):
 
     sg_fallback_warning = None
     if not symops and sg:
-        symops, sg_header, sg_message = resolve_sg_operators(sg)
+        if parse_colon_suffix(sg)[1] is not None:
+            symops, sg_header, sg_message = resolve_colon_suffixed_sg_operators(sg)
+        else:
+            symops, sg_header, sg_message = resolve_sg_operators(sg)
         if symops:
             sg_fallback_warning = (
                 f"CIF had no _symmetry_equiv_pos_as_xyz loop -- {sg_message}. "
@@ -502,8 +607,16 @@ def convert(path, tol=0.0015):
             kind = constraint[coord]
             val = point[i]
             if kind[0] == "free":
-                snapped, _ = snap_to_fraction(val, tol)
-                coord_parts.append(f"{coord} @ {snapped:.10g}")
+                # No snapping here -- a FREE coordinate is by definition not
+                # symmetry-constrained to any fraction (that's what "free"
+                # means), so its true value is whatever the CIF actually
+                # measured, not the nearest "nice" fraction. Snapping this
+                # was a real bug: it silently nudged the refined starting
+                # value to 2/3 etc. whenever the CIF's own value happened to
+                # land within `tol` of one by coincidence, discarding real
+                # precision the CIF author refined to (e.g. 0.6664 -> 2/3 =
+                # 0.666667, an 0.0003 shift with no crystallographic basis).
+                coord_parts.append(f"{coord} @ {val:.10g}")
             elif kind[0] == "fixed":
                 snapped, exact = snap_to_fraction(val, tol)
                 if exact is not None and exact.numerator != 0:

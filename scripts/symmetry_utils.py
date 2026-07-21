@@ -274,12 +274,22 @@ def classify_coordinates(point, stabilizer):
     a site on a 3-fold body-diagonal axis, x=y=z, all three mutually tied
     and none individually pinned to a constant -- see ZrW2O8's W1/W2/O4),
     ties are resolved per connected component: if any member of a tied
-    component is independently fixed, the whole component is fixed;
-    otherwise one member (alphabetically first) is chosen as the free
-    representative and the rest are expressed relative to it.
+    component is independently fixed, the whole component is fixed.
+    Otherwise the free representative is whichever member every other
+    coordinate can be validly expressed FROM (see tie_adj below for why
+    that's not always the alphabetically-first one), with ties among
+    multiple valid representatives broken alphabetically.
     """
     fixed_idx = set()
-    # tie_adj[i] = list of (j, sign, offset) meaning p_i = sign*p_j + offset (mod 1)
+    # tie_adj[j] = list of (k, sign, offset) meaning p_j = sign*p_k + offset
+    # (mod 1) -- j is DEPENDENT, k is the side it's expressed in terms of.
+    # DIRECTED: only added on the side being solved FOR (the variable with
+    # unit coefficient in the pair). A relation like `x - 2y = 0` only has
+    # one algebraically valid direction, x = 2*y -- "solving" the reverse,
+    # y = x/2 (mod 1), is multi-valued (both x/2 and x/2+1/2 satisfy it) and
+    # not added. Only when BOTH coefficients have unit magnitude (e.g.
+    # x - y = 0) is the relation genuinely invertible, and only then is a
+    # reverse edge added too.
     tie_adj = {0: [], 1: [], 2: []}
     complex_idx = {}
 
@@ -298,16 +308,20 @@ def classify_coordinates(point, stabilizer):
             elif len(nonzero) == 2:
                 (j, cj), (k, ck) = nonzero
                 if abs(cj) == 1:
-                    # p_j = cj*rhs - cj*ck*p_k
+                    # solves for p_j: p_j = -cj*ck*p_k + cj*rhs
                     sign = int(-cj * ck)
                     offset = cj * rhs
                     tie_adj[j].append((k, sign, offset))
-                    tie_adj[k].append((j, sign, sign * (-offset)))
+                    if abs(ck) == 1:
+                        # also invertible the other way: p_k = sign*p_j - offset/...
+                        # (sign is self-inverse since |sign|==1 here)
+                        tie_adj[k].append((j, sign, sign * (-offset)))
                 elif abs(ck) == 1:
                     sign = int(-ck * cj)
                     offset = ck * rhs
                     tie_adj[k].append((j, sign, offset))
-                    tie_adj[j].append((k, sign, sign * (-offset)))
+                    if abs(cj) == 1:
+                        tie_adj[j].append((k, sign, sign * (-offset)))
                 else:
                     complex_idx[i] = (row, float(translation[i]))
             else:
@@ -315,28 +329,16 @@ def classify_coordinates(point, stabilizer):
 
     # A pair (j, k) can receive MULTIPLE tie contributions -- one per
     # distinct stabilizing operator row that happens to relate them -- and
-    # those contributions are not guaranteed to agree with each other. Real
-    # bug, found and confirmed on a real site (Al2O3/corundum's Al1 at
-    # (0,0,z) under R-3c, a genuine 3-fold axis): two different stabilizing
-    # operators each produce a valid single-row (x,y) tie -- one gives
-    # sign=-1 (y=-x), the other sign=2 (y=2x) -- and the original code just
-    # kept whichever edge bfs_component's traversal happened to visit
-    # first, silently discarding the other. y=-x and y=2x are only BOTH
-    # true when x=y=0 -- i.e. the pair isn't a genuine one-parameter tied
-    # line at all, it's jointly FIXED at the point's own value, the same
-    # way classify_adps's homogeneous system already resolves an
+    # those contributions aren't guaranteed to agree (e.g. Al2O3's Al1 at
+    # (0,0,z) under R-3c: one operator implies y=-x, another y=2x). Both can
+    # only be true when x=y=0, i.e. the pair isn't a genuine one-parameter
+    # tied line at all -- it's jointly FIXED at the point's own value, the
+    # same way classify_adps's homogeneous system resolves an
     # over-determined case by solving everything together rather than
-    # picking one contributing equation. Detected here by checking every
-    # pair of tie contributions for the same (j, k) actually agree (within
-    # tolerance) on both sign and offset; a real disagreement marks BOTH
-    # coordinates fixed (their tie edges are then dropped so
-    # bfs_component never sees the inconsistent pair as tied) rather than
-    # silently trusting an arbitrary one of the conflicting equations.
-    # Verified against the real R-3c case: Al1's x/y are now both
-    # correctly reported 'fixed' (matching the crystallographic fact that
-    # a 3-fold axis pins a site to a single point, not a tied line) instead
-    # of the previous wrong 'y tied to x with sign=2', which format_tie_expr
-    # then further mangled into an invalid 'y = -Get(x);' equation.
+    # picking one equation. Detected by checking every pair of tie
+    # contributions for the same (j, k) agree (within tolerance) on both
+    # sign and offset; a disagreement marks BOTH coordinates fixed (their
+    # tie edges dropped) rather than trusting an arbitrary one.
     conflicted = set()
     for j in range(3):
         seen = {}
@@ -357,20 +359,57 @@ def classify_coordinates(point, stabilizer):
     constraint = {}
     visited = set()
 
-    def bfs_component(start):
-        comp = {start: (1, 0.0)}  # idx -> (sign, offset) relative to `start`
-        queue = [start]
-        while queue:
-            a = queue.pop()
-            sign_a, offset_a = comp[a]
-            for (b, sign_ab, offset_ab) in tie_adj[a]:
-                if b in comp:
+    # Connectivity (which coordinates are related, for grouping) is the
+    # undirected closure of tie_adj's directed edges (see its own comment
+    # above). But the free REPRESENTATIVE of a component must be a
+    # coordinate every other member can be expressed FROM -- a node with a
+    # directed path *into* it from every dependent -- not just any member,
+    # since tie_adj[dependent] -> ... -> repr must actually exist.
+    def related(a, b, seen=None):
+        if seen is None:
+            seen = set()
+        seen.add(a)
+        for (k, _, _) in tie_adj[a]:
+            if k == b:
+                return True
+            if k not in seen and related(k, b, seen):
+                return True
+        return False
+
+    def undirected_component(start):
+        comp = {start}
+        changed = True
+        while changed:
+            changed = False
+            for a in range(3):
+                if a in comp:
                     continue
-                sign_b = sign_ab * sign_a
-                offset_b = sign_ab * (offset_a - offset_ab)
-                comp[b] = (sign_b, offset_b)
-                queue.append(b)
+                for b in list(comp):
+                    if related(a, b) or related(b, a):
+                        comp.add(a)
+                        changed = True
+                        break
         return comp
+
+    def resolve_relative(node, root, seen=None):
+        """Walk tie_adj[node] -> ... -> root, composing sign/offset, so
+        p_node = sign*p_root + offset. Returns (sign, offset) or None if no
+        directed path from node to root exists."""
+        if node == root:
+            return (1, 0.0)
+        if seen is None:
+            seen = set()
+        seen.add(node)
+        for (k, sign_nk, offset_nk) in tie_adj[node]:
+            if k == root:
+                return (sign_nk, offset_nk)
+            if k in seen:
+                continue
+            sub = resolve_relative(k, root, seen)
+            if sub is not None:
+                sub_sign, sub_offset = sub
+                return (sign_nk * sub_sign, sign_nk * sub_offset + offset_nk)
+        return None
 
     for i in range(3):
         coord = COORD_NAME[i]
@@ -381,20 +420,43 @@ def classify_coordinates(point, stabilizer):
             constraint[coord] = ("complex", row, t)
             visited.add(i)
             continue
-        comp = bfs_component(i)
-        visited |= set(comp.keys())
-        comp_fixed = any(k in fixed_idx for k in comp.keys())
+        comp = undirected_component(i)
+        visited |= comp
+        comp_fixed = any(k in fixed_idx for k in comp)
         if len(comp) == 1 and i not in fixed_idx:
             constraint[coord] = ("free", None)
         elif comp_fixed or i in fixed_idx:
-            for k in comp.keys():
+            for k in comp:
                 constraint[COORD_NAME[k]] = ("fixed", point[k])
         else:
-            repr_idx = min(comp.keys(), key=lambda k: COORD_NAME[k])
+            # Pick the alphabetically-first coordinate that every other
+            # member can be validly expressed FROM (see docstring).
+            candidates = []
+            for repr_idx in sorted(comp, key=lambda k: COORD_NAME[k]):
+                rels = {}
+                ok = True
+                for k in comp:
+                    if k == repr_idx:
+                        continue
+                    rel = resolve_relative(k, repr_idx)
+                    if rel is None:
+                        ok = False
+                        break
+                    rels[k] = rel
+                if ok:
+                    candidates.append((repr_idx, rels))
+                    break
+            if not candidates:
+                # No coordinate in this component can express all the
+                # others directly (shouldn't happen for a 2-member tie, but
+                # guard rather than crash) -- fall back to marking the
+                # whole component fixed at its known values.
+                for k in comp:
+                    constraint[COORD_NAME[k]] = ("fixed", point[k])
+                continue
+            repr_idx, rels = candidates[0]
             constraint[COORD_NAME[repr_idx]] = ("free", None)
-            for k, (sign, offset) in comp.items():
-                if k == repr_idx:
-                    continue
+            for k, (sign, offset) in rels.items():
                 constraint[COORD_NAME[k]] = ("tied", COORD_NAME[repr_idx], sign, offset)
 
     return constraint

@@ -134,8 +134,22 @@ def locate_keyword_span(line, keyword):
     existing return shape (a parsed value, not a replaceable span) is
     relied on by many other callers already; this one exists purely to
     answer "what text, exactly, would a caller overwrite."
+
+    Same 'skip Get(...)-interior matches' fix as extract_keyword_form's own
+    (see its docstring) -- a site line like 'x = 2 * Get(y);  y @
+    -0.16832;' must find the REAL 'y' declaration, not the 'y' inside
+    'Get(y)' earlier on the same line.
     """
-    m = re.search(r"\b" + re.escape(keyword) + r"\b", line)
+    m = None
+    for cand in re.finditer(r"\b" + re.escape(keyword) + r"\b", line):
+        get_m = re.search(r"\bGet\(\s*$", line[:cand.start()])
+        if get_m:
+            close = line.find(")", cand.end())
+            after = line[cand.end():close] if close != -1 else ""
+            if close != -1 and after.strip() == "":
+                continue
+        m = cand
+        break
     if not m:
         return None
     pos = m.end()
@@ -179,10 +193,17 @@ def format_fixed_value(value):
 
 
 def format_tie_expr(other, sign, offset):
-    """Same formatting check_symmetry_constraints itself uses for a
-    coordinate tie's RHS -- e.g. 'Get(x)', '-Get(x)', 'Get(x) + 1/3'."""
-    sign_str = "" if sign == 1 else "-"
-    expr = f"{sign_str}Get({other})"
+    """Coordinate tie RHS formatting -- e.g. 'Get(x)', '-Get(x)',
+    '2 * Get(x)', 'Get(x) + 1/3'. Delegates the multiplicative part to
+    symmetry_utils.format_adp_tie (the SAME formatter cif_to_str.py uses to
+    generate coordinate ties -- see its own call site,
+    'tie_body = format_adp_tie([(Fraction(sign), other)])') rather than a
+    separate reimplementation, since `sign` is not always +-1 (e.g. a
+    'x - 2y = 0' stabilizer row ties x to y with sign=2) and a naive
+    '"" if sign == 1 else "-"' would silently mangle that into the wrong
+    equation, '-Get(other)', rather than '2 * Get(other)'."""
+    from fractions import Fraction
+    expr = symmetry_utils.format_adp_tie([(Fraction(sign), other)])
     offset_mod1 = offset % 1.0
     if offset_mod1 > 1e-6:
         off_snapped, off_exact = symmetry_utils.snap_to_fraction(offset_mod1)
@@ -440,9 +461,17 @@ def evaluate_coordinate(coord, kind, form, forms, text, offsets, content_start, 
     matches = False
     if form[0] == "equation":
         tie_m = cis.GET_TIE_RE.match(form[1])
+        # mul_x/mul_j (a multiplier AFTER Get(...)) is never a form
+        # format_tie_expr emits for a coordinate tie, so excluded here. A
+        # PRE-multiplier (mul_pre) IS that form for a non-unit sign, so
+        # it's folded into ref_sign below instead -- otherwise a genuinely
+        # correct 'x = 2 * Get(y);' would always be flagged as needing a
+        # rewrite instead of recognized as already-correct.
         if tie_m and not tie_m.group("mul_x") and not tie_m.group("mul_j"):
             ref_other = tie_m.group("name")
             ref_sign = -1 if tie_m.group("neg") else 1
+            if tie_m.group("mul_pre"):
+                ref_sign *= float(tie_m.group("mul_pre"))
             ref_offset = float(Fraction(tie_m.group("off_val"))) if tie_m.group("off_sign") else 0.0
             if tie_m.group("off_sign") == "-":
                 ref_offset = -ref_offset
@@ -639,8 +668,14 @@ def evaluate_cell(text, offsets, content_start, preamble, symbol, system, refine
                 f"lines; add '{dep} = Get({indep});' manually."))
             continue
         tie_m = cis.GET_TIE_RE.match(form[1]) if form[0] == "equation" else None
-        ok = (bool(tie_m) and not tie_m.group("neg") and not tie_m.group("mul_x")
-              and not tie_m.group("mul_j") and not tie_m.group("off_sign") and tie_m.group("name") == indep)
+        # Same "exact bare form only" requirement as check_symmetry_
+        # constraints' mirror of this check (no negation, pre- or
+        # post-Get multiplier, or offset) -- a lattice length tie must be
+        # unscaled equality, unlike a coordinate tie which can legitimately
+        # carry a non-unit sign.
+        ok = (bool(tie_m) and not tie_m.group("neg") and not tie_m.group("mul_pre")
+              and not tie_m.group("mul_x") and not tie_m.group("mul_j")
+              and not tie_m.group("off_sign") and tie_m.group("name") == indep)
         line_no = cis.line_of(text, content_start + form[-1])
         if ok:
             items.append(make_item("cell", dep, line_no, "ok", f"already correctly tied ('{dep} = Get({indep});')."))

@@ -1,8 +1,14 @@
 # Changelog
 
+## 1.0.8 - 2026-07-21
+- Changes to cif_to_str.py and symmetery_utils.py to fix a bug in trigonal/hexagonal space groups with x,2x type positions
+- Fully updated documentation across the four relevant py scripts
+- Also changed snap to special rules so that a 0.66667 y z type site remains general
+
 ## 1.0.7 - 2026-07-20
 - Changes to skills.md
 - Added 27-rietveld-workflow-conventions.md
+- Changed my local directory to topas-inp-writer-master to avoid confusion
 
 ## 1.0.6 — 2026-07-19
 - Added example_inp_files with z matrices, restrained organic molecules
