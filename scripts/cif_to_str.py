@@ -46,14 +46,22 @@ Method (per atom site):
      constant -- TOPAS has no reason to reference a fixed keyword via Get()
      when the literal number is simpler and matches this file's existing
      convention for fully-fixed CeO2-style special positions).
-  4. The CIF's stated `_atom_site_site_symmetry_multiplicity` is cross-
-     checked against the computed orbit size (number of distinct cosets of
-     the stabilizer within the full operator list) -- see
-     `check_multiplicity()`. A mismatch means either the site is disordered/
-     split (occupancy needs scaling: occ_topas = cif_occ * cif_mult /
-     computed_mult) or the coordinates don't sit exactly on the intended
-     special position (rounding) -- flagged, not silently "fixed", since
-     which of these it is can't be determined from the CIF alone.
+  4. The CIF's stated `_atom_site_symmetry_multiplicity` is cross-checked
+     against the computed orbit size (number of distinct cosets of the
+     stabilizer within the full operator list) -- see `check_multiplicity()`.
+     This tag is used inconsistently across CIF-generating software: some
+     (matching its formal core-dictionary definition) populate it with the
+     true Wyckoff multiplicity, but others (SHELXL-derived CIFs, confirmed
+     directly in the wild) populate it with the site-symmetry ORDER instead
+     (1 for a general position, 2/3/4/... for a special one) -- a different
+     number that happens to divide the multiplicity rather than equal it.
+     A stated value is therefore only treated as a genuine disagreement
+     (occupancy needs scaling: occ_topas = cif_occ * cif_mult /
+     computed_mult) if it matches NEITHER the computed multiplicity NOR the
+     computed site-symmetry order -- otherwise it's silently consistent with
+     one of the two known conventions and left alone. Flagged, not silently
+     "fixed", since which of disorder/split-site vs. off-special-position
+     rounding it is can't be determined from the CIF alone.
 
 Known limitations (be upfront about these, don't claim more than is true):
   - Prefers the CIF's own `_symmetry_equiv_pos_as_xyz` (or
@@ -442,6 +450,34 @@ def resolve_scattering_species(symbol):
     )
 
 
+def topas_safe_identifier(label, used=None):
+    """
+    CIF atom labels routinely carry a literal apostrophe (the ribose/
+    sugar-ring '-prime' convention, e.g. 'C1\'A', 'O5\'B', 'S3\'A') or other
+    punctuation that TOPAS's own INP syntax can't use in a `site` name --
+    confirmed directly: an apostrophe starts a comment-to-end-of-line in
+    TOPAS's grammar, and a site named e.g. "S3'A" ran to completion without
+    any reported error yet vanished entirely from TOPAS's own
+    elemental_composition output (172_4506971.cif). Replace any character
+    that isn't alphanumeric/underscore with '_', and prefix a leading digit
+    (TOPAS identifiers, like most languages, can't start with one). `used`
+    (a set, mutated in place) disambiguates a collision this substitution
+    might create between two originally-distinct labels by appending a
+    numeric suffix, so two different sites are never silently merged.
+    """
+    safe = re.sub(r"[^0-9A-Za-z_]", "_", label)
+    if not safe or safe[0].isdigit():
+        safe = "s" + safe
+    if used is not None:
+        base = safe
+        n = 2
+        while safe in used:
+            safe = f"{base}_{n}"
+            n += 1
+        used.add(safe)
+    return safe
+
+
 # ---------------------------------------------------------------------------
 # Main conversion
 # ---------------------------------------------------------------------------
@@ -525,8 +561,17 @@ def convert(path, tol=0.0015):
     if sg_fallback_warning:
         warnings.append(sg_fallback_warning)
 
+    used_site_names = set()
     for row in site_rows:
         label = row.get("_atom_site_label", "?")
+        site_name = topas_safe_identifier(label, used_site_names)
+        if site_name != label:
+            warnings.append(
+                f"{label}: site label contains characters TOPAS's own syntax can't use in a "
+                f"`site` identifier (e.g. a literal apostrophe, which starts a comment in TOPAS's "
+                f"grammar) -- emitted as '{site_name}' instead. Cross-reference by position, not "
+                f"name, if comparing against the CIF."
+            )
         if "_atom_site_type_symbol" in row:
             type_symbol = row["_atom_site_type_symbol"]
         else:
@@ -564,7 +609,7 @@ def convert(path, tol=0.0015):
                 beq = None
         else:
             beq = None
-        cif_mult = row.get("_atom_site_site_symmetry_multiplicity")
+        cif_mult = row.get("_atom_site_symmetry_multiplicity")
         cif_mult = int(cif_mult) if cif_mult and cif_mult.isdigit() else None
 
         point = (x, y, z)
@@ -583,7 +628,7 @@ def convert(path, tol=0.0015):
             else:
                 adp_part = f"  beq {beq}" if beq is not None else ""
             out_lines.append(
-                f"   site {label}  x @ {x}  y @ {y}  z @ {z}  occ {type_symbol} {occ}{adp_part}"
+                f"   site {site_name}  num_posns 0  x @ {x}  y @ {y}  z @ {z}  occ {type_symbol} {occ}{adp_part}"
             )
             continue
 
@@ -591,15 +636,39 @@ def convert(path, tol=0.0015):
         constraint = classify_coordinates(point, stabilizer)
         computed_mult = check_multiplicity(point, symops, stabilizer)
 
-        if cif_mult is not None and cif_mult != computed_mult:
-            adj_occ = occ * cif_mult / computed_mult
-            warnings.append(
-                f"{label}: CIF states multiplicity {cif_mult}, computed {computed_mult} from "
-                f"symmetry -- occupancy adjusted {occ} -> {adj_occ:.6f} "
-                f"(possible disorder/split site, or coordinates not exactly on the special "
-                f"position -- verify manually)"
-            )
-            occ = adj_occ
+        if cif_mult is not None:
+            site_symmetry_order = len(stabilizer)
+            if cif_mult != computed_mult and cif_mult != site_symmetry_order:
+                # Genuinely doesn't match either real-world convention this
+                # tag is populated with (Wyckoff multiplicity, or the
+                # site-symmetry order some CIF-generating software actually
+                # writes here despite the tag's name -- see module docstring
+                # point 4). Flagged only -- NOT auto-corrected. An earlier
+                # version of this branch scaled occ by cif_mult/computed_mult
+                # directly, which silently assumes computed_mult (derived
+                # from the CIF's OWN _symmetry_equiv_pos_as_xyz loop) is
+                # trustworthy. Confirmed it isn't always: 25_8103028.cif's
+                # own loop lists only 1 operator for space group Pmm2 (should
+                # be 4), so computed_mult came out wrong for every site in
+                # the file, and correcting occ against it compounded with
+                # TOPAS's own independent space_group-based multiplicity at
+                # runtime -- occ 8 x TOPAS's own internal x4 for a genuine
+                # general position gave a 4x-too-high density (28.3 vs the
+                # CIF's own 7.06 g/cm^3), not a fix. Since which of
+                # {disorder/split site, off-special-position rounding,
+                # unreliable computed_mult from an incomplete CIF operator
+                # loop} applies can't be told apart from the CIF alone,
+                # leave occ untouched and surface it for manual review
+                # instead of risking exactly this kind of silent corruption.
+                warnings.append(
+                    f"{label}: CIF states _atom_site_symmetry_multiplicity={cif_mult}, which "
+                    f"matches neither the computed Wyckoff multiplicity ({computed_mult}) nor the "
+                    f"computed site-symmetry order ({site_symmetry_order}) -- occupancy left as "
+                    f"{occ} (NOT auto-adjusted: this mismatch could mean a genuine disorder/split "
+                    f"site, coordinates not exactly on the special position, or that this CIF's own "
+                    f"symmetry operator loop is incomplete relative to its declared space group -- "
+                    f"VERIFY MANUALLY, do not trust either number blindly)"
+                )
 
         coord_parts = []
         has_complex = False
@@ -676,7 +745,7 @@ def convert(path, tol=0.0015):
             adp_part = "  " + "  ".join(adp_parts)
         else:
             adp_part = f"  beq {beq}" if beq is not None else ""
-        out_lines.append(f"   site {label}  {'  '.join(coord_parts)}  occ {type_symbol} {occ:.6g}{adp_part}")
+        out_lines.append(f"   site {site_name}  num_posns {computed_mult}  {'  '.join(coord_parts)}  occ {type_symbol} {occ:.6g}{adp_part}")
 
     return "\n".join(out_lines), warnings
 

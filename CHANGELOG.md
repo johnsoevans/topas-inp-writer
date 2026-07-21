@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.9 - 2026-07-21
+- Minor changes to cif_to_str.py to read in num_posns from cif if possible and set to 0 if not
+
 ## 1.0.8 - 2026-07-21
 - Changes to cif_to_str.py and symmetery_utils.py to fix a bug in trigonal/hexagonal space groups with x,2x type positions
 - Fully updated documentation across the four relevant py scripts
