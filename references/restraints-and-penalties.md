@@ -36,8 +36,19 @@ Zr1:0     O1:5       0   0  -1   2.00106
 
 ## Weighting distance vs. angle restraints
 
-As a starting rule of thumb, weight distance restraints roughly **2000x looser** than angle restraints (i.e. the angle restraint's `wscale` weight is ~2000x the distance restraint's, for comparable restraint tightness). Angles in degrees and distances in Å sit on very different numeric scales, and without this rebalancing one restraint family tends to dominate the penalty function and starve the other of any real refining pressure. Treat 2000x as a reasonable starting ratio to tune per-structure, not a hard constant.
+As a starting rule of thumb, weight distance restraints roughly **2000x higher** than angle restraints (i.e. if distance is 1 angle would be 0.0005). Angles in degrees and distances in Å sit on very different numeric scales, and without this rebalancing one restraint family tends to dominate the penalty function and starve the other of any real refining pressure. Treat 2000x as a reasonable starting ratio to tune per-structure, not a hard constant.
 
 ## Balancing restraints against the diffraction data
 
 Use the global `penalties_weighting_K1` keyword to scale how strongly the summed penalty/restraint terms compete against the profile chi-square during minimization — this is the correct lever for "restraints vs. data" balance as a whole, distinct from the distance-vs-angle internal balance above. Tune it so restraints nudge the model toward chemical sense without visibly fighting a genuinely well-fit region of the pattern.
+
+## Before refining with restraints
+
+**Never hand-derive an angle target (which pairs are 90° vs. 180°, etc.) from reading the triangular `append_bond_lengths` table yourself — the row/column bookkeeping is easy to get wrong and TOPAS can check it exactly.** Instead, for every `Angle_Restrain` line you are about to write:
+
+1. Write it into the `.inp` with a **named** `t_calc` and **weight 0**: `Angle_Restrain(A ...  PIVOT  B ..., my_name, target, 0, 0, 0)`.
+2. Run with `iters 0`.
+3. Read the live-computed angle back from the `.out` (it replaces the placeholder `0` you gave `t_calc`) and confirm it sits near the target you wrote (within a few degrees for a good starting model) — not near `180 - target` or some other value.
+4. Only once every restraint line has been checked this way, set the real `tol`/`weight` and start refining.
+
+A quick sanity check that catches most target mix-ups without checking every angle individually: for an octahedron, the 15 pairwise angles must resolve into exactly 3 trans (~180°) pairs and 12 cis (~90°) pairs, and the 3 trans pairs must be a perfect matching — every one of the 6 ligands appears in exactly one trans pair, never two. If the same ligand shows up in two different "180°" restraint lines, at least one target is wrong.

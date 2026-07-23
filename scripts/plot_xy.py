@@ -88,6 +88,12 @@ don't parse as at least two numbers are skipped rather than raising, so a
 stray header/footer line (or a '/* ... */' comment-delimiter pair) doesn't
 abort the whole file.
 
+`--stats "Label1=value1,Label2=value2,..."` adds refinement statistics
+(e.g. Rwp, GoF, Rp) to the header meta line as plain text, e.g.
+`--stats "Rwp=13.68%,GoF=1.64"`. Rendered in the same muted text-ink as the
+existing point-count/X-range meta text -- a headline number is not a series
+identity, so it deliberately gets no color/swatch of its own.
+
 `--ticks "NAME1|positions1.xy[|color1],NAME2|positions2.xy[|color2],..."`
 (pipe-separated fields, comma-separated groups -- same convention as
 `--phases`) adds a row of Bragg-reflection tick marks, one row per named
@@ -287,7 +293,7 @@ PAGE_TEMPLATE = """<!doctype html>
 <body>
 <div class="wrap">
   <h1>{title_escaped}</h1>
-  <div class="meta">{npoints} points &middot; X range {xmin_disp} to {xmax_disp}</div>
+  <div class="meta">{npoints} points &middot; X range {xmin_disp} to {xmax_disp}{stats_html}</div>
   <div class="panel">
     <div class="controls">
       <label><input type="checkbox" id="sqrtToggle"> Sqrt(Y) scale</label>
@@ -454,6 +460,18 @@ function computeDiffOffset(mainYMin, mainYMax, plotH) {{
   return (mainYMin - DIFF_GAP_PX * dataPerPx) - diffMaxTy;
 }}
 
+// Reserved clearance (CSS px) between the lowest visible curve point (main
+// series or diff, whichever is lower) and the tick band, whenever any tick
+// group is visible. This REPLACES the proportional 8% pad on the bottom
+// edge only (top edge keeps the proportional pad) -- using Math.max(pad,
+// fixed) was wrong: on a pattern with a tall strong peak, the proportional
+// 8% pad is itself huge (thousands of counts on the Y axis), so it always
+// won regardless of this constant, producing a large gap above the tick
+// row instead of the small fixed one intended. A small FIXED pixel gap is
+// what "ticks sit just above the axis, close under the diff curve" means
+// -- it must not scale with the data range at all.
+const TICK_CLEARANCE_PX = 10;
+
 function visibleYRange() {{
   const [mainYMin, mainYMax] = scanRange(s => s.kind !== 'diff');
   const diffOffset = computeDiffOffset(mainYMin, mainYMax, curveHeight());
@@ -468,7 +486,12 @@ function visibleYRange() {{
   if (!isFinite(yMin) || !isFinite(yMax)) {{ yMin = 0; yMax = 1; }}
   if (yMin === yMax) {{ yMin -= 1; yMax += 1; }}
   const pad = (yMax - yMin) * 0.08;
-  return {{ yMin: yMin - pad, yMax: yMax + pad, diffOffset }};
+  let bottomPad = pad;
+  if (TICKS.length) {{
+    const dataPerPx = (yMax - yMin) / (curveHeight() || 1) || 1;
+    bottomPad = TICK_CLEARANCE_PX * dataPerPx;
+  }}
+  return {{ yMin: yMin - bottomPad, yMax: yMax + pad, diffOffset }};
 }}
 
 function plotWidth() {{ return canvas.width - MARGIN.left - MARGIN.right; }}
@@ -769,7 +792,21 @@ resizeCanvas();
 """
 
 
-def build_html(series, title, ticks=None):
+def build_stats_html(stats):
+    """Render '--stats' label=value pairs as extra `middot`-separated text
+    in the header meta line -- plain text-ink, no color/series styling,
+    since a stat like Rwp/GoF is a headline number, not a series identity
+    (see dataviz skill: color follows the entity, text stays in ink)."""
+    if not stats:
+        return ""
+    escaped = (
+        f"{label.replace('<', '&lt;').replace('>', '&gt;')} {value.replace('<', '&lt;').replace('>', '&gt;')}"
+        for label, value in stats
+    )
+    return " &middot; " + " &middot; ".join(escaped)
+
+
+def build_html(series, title, ticks=None, stats=None):
     ticks = ticks or []
     all_x = [x for s in series for x in s["x"]]
     xmin_disp = f"{min(all_x):.4g}" if all_x else "n/a"
@@ -780,6 +817,7 @@ def build_html(series, title, ticks=None):
         npoints=npoints,
         xmin_disp=xmin_disp,
         xmax_disp=xmax_disp,
+        stats_html=build_stats_html(stats),
         series_json=json.dumps(series),
         ticks_json=json.dumps(ticks),
     )
@@ -861,6 +899,22 @@ def parse_tick_reflection_file(path):
     return entries
 
 
+def parse_stats(stats_spec):
+    """Parse '--stats Label1=value1,Label2=value2,...' into an ordered
+    list of (label, value) string pairs, preserving the order given."""
+    pairs = []
+    for spec in stats_spec.split(","):
+        spec = spec.strip()
+        if not spec:
+            continue
+        if "=" not in spec:
+            print(f"--stats entry {spec!r} must be Label=value", file=sys.stderr)
+            sys.exit(1)
+        label, value = spec.split("=", 1)
+        pairs.append((label.strip(), value.strip()))
+    return pairs
+
+
 def build_tick_groups(ticks_spec):
     """Parse '--ticks NAME1|positions1.xy[|color1],NAME2|positions2.xy[|color2],...'
     into a list of {name, color, x, labels} tick-mark groups (see
@@ -914,9 +968,17 @@ def main():
         "comma-separated groups) -- adds a row of Bragg-reflection tick marks per named group below "
         "the main plot (see the module docstring). Combinable with either xy_files or --phases.",
     )
+    parser.add_argument(
+        "--stats",
+        help="'Label1=value1,Label2=value2,...' (comma-separated) -- refinement statistics (e.g. "
+        "Rwp/GoF/Rp) shown as plain text in the header meta line, e.g. --stats \"Rwp=13.68%%,GoF=1.64\". "
+        "Not a series/color -- a headline number, not an identity, so it's rendered in the same "
+        "muted text-ink as the point-count/X-range meta text. Combinable with xy_files or --phases.",
+    )
     args = parser.parse_args()
 
     ticks = build_tick_groups(args.ticks) if args.ticks else None
+    stats = parse_stats(args.stats) if args.stats else None
 
     if args.phases:
         if args.xy_files or args.labels or args.colors or args.diff:
@@ -925,7 +987,7 @@ def main():
         series = build_phase_series(args.phases)
         title = args.title or "all phases"
         out_path = args.output or "combined_xy_plot.html"
-        html = build_html(series, title, ticks=ticks)
+        html = build_html(series, title, ticks=ticks, stats=stats)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(html)
         print(f"Written to {out_path}", file=sys.stderr)
@@ -966,7 +1028,7 @@ def main():
             series.append(compute_diff_series(series_by_name, name_a, name_b, diff_label, diff_color))
 
     title = args.title or " / ".join(os.path.basename(p) for p in args.xy_files)
-    html = build_html(series, title, ticks=ticks)
+    html = build_html(series, title, ticks=ticks, stats=stats)
 
     out_path = args.output
     if not out_path:

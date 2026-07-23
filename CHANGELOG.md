@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.10 - 2026-07-22
+- Includes practical training on how to perform a Rietveld based on 27-rietveld-workflow-conventions.md.  This has 43 sensible rules R1-R43 for refinement
+- Tested on LaMnO3, ZrW2O8 and Y2O3 examples
+- restraints-and-penalties.md also updated
+
 ## 1.0.9 - 2026-07-21
 - Minor changes to cif_to_str.py to read in num_posns from cif if possible and set to 0 if not
 

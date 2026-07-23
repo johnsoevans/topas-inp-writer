@@ -66,16 +66,23 @@ def extract_matrix(path):
     pending = []  # values accumulated across wrapped continuation lines
 
     row_start_re = re.compile(r"^(\S+)\s+(\d+):\s*(.*)$")
+    # TOPAS's own fixed-width column formatting can print two adjacent
+    # negative values with no separating space at all when both reach 3+
+    # digits (e.g. "-73-100", confirmed directly in a real refined .out) --
+    # plain str.split() can't recover the boundary since there's no
+    # whitespace to split on. Match signed-integer tokens explicitly instead,
+    # so "-73-100" tokenizes as ["-73", "-100"] rather than failing int().
+    int_token_re = re.compile(r"-?\d+")
 
     for ln in lines[1:]:
         row_match = row_start_re.match(ln.strip())
         if row_match and not pending:
             label, _idx, rest = row_match.groups()
             labels.append(label)
-            pending = rest.split()
+            pending = int_token_re.findall(rest)
         else:
             # continuation of a wrapped row (no "<label> N:" prefix)
-            pending.extend(ln.split())
+            pending.extend(int_token_re.findall(ln))
 
         if len(pending) >= ncols:
             values = [int(v) for v in pending[:ncols]]
