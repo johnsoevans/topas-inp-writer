@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.12 - 2026-07-22
+- Oliver's cif_to_str.py update
+- Added quant skills to  27-rietveld-workflow-conventions.md
+
 ## 1.0.11 - 2026-07-22
 - Changes to all symmetry related scripts to read COD/CSD/ICSD sets
 

@@ -2,7 +2,7 @@
 
 Practical strategy conventions for running Rietveld/Pawley refinements, learned from real refinement sessions with John rather than the manual itself. These are defaults to apply automatically, not options to re-weigh each time — deviate only if the user specifies otherwise.  Note that others may not agree with these conventions!
 
-Every concrete rule below carries a stable tag like `(R7)` so it can be cited, changed, or superseded precisely in a future session — e.g. "change R7" or "add a rule after R14". Numbers are grouped under topic headings purely for readability — the heading doesn't gate or reset the numbering. **Renumbered to be sequential (R1-R43, no gaps) on 2026-07-23** — before that date, R24-R43 had drifted out of order as rules were added piecemeal; any citation to an R-number from before that date may no longer point at the same rule. Going forward, new rules should still just continue from the next free number (currently R44) rather than being inserted mid-sequence, to avoid needing another renumbering pass.
+Every concrete rule below carries a stable tag like `(R7)` so it can be cited, changed, or superseded precisely in a future session — e.g. "change R7" or "add a rule after R14". Numbers are grouped under topic headings purely for readability — the heading doesn't gate or reset the numbering. **Renumbered to be sequential (R1-R43, no gaps) on 2026-07-23** — before that date, R24-R43 had drifted out of order as rules were added piecemeal; any citation to an R-number from before that date may no longer point at the same rule. Going forward, new rules should still just continue from the next free number (currently R57) rather than being inserted mid-sequence, to avoid needing another renumbering pass.
 
 ## Wavelength and instrument setup
 
@@ -13,7 +13,7 @@ Every concrete rule below carries a stable tag like `(R7)` so it can be cited, c
 **(R3) Peak-shape family determines the wavelength/emission macro — this pairing is conditional, not a blanket default:**
 - TCHZ (refined, or fixed as an instrument resolution function) with unmonochromated lab Cu Kα1/Kα2 data → `CuKa2_analyt(yminymax)`. This loads the analytical Kα1/Kα2 emission profile TCHZ needs to reproduce the doublet correctly; plain `CuKa2` (a simpler two-line approximation) gives a subtly wrong peak shape when paired with TCHZ.
 - Fundamental parameters, or plain empirical size/microstrain broadening with no TCHZ at all → use `CuKa5()` or `CuKa2()` instead.
-- A monochromator is present → a single-wavelength macro like `CuKa1` is appropriate.
+- A Ge or quartz monochromator is likely to be incident beam → a single-wavelength macro like `CuKa1` is appropriate.
 - This applies identically whether the phase is `str` (Rietveld) or `hkl_Is` (Pawley/Le Bail) — see the matched pair `tio2_lab_bragg_brentano_rietveld.inp` / `tio2_lab_bragg_brentano_pawley.inp` in `example_inp_files/`.
 
 **(R4) Seed a placeholder statistics line as the very first line of content** in any brand-new `.inp` written from scratch:
@@ -110,6 +110,8 @@ TCHZ_Peak_Type(!pku, 0.00027, !pkv, -0.00053, !pkw, -6.17e-05, !pkz, 0.0000, !pk
 
 **(R37) Mandatory backup, regardless of R36: at the end of every refinement session, include a list of every plot/3D-view/correlation-heatmap generated during that session, each as a clickable link, in the final message or summary.** This does not replace opening each one live as it's produced — it's a safety net for whenever that slips, mechanical enough to get right by doing one pass over everything written during the session, rather than depending on having caught every individual step along the way. List them in the order generated, with a short label (e.g. "Stage 1 fit (10-65°)", "Final fit (10-150°)", "3D structure", "Correlation matrix") rather than just bare filenames/URLs.
 
+**(R56) At the end of every refinement session, write the finalized `.inp` file's full path (in double quotes) to `launch_file.txt` in the TOPAS install directory (`TOPAS_DIR`), replacing whatever path is already there.** This lets TOPAS-GUI/`F6` open straight to the just-completed refinement. Standing rule going forward — not conditional on a specific task's instructions calling for it.
+
 ## Generating a Pawley/Le Bail hkl list from a converged structural model
 
 **(R38)** When a Rietveld (`str`) model has already converged and a Pawley (`hkl_Is`) fit is wanted for comparison (e.g. "how much of the residual is structural vs. peak-shape/background"), don't hand-derive or guess the reflection list — generate it directly from the converged model:
@@ -159,6 +161,34 @@ This refinement was performed with TOPilot, it is the user's responsibility to j
 ```
 
 These requirements are independent of the instrument-specific sections above (Cu lab XRD, synchrotron, neutron) — apply them to every final report regardless of data source.
+
+## Quantitative phase analysis
+
+Most standard Rietveld rules above still apply to a quantitative job — the exceptions and additions specific to quant work are below.
+
+**(R44) ADPs are handled differently from the normal staging (R12):** don't refine per-site/per-type ADPs by the usual rules. Ask the user whether to keep each phase's own ADPs as given in its CIF (fixed), or apply one shared refined ADP across every site in every phase — then handle accordingly.
+
+**(R45) Don't refine atomic coordinates in a quantitative analysis unless specifically told to.** Cell parameters, scale, peak shape, and ADPs (per R44) are normally enough; coordinates stay fixed at their CIF values.
+
+**(R46) Cell parameters should not vary far from each phase's starting/standard values** — more than ~0.5% is unusual and worth flagging.
+
+**(R47) Prompt the user for a peak-shape family, offering (ii), (iii), or (iv)** (R7-R9), suggesting Family (ii) as the simplest default. If they choose Family (iii), ask what TCHZ instrumental function to use, optionally suggesting R8's values as a starting point.
+
+**(R48) Screening stage — test each candidate CIF one at a time, at a reduced 2θ range (R11):** refine only cell parameters, peak shape, and a zero-point *or* specimen-displacement correction (R20) — no coordinates (R45). Bound ADP to 0-1 and zero-point to ±0.1° unless told otherwise, so a weak/absent phase can't wander to a nonsense value that hides its true (mis)fit. Keep peaks from going so broad their intensity disappears into the background — e.g. a Lorentzian size term constrained above ~10 nm is enough at this stage. Reject a phase from further consideration if it looks to be present only at the <1% level.
+
+**(R49) Build the combined fit with every phase that survived screening (R48), using a more general peak-shape model, and extend to the full 2θ range** (R11) — this is the same full-range/general-peak-shape progression as a standard refinement, just applied across all surviving phases at once.
+
+**(R50) At the end of the full refinement, recheck whether any previously-eliminated phase (R48) might actually be present** — a phase that looked absent at screening can sometimes be revealed once the other phases' contributions are properly accounted for. This recheck must be a real trial refinement (add the phase back with its cell/coordinates fixed, let scale and `weight_percent` refine, compare Rwp against the without-phase result) — not a repeat of R48's by-eye peak comparison, which can be fooled when a real minority phase's strong lines all happen to overlap already-stronger confirmed phases.
+
+**(R51) Phase elimination during the full-range refinement** (a sharper version of R48's screening-stage check): if a phase's cell drifts significantly and its crystallite size (`CS_L`/`CS_G`) falls below ~10 nm, eliminate it. Independently, check each phase's refined `weight_percent` directly — below ~1% is grounds for elimination even if cell/size look acceptable. If the two criteria disagree, ask the user which to apply rather than picking unilaterally.
+
+**(R52) Include a `weight_percent` for every phase** — required for quantitative work, not optional; report it with esd under `do_errors` alongside the other refined values.
+
+**(R53) Add TOPAS's own `elemental_composition` keyword to determine the overall composition of the sample** — use the real keyword (`references/11-quantitative-analysis.md`) rather than a hand-written comment block.
+
+**(R54) Include a pie chart of weight percentages as part of the final report** (see `references/27-rietveld-workflow-conventions.md`'s final-report rules, R39-R43, and the `dataviz` skill for chart construction).
+
+**(R55) Report on any likely issues in the quantitative analysis** as part of the final write-up — e.g. phases eliminated on marginal/conflicting evidence, saturated peak-shape terms, or anything else that could affect confidence in the reported weight percentages.
 
 ## Synchrotron X-ray data
 

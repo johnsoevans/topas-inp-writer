@@ -120,6 +120,9 @@ from symmetry_utils import (
     classify_adps,
     format_adp_tie,
     complete_centering_operators,
+    apply_symop,
+    mod1,
+    points_equal_mod1,
     ADP_NAMES,
     COORD_NAME,
 )
@@ -225,6 +228,60 @@ def resolve_colon_suffixed_sg_operators(symbol):
 
 
 # ---------------------------------------------------------------------------
+# Origin-choice detection (ITA groups with two listed origins) -- deliberately
+# kept local to this script for the same reason as the colon-suffix handling
+# above: symmetry_utils.py is shared/externally-maintained and not modified
+# by this workflow.
+#
+# A CIF that states its space group WITHOUT a colon suffix but whose own
+# _symmetry_equiv_pos_as_xyz loop actually corresponds to origin choice 2
+# (not TOPAS's own bare-symbol default of origin choice 1) causes a silent,
+# hard-to-detect bug: this script correctly derives Wyckoff/lattice
+# constraints from the CIF's own operators, but the `space_group "..."`
+# keyword written into the .inp is just the bare symbol -- and at refinement/
+# simulation runtime TOPAS re-resolves THAT string independently via its own
+# database, landing on origin choice 1. The CIF's coordinates and TOPAS's
+# runtime symmetry then silently disagree, generating atoms in the wrong
+# positions (confirmed directly: 130_GUCDUE.cif and 48_LAZWAK.cif both show
+# this exact pattern -- the CIF's own operator loop contains a bare
+# `-x,-y,-z` with ZERO translation, which is present in the ':2' resolution
+# but absent from the bare/':1' one).
+#
+# The IT numbers below are exactly the space groups with two origins listed
+# in International Tables for Crystallography Vol. A -- every other space
+# group has only one origin, so this whole check is a no-op for them.
+# ---------------------------------------------------------------------------
+
+ORIGIN_CHOICE_AMBIGUOUS_SG_NUMBERS = {
+    48, 50, 59, 68, 70, 85, 86, 88,
+    125, 126, 129, 130, 133, 134, 137, 138, 141, 142,
+    201, 222, 224, 227,
+}
+
+
+def _canonical_operator(rows, translation, ndigits=6):
+    """(rows, translation) -> a hashable, translation-mod-1-normalized form,
+    for order-independent set comparison of two operator lists."""
+    canon_t = []
+    for t in translation:
+        v = float(t) % 1.0
+        if v > 1 - 10 ** (-ndigits):
+            v = 0.0
+        canon_t.append(round(v, ndigits))
+    return (tuple(tuple(r) for r in rows), tuple(canon_t))
+
+
+def operator_sets_match(ops_a, ops_b):
+    """True if two symmetry-operator lists (each in parse_symop_string's
+    (rows, translation) shape) represent the identical set of operators,
+    order-independent. Used to test whether a CIF's own operator loop
+    matches a particular origin-choice resolution of its space group."""
+    if not ops_a or not ops_b or len(ops_a) != len(ops_b):
+        return False
+    return {_canonical_operator(*op) for op in ops_a} == {_canonical_operator(*op) for op in ops_b}
+
+
+# ---------------------------------------------------------------------------
 # CIF parsing (minimal, targeted at exactly what conversion needs)
 # ---------------------------------------------------------------------------
 
@@ -248,17 +305,51 @@ def parse_cif_value(s):
         return None
 
 
+def parse_fract_coord(s):
+    """_atom_site_fract_x/y/z specifically use a bare '.' to mean the
+    coordinate is fixed at 0 by the site's own symmetry (an ITA/ICSD
+    special-position convention -- confirmed on 166_410784_O8_P2_Sr3.cif's
+    Sr1 at Wyckoff 3a (0,0,0), written as 'Sr1 Sr2+ 3 a . . . ...'), NOT
+    'not measured/inapplicable' the way parse_cif_value treats bare '.'
+    everywhere else (occupancy, B_iso, cell parameters, ...) -- those really
+    do mean missing data. Falls through to parse_cif_value's normal
+    handling for anything that isn't exactly '.' (a real number, '?'
+    genuinely unknown, an empty field, ...)."""
+    if strip_cif_uncertainty(s).strip() == ".":
+        return 0.0
+    return parse_cif_value(s)
+
+
 def read_cif_lines(path):
     with open(path, encoding="utf-8", errors="ignore") as f:
         return f.read().splitlines()
 
 
 def find_scalar_tag(lines, tag):
-    """Find a single-value CIF tag like '_cell_length_a 5.410278(11)'."""
-    for line in lines:
+    """Find a single-value CIF tag like '_cell_length_a 5.410278(11)'. Also
+    handles the ICSD-for-WWW export convention of writing the tag alone on
+    its own line with the value on the following line (e.g.
+    '_chemical_formula_sum' then \"'H5.968 Cl0.032 O10.968 W2 Zr1'\" on the
+    next line) -- confirmed common in ICSD CIFs carrying this tag, silently
+    returning None for every one of them without this branch (COD/CSD CIFs
+    always carry the value on the same line, so this branch is a no-op for
+    those corpora -- it only ever turns a previous None into a real value,
+    never changes an already-working same-line parse). Does NOT handle the
+    separate ';'-delimited multi-line text-field convention -- left
+    unsupported/opaque same as parse_cif_loop's own text-field handling,
+    since no tag this script reads actually needs it."""
+    for i, line in enumerate(lines):
         stripped = line.strip()
         if stripped.startswith(tag) and (len(stripped) == len(tag) or stripped[len(tag)].isspace()):
             rest = stripped[len(tag):].strip()
+            if not rest:
+                j = i + 1
+                while j < len(lines) and not lines[j].strip():
+                    j += 1
+                if j < len(lines):
+                    nxt = lines[j].strip()
+                    if nxt and not nxt.startswith(("_", "loop_", "data_", ";")):
+                        rest = nxt
             if rest:
                 # value may itself be quoted
                 m = re.match(r"""^['"]?(.*?)['"]?$""", rest)
@@ -451,6 +542,18 @@ def resolve_scattering_species(symbol):
     )
 
 
+def generate_orbit(point, symops, tol):
+    """All distinct images of `point` under `symops`, mod 1 -- used only for
+    cross-site duplicate-atom detection (see the site loop in convert()), not
+    for Wyckoff constraint derivation itself (that's find_stabilizer's job)."""
+    orbit = []
+    for rows, translation in symops:
+        img = tuple(mod1(v, tol) for v in apply_symop(rows, translation, point))
+        if not any(points_equal_mod1(img, p, tol) for p in orbit):
+            orbit.append(img)
+    return orbit
+
+
 def topas_safe_identifier(label, used=None):
     """
     CIF atom labels routinely carry a literal apostrophe (the ribose/
@@ -551,6 +654,7 @@ def convert(path, tol=0.0015):
                 symops.append(parse_symop_string(row[op_key]))
             except ValueError:
                 continue
+    symops_from_cif = bool(symops)
 
     truncated_operator_warning = None
     if symops and not any(
@@ -572,6 +676,7 @@ def convert(path, tol=0.0015):
             f"space-group database, the same fallback used when a CIF has no operator loop at all."
         )
         symops = []
+        symops_from_cif = False
 
     centering_warning = None
     if symops and sg:
@@ -586,6 +691,50 @@ def convert(path, tol=0.0015):
                 f"below; without this, multiplicity would be undercounted by the centering factor "
                 f"for any site whose stabilizer is entirely made of the originally-listed operators."
             )
+
+    # Origin-choice check -- only ever engages when ALL of these hold, so it's
+    # a no-op for the overwhelming majority of CIFs (any single-origin space
+    # group, any CIF whose symbol already carries a colon suffix, and any CIF
+    # without its own operator loop to check against in the first place):
+    sg_origin_suffix = ""
+    origin_choice_warning = None
+    if symops_from_cif and sg and parse_colon_suffix(sg)[1] is None:
+        it_number_raw = find_scalar_tag(lines, "_symmetry_Int_Tables_number")
+        if it_number_raw is None:
+            it_number_raw = find_scalar_tag(lines, "_space_group_IT_number")  # ICSD alt tag name
+        try:
+            it_number = int(strip_cif_uncertainty(it_number_raw)) if it_number_raw else None
+        except ValueError:
+            it_number = None
+        if it_number in ORIGIN_CHOICE_AMBIGUOUS_SG_NUMBERS:
+            sg_bare_topas = sg.replace(" ", "_")
+            symops_o1, _, _ = resolve_sg_operators(sg_bare_topas)
+            symops_o2, _, _ = resolve_colon_suffixed_sg_operators(sg_bare_topas + ":2")
+            matches_o1 = operator_sets_match(symops, symops_o1)
+            matches_o2 = operator_sets_match(symops, symops_o2)
+            if matches_o2 and not matches_o1:
+                sg_origin_suffix = ":2"
+                origin_choice_warning = (
+                    f"Space group {sg!r} (IT #{it_number}) has two ITA origin choices, and this "
+                    f"CIF states neither via a colon suffix. Compared the CIF's own "
+                    f"{len(symops)} symmetry operators against both of TOPAS's own database "
+                    f"resolutions: they match origin choice 2, NOT TOPAS's bare-symbol default "
+                    f"(origin choice 1). Writing space_group as {sg_bare_topas + sg_origin_suffix!r} "
+                    f"instead of the CIF's bare form -- using the bare symbol here would make "
+                    f"TOPAS's runtime symmetry generation silently disagree with the CIF's own "
+                    f"coordinates (confirmed to cause large composition/density errors on "
+                    f"130_GUCDUE.cif and 48_LAZWAK.cif) even though the constraints above, "
+                    f"derived from the CIF's own operators, are themselves correct."
+                )
+            elif not matches_o1:
+                origin_choice_warning = (
+                    f"Space group {sg!r} (IT #{it_number}) has two ITA origin choices, and this "
+                    f"CIF states neither via a colon suffix. Could not confirm which origin the "
+                    f"CIF's own operators correspond to (matched "
+                    f"{'both' if matches_o2 else 'neither'} of TOPAS's database resolutions) -- "
+                    f"space_group is being written as the CIF's bare symbol as before, but "
+                    f"VERIFY THE SETTING MANUALLY against the CIF's own operators."
+                )
 
     sg_fallback_warning = None
     if not symops and sg:
@@ -629,7 +778,7 @@ def convert(path, tol=0.0015):
         if "ga" not in fixed_angles:
             out_lines.append(f"   ga {ga}")
     if sg:
-        sg_topas = sg.replace(" ", "_")
+        sg_topas = sg.replace(" ", "_") + sg_origin_suffix
         out_lines.append(f'   space_group "{sg_topas}"')
     out_lines.append("")
 
@@ -642,8 +791,11 @@ def convert(path, tol=0.0015):
         warnings.append(sg_fallback_warning)
     if centering_warning:
         warnings.append(centering_warning)
+    if origin_choice_warning:
+        warnings.append(origin_choice_warning)
 
     used_site_names = set()
+    site_orbits = []  # [(label, species, occ, [orbit_points])] -- cross-site duplicate-atom detection
     for row in site_rows:
         label = row.get("_atom_site_label", "?")
         site_name = topas_safe_identifier(label, used_site_names)
@@ -666,9 +818,9 @@ def convert(path, tol=0.0015):
         type_symbol, species_warning = resolve_scattering_species(type_symbol)
         if species_warning:
             warnings.append(f"{label}: {species_warning}")
-        x = parse_cif_value(row.get("_atom_site_fract_x", "0"))
-        y = parse_cif_value(row.get("_atom_site_fract_y", "0"))
-        z = parse_cif_value(row.get("_atom_site_fract_z", "0"))
+        x = parse_fract_coord(row.get("_atom_site_fract_x", "0"))
+        y = parse_fract_coord(row.get("_atom_site_fract_y", "0"))
+        z = parse_fract_coord(row.get("_atom_site_fract_z", "0"))
         if x is None or y is None or z is None:
             warnings.append(
                 f"{label}: fractional coordinate missing/unparseable "
@@ -713,6 +865,68 @@ def convert(path, tol=0.0015):
                 f"   site {site_name}  num_posns 0  x @ {x}  y @ {y}  z @ {z}  occ {type_symbol} {occ}{adp_part}"
             )
             continue
+
+        # Cross-site duplicate-atom detection: some CIFs (especially organic-
+        # crystal deposits with a fragment sitting on a special axis) explicitly
+        # enumerate every symmetry-related copy of that fragment as its own
+        # separately-named atom, rather than relying on symmetry to generate
+        # them from one independent site -- confirmed in the wild
+        # (100_YOVPUY.cif, a squarate anion on a 4-fold axis: C1/C4/C5/C6 and
+        # O1/O3/O4/O5 are two atoms, each listed four times, their coordinates
+        # exact images of each other under P4bm's own rotation operators, e.g.
+        # applying '-y,x,z' to C1 reproduces C4 exactly). Treating each listed
+        # row as independent (as the rest of this loop does) silently
+        # quadruple-counts that fragment's mass/composition/density -- caught
+        # here by checking whether this site's own point coincides (mod 1)
+        # with any point already placed by an EARLIER site's orbit. If so,
+        # skip this row entirely (not merely rescale its occupancy, since the
+        # duplicate fraction is 100%, not partial) rather than silently
+        # keeping both.
+        #
+        # Species (type_symbol) MUST also match before treating this as a
+        # duplicate -- a mixed-occupancy/substitutional-disorder site (e.g.
+        # Ba2/Sr2 both partially occupying the identical position, a common,
+        # entirely legitimate pattern in inorganic solid solutions) coincides
+        # in coordinates by design, but is NOT a duplicate atom -- both
+        # species genuinely contribute to that site's composition and must be
+        # kept. Confirmed as a real false-positive risk directly: an earlier
+        # version of this check (species-blind) silently dropped Sr2 as a
+        # "duplicate" of Ba2 in 100_2100722.cif, corrupting composition/
+        # density for a large fraction of an unrelated (COD-sourced) corpus
+        # that has nothing to do with the CSD ring-duplication pattern this
+        # check was built for.
+        #
+        # BOTH occupancies must also be (near) 1 -- matching species alone
+        # still isn't enough: a same-element split/disordered site (e.g.
+        # 95_9014926.cif's 'As' at occ 0.81 and 'AsSb' at occ 0.19, two
+        # genuinely distinct partial components that happen to both resolve
+        # to species 'As') coincides in both coordinates AND species, but is
+        # exactly as legitimate as the Ba2/Sr2 case -- confirmed as a second
+        # real false-positive this check produced before this condition was
+        # added. The genuine CSD ring-duplication case (100_YOVPUY.cif) is
+        # unaffected: every duplicated row there is individually written at
+        # full occupancy (occ C 1), since the CIF is (incorrectly, for
+        # TOPAS's purposes) describing each as if it fully, independently
+        # occupied its own copy of the position.
+        duplicate_of = None
+        if abs(occ - 1.0) < 0.01:
+            for other_label, other_species, other_occ, orbit in site_orbits:
+                if (other_species == type_symbol and abs(other_occ - 1.0) < 0.01
+                        and any(points_equal_mod1(point, p, tol) for p in orbit)):
+                    duplicate_of = other_label
+                    break
+        if duplicate_of:
+            warnings.append(
+                f"{label}: coordinates coincide (under the space group's own symmetry) with "
+                f"site {duplicate_of!r} already emitted, both are the same species "
+                f"({type_symbol!r}), and both are at full occupancy -- this row is a "
+                f"symmetry-duplicate of that atom, not an independent one (a common CIF "
+                f"convention for a fragment on a special axis, explicitly listing every "
+                f"symmetry copy under separate atom labels). Skipped entirely to avoid "
+                f"double-counting composition/density -- verify against the CIF by hand."
+            )
+            continue
+        site_orbits.append((label, type_symbol, occ, generate_orbit(point, symops, tol)))
 
         stabilizer = find_stabilizer(point, symops, tol)
         constraint = classify_coordinates(point, stabilizer)
@@ -775,8 +989,25 @@ def convert(path, tol=0.0015):
                 if abs(offset) < 1e-6:
                     coord_parts.append(f"{coord} = {tie_body};")
                 else:
-                    off_snapped, off_exact = snap_to_fraction(offset % 1.0, tol)
-                    op = "+" if offset >= 0 else "-"
+                    # Re-derive the sign from the MOD-1-REDUCED offset, not
+                    # from the raw (possibly >1-in-magnitude or negative)
+                    # offset classify_coordinates returns -- confirmed as a
+                    # real bug: for offset=-0.75, `offset % 1.0` correctly
+                    # gives the display MAGNITUDE 0.25, but combining that
+                    # with the RAW offset's sign ("-", since -0.75 < 0) wrote
+                    # "- 1/4" (i.e. an effective offset of -0.25), which is
+                    # NOT congruent to the true -0.75 mod 1 (0.75) -- off by
+                    # exactly 0.5, silently generating a genuinely wrong
+                    # coordinate. Reducing first and choosing +/- from the
+                    # REDUCED value keeps the small-magnitude-offset display
+                    # preference (e.g. "- 1/4" over "+ 3/4") while staying
+                    # mathematically correct: a reduced value > 0.5 is
+                    # rewritten as -(1 - reduced), which is congruent to it
+                    # mod 1 by construction.
+                    reduced = offset % 1.0
+                    disp_offset = reduced - 1.0 if reduced > 0.5 else reduced
+                    off_snapped, off_exact = snap_to_fraction(abs(disp_offset), tol)
+                    op = "+" if disp_offset >= 0 else "-"
                     if off_exact is not None:
                         coord_parts.append(
                             f"{coord} = {tie_body} {op} {off_exact.numerator}/{off_exact.denominator};"
