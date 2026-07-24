@@ -166,7 +166,7 @@ These requirements are independent of the instrument-specific sections above (Cu
 
 Most standard Rietveld rules above still apply to a quantitative job — the exceptions and additions specific to quant work are below.
 
-**(R44) ADPs are handled differently from the normal staging (R12):** don't refine per-site/per-type ADPs by the usual rules. Ask the user whether to keep each phase's own ADPs as given in its CIF (fixed), or apply one shared refined ADP across every site in every phase — then handle accordingly.
+**(R44) ADPs are handled differently from the normal staging (R12):** don't refine per-site/per-type ADPs by the usual rules. Ask the user whether to keep each phase's own ADPs as given in its CIF (fixed), or apply one shared refined ADP across every site in every phase.  Be specific when wording this question.
 
 **(R45) Don't refine atomic coordinates in a quantitative analysis unless specifically told to.** Cell parameters, scale, peak shape, and ADPs (per R44) are normally enough; coordinates stay fixed at their CIF values.
 

@@ -114,6 +114,8 @@ from symmetry_utils import (
     check_multiplicity,
     determine_fixed_angles,
     determine_length_ties,
+    classify_crystal_system,
+    ANGLE_CONSTRAINTS_BY_SYSTEM,
     resolve_sg_operators,
     parse_sg_file,
     snap_to_fraction,
@@ -586,7 +588,7 @@ def topas_safe_identifier(label, used=None):
 # Main conversion
 # ---------------------------------------------------------------------------
 
-def convert(path, tol=0.0015):
+def convert(path, tol=0.0015, refine=False):
     lines = read_cif_lines(path)
 
     a = parse_cif_value(find_scalar_tag(lines, "_cell_length_a") or "")
@@ -764,19 +766,33 @@ def convert(path, tol=0.0015):
 
     fixed_angles = determine_fixed_angles(symops, (al, be, ga)) if symops else set()
     length_ties = determine_length_ties(symops, (a, b, c), (al, be, ga)) if symops else {}
+    # Angles/lengths the crystal system locks to a SPECIFIC value (not
+    # necessarily 90 -- e.g. hexagonal/trigonal ga=120) must never be
+    # written as independently refinable, even though they aren't omittable
+    # the way a 90 angle is (fixed_angles only covers the omittable-at-90
+    # case -- see determine_fixed_angles's own docstring). Anything NOT in
+    # this set, and not tied to another length, is a genuinely free
+    # parameter and gets `@` so it can refine -- matches the same @-means-
+    # refinable convention already used for free atomic coordinates and
+    # anisotropic ADPs below; harmless for the iters-0 simulate-only batch
+    # (a refine flag with no refinement cycles is a no-op there).
+    angle_constraints = ANGLE_CONSTRAINTS_BY_SYSTEM.get(classify_crystal_system(symops), {}) if symops else {}
+
+    flag = "@ " if refine else ""
 
     out_lines = []
     out_lines.append("str")
     if a is not None:
-        out_lines.append(f"   a {a}")
-        out_lines.append(f"   b = Get({length_ties['b']});" if "b" in length_ties else f"   b {b}")
-        out_lines.append(f"   c = Get({length_ties['c']});" if "c" in length_ties else f"   c {c}")
-        if "al" not in fixed_angles:
-            out_lines.append(f"   al {al}")
-        if "be" not in fixed_angles:
-            out_lines.append(f"   be {be}")
-        if "ga" not in fixed_angles:
-            out_lines.append(f"   ga {ga}")
+        out_lines.append(f"   a {flag}{a}")
+        out_lines.append(f"   b = Get({length_ties['b']});" if "b" in length_ties else f"   b {flag}{b}")
+        out_lines.append(f"   c = Get({length_ties['c']});" if "c" in length_ties else f"   c {flag}{c}")
+        for name, val in (("al", al), ("be", be), ("ga", ga)):
+            if name in fixed_angles:
+                continue  # forced to 90, relies on TOPAS's own default -- omitted entirely
+            if name in angle_constraints:
+                out_lines.append(f"   {name} {val}")  # forced (e.g. hexagonal ga=120) but not omittable -- never refined
+            else:
+                out_lines.append(f"   {name} {flag}{val}")
     if sg:
         sg_topas = sg.replace(" ", "_") + sg_origin_suffix
         out_lines.append(f'   space_group "{sg_topas}"')
@@ -860,7 +876,7 @@ def convert(path, tol=0.0015):
                     for name in ADP_NAMES
                 )
             else:
-                adp_part = f"  beq {beq}" if beq is not None else ""
+                adp_part = f"  beq @ {beq}" if beq is not None else ""
             out_lines.append(
                 f"   site {site_name}  num_posns 0  x @ {x}  y @ {y}  z @ {z}  occ {type_symbol} {occ}{adp_part}"
             )
@@ -1052,7 +1068,7 @@ def convert(path, tol=0.0015):
                     adp_parts.append(f"{name} = {format_adp_tie(kind[1])};")
             adp_part = "  " + "  ".join(adp_parts)
         else:
-            adp_part = f"  beq {beq}" if beq is not None else ""
+            adp_part = f"  beq @ {beq}" if beq is not None else ""
         out_lines.append(f"   site {site_name}  num_posns {computed_mult}  {'  '.join(coord_parts)}  occ {type_symbol} {occ:.6g}{adp_part}")
 
     return "\n".join(out_lines), warnings
