@@ -105,6 +105,139 @@ def points_equal_mod1(p, q, tol):
 
 
 # ---------------------------------------------------------------------------
+# Lattice-centering completion: some CIFs (a common, legitimate ICSD
+# convention) list only the primitive/reduced operator set for a centered
+# space group, relying on the reader to already know from the lattice
+# symbol (I/C/A/B/F, or R in the hexagonal-axes setting) that the
+# centering-translated copies must be added. A caller that uses the
+# operator list as-is (e.g. check_multiplicity's len(symops)) then
+# undercounts multiplicity by the centering factor for any site whose
+# stabilizer is entirely made of the listed primitive operators.
+# ---------------------------------------------------------------------------
+
+CENTERING_TRANSLATIONS = {
+    "I": [(Fraction(1, 2), Fraction(1, 2), Fraction(1, 2))],
+    "C": [(Fraction(1, 2), Fraction(1, 2), Fraction(0))],
+    "A": [(Fraction(0), Fraction(1, 2), Fraction(1, 2))],
+    "B": [(Fraction(1, 2), Fraction(0), Fraction(1, 2))],
+    "F": [
+        (Fraction(0), Fraction(1, 2), Fraction(1, 2)),
+        (Fraction(1, 2), Fraction(0), Fraction(1, 2)),
+        (Fraction(1, 2), Fraction(1, 2), Fraction(0)),
+    ],
+    # Rhombohedral space group in the HEXAGONAL-axes setting only (see
+    # centering_letter_for_symbol). The rhombohedral-AXES setting is
+    # already primitive and gets no entry here.
+    "R_HEX": [
+        (Fraction(2, 3), Fraction(1, 3), Fraction(1, 3)),
+        (Fraction(1, 3), Fraction(2, 3), Fraction(2, 3)),
+    ],
+}
+
+
+def centering_letter_for_symbol(sg_symbol):
+    """
+    Extract which CENTERING_TRANSLATIONS key (if any) a Hermann-Mauguin
+    space-group symbol implies, from its leading lattice letter. Returns
+    None for a primitive lattice (P, or an unrecognized/empty symbol) --
+    the common case, where no completion is needed at all.
+
+    Also None for a symbol carrying a parenthesized axis-transformation
+    suffix (e.g. 'C m m 2 (2*c,a,b)') -- a nonstandard/transformed setting
+    whose actual centering translation vector can differ from the
+    STANDARD I/C/A/B/F vector this function checks for, so treating it as
+    standard risks wrongly judging an already-complete operator list
+    incomplete and doubling it. Left alone entirely rather than deriving
+    the transformed vector -- safe default over a guess.
+
+    'R' is resolved to 'R_HEX' only when the symbol's own trailing
+    qualifier says so ('R -3 H') or, if that qualifier is absent, when it
+    can't be ruled out and the caller supplies cell angles closer to the
+    hexagonal (90, 90, 120) pattern than to a mutually-equal rhombohedral
+    triple -- see resolve caller. This function alone only handles the
+    unambiguous 'H'/'R' qualifier case; ambiguous-without-angles callers
+    get None (safe default: don't add operators you're not sure are
+    needed) and must decide via cell angles themselves.
+    """
+    if not sg_symbol:
+        return None
+    stripped = sg_symbol.strip()
+    if not stripped:
+        return None
+    if "(" in stripped:
+        return None  # nonstandard/transformed setting -- see docstring
+    letter = stripped[0].upper()
+    if letter == "R":
+        upper = stripped.upper()
+        if upper.rstrip().endswith("H"):
+            return "R_HEX"
+        if upper.rstrip().endswith("R"):
+            return None  # rhombohedral-axes setting -- already primitive
+        return None  # ambiguous without angles -- caller may re-check via angles
+    if letter in ("I", "C", "A", "B", "F"):
+        return letter
+    return None
+
+
+def complete_centering_operators(symops, sg_symbol, cell_angles=None, tol=1e-4):
+    """
+    Given a CIF's own operator list `symops` and its Hermann-Mauguin
+    `sg_symbol`, return (completed_symops, added) -- `completed_symops` has
+    every listed operator's centering-translated copies added if the
+    lattice symbol implies centering AND those copies aren't already
+    present (checked by testing whether the centering translation applied
+    to the identity operator, mod 1, matches an operator already in the
+    list -- the same signal a fully-listed CIF's own last entries show,
+    e.g. 'x+1/2, y+1/2, z+1/2' for I). `added` is the number of new
+    operators appended (0 if the list was already complete or the lattice
+    is primitive) -- callers can use this to decide whether to warn.
+
+    Deliberately conservative: never removes or reorders anything already
+    in `symops`, and only adds translated copies of operators that are
+    ALREADY there (never invents a new rotation). If the centering letter
+    is ambiguous ('R' with no 'H'/'R' qualifier in the symbol) and
+    `cell_angles` (al, be, ga) is given, disambiguates the same way
+    determine_length_ties does: (90, 90, 120) -> hexagonal-axes (needs
+    completion), mutually-equal-but-not-90 -> rhombohedral-axes (already
+    primitive, no completion).
+    """
+    letter = centering_letter_for_symbol(sg_symbol)
+    if letter is None and sg_symbol and sg_symbol.strip().upper().startswith("R") and cell_angles is not None:
+        al, be, ga = cell_angles
+        if al is not None and be is not None and ga is not None:
+            is_hex_axes = abs(al - 90) < 0.5 and abs(be - 90) < 0.5 and abs(ga - 120) < 0.5
+            if is_hex_axes:
+                letter = "R_HEX"
+    if letter is None:
+        return symops, 0
+
+    vectors = CENTERING_TRANSLATIONS[letter]
+    identity_rows = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+
+    def has_translation(dx, dy, dz):
+        for rows, translation in symops:
+            if tuple(rows) != identity_rows:
+                continue
+            t = tuple(float(v) for v in translation)
+            if points_equal_mod1(t, (float(dx), float(dy), float(dz)), tol):
+                return True
+        return False
+
+    if all(has_translation(*v) for v in vectors):
+        return symops, 0  # already complete -- every centering copy present
+
+    completed = list(symops)
+    for dx, dy, dz in vectors:
+        for rows, translation in symops:
+            new_t = tuple(mod1(float(t) + float(d)) for t, d in zip(translation, (dx, dy, dz)))
+            # 720720 = lcm(1..16): snaps the float sum back to an exact
+            # Fraction, since every translation component here is a simple
+            # fraction with a small denominator (halves, thirds, ...).
+            completed.append((rows, tuple(Fraction(round(v * 720720), 720720) for v in new_t)))
+    return completed, len(completed) - len(symops)
+
+
+# ---------------------------------------------------------------------------
 # Fallback: resolve symmetry operators via TOPAS's own space-group database
 # (sgcom6.exe / the sg/ directory) -- used whenever operators aren't
 # available directly from the source (a CIF missing its own
@@ -328,17 +461,13 @@ def classify_coordinates(point, stabilizer):
                 complex_idx[i] = (row, float(translation[i]))
 
     # A pair (j, k) can receive MULTIPLE tie contributions -- one per
-    # distinct stabilizing operator row that happens to relate them -- and
-    # those contributions aren't guaranteed to agree (e.g. Al2O3's Al1 at
-    # (0,0,z) under R-3c: one operator implies y=-x, another y=2x). Both can
-    # only be true when x=y=0, i.e. the pair isn't a genuine one-parameter
-    # tied line at all -- it's jointly FIXED at the point's own value, the
-    # same way classify_adps's homogeneous system resolves an
-    # over-determined case by solving everything together rather than
-    # picking one equation. Detected by checking every pair of tie
-    # contributions for the same (j, k) agree (within tolerance) on both
-    # sign and offset; a disagreement marks BOTH coordinates fixed (their
-    # tie edges dropped) rather than trusting an arbitrary one.
+    # distinct stabilizing operator row that relates them -- and these
+    # aren't guaranteed to agree (e.g. one operator implies y=-x, another
+    # y=2x; both only hold when x=y=0, so the pair is jointly FIXED, not a
+    # genuine one-parameter tied line -- the same over-determined-system
+    # reasoning classify_adps uses). A disagreement (checked mod 1, see
+    # below) marks BOTH coordinates fixed rather than trusting either
+    # equation arbitrarily.
     conflicted = set()
     for j in range(3):
         seen = {}
@@ -346,7 +475,14 @@ def classify_coordinates(point, stabilizer):
             prior = seen.get(k)
             if prior is not None:
                 prior_sign, prior_offset = prior
-                if prior_sign != sign or abs(prior_offset - offset) > 1e-6:
+                # Offsets are compared MOD 1, not as raw floats: two
+                # different stabilizing-operator rows for the same pair can
+                # legitimately yield offsets like +0.5 and -0.5 -- these
+                # are the same tie (x = y + 1/2 == y - 1/2, mod 1), not a
+                # real conflict. A naive abs(a - b) > tol comparison
+                # doesn't know that 1.0's worth of difference wraps to 0
+                # and wrongly treats every such pair as contradictory.
+                if prior_sign != sign or abs(mod1(prior_offset - offset)) > 1e-6:
                     conflicted.add(j)
                     conflicted.add(k)
             else:

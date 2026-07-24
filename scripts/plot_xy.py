@@ -285,7 +285,7 @@ PAGE_TEMPLATE = """<!doctype html>
   canvas.dragging {{ cursor: grabbing; }}
   .canvas-holder {{ position: relative; }}
   .tick-tooltip {{ position: absolute; pointer-events: none; background: var(--panel);
-    border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 11px;
+    border: 1px solid var(--border); border-radius: 4px; padding: 3px 9px; font-size: 16.5px;
     color: var(--ink); white-space: nowrap; transform: translate(-50%, calc(-100% - 6px));
     box-shadow: 0 2px 6px rgba(0,0,0,0.18); z-index: 5; }}
 </style>
@@ -369,8 +369,8 @@ let viewXMin = DATA_XMIN;
 let viewXMax = DATA_XMAX;
 let yMode = 'linear';
 
-const MARGIN = {{ left: 62, right: 18, top: 16, bottom: 40 }};
-const TICK_ROW_H = 9;
+const MARGIN = {{ left: 70, right: 18, top: 16, bottom: 48 }};
+const TICK_ROW_H = 13.5;
 const TICK_BAND_PAD = 4;
 
 // Tick rows live INSIDE the plot frame, stacked just above the X-axis
@@ -579,7 +579,7 @@ function draw() {{
   // frame, stacked just above the X-axis line (see visibleTickRows/
   // tickBandH), independent of the Y-axis data/autoscale so hiding/
   // showing curves or toggling Sqrt(Y) never moves them.
-  ctx.lineWidth = 1.3;
+  ctx.lineWidth = 1.95;
   for (const row of visibleTickRows()) {{
     ctx.strokeStyle = row.grp.color;
     const i0 = Math.max(0, lowerBound(row.grp.x, viewXMin) - 1);
@@ -612,11 +612,22 @@ function draw() {{
     ctx.stroke();
   }}
 
+  // axis titles -- X centered below the tick-value labels, Y rotated and
+  // centered along the curve area, both outside the tick-value label band
+  // so they never overlap the numeric ticks drawn above.
   ctx.fillStyle = ink;
-  ctx.textAlign = 'left';
+  ctx.font = '13px -apple-system, Segoe UI, Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  ctx.font = '12px -apple-system, Segoe UI, Helvetica, Arial, sans-serif';
-  ctx.fillText(yMode === 'sqrt' ? 'Sqrt(Y)' : 'Y', 6, 14);
+  ctx.fillText('2θ (°)', MARGIN.left + plotWidth() / 2, MARGIN.top + plotHeight() + 34);
+
+  ctx.save();
+  ctx.translate(16, MARGIN.top + curveHeight() / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(yMode === 'sqrt' ? 'Sqrt(Intensity)' : 'Intensity', 0, 0);
+  ctx.restore();
 
   drawCrosshair(yMin, yMax, diffOffset);
 }}

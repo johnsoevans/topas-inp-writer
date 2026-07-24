@@ -35,7 +35,7 @@ TOPAS overwrites these with real values in the `.out` it produces — but only i
 TCHZ_Peak_Type(!pku, 0.00027, !pkv, -0.00053, !pkw, -6.17e-05, !pkz, 0.0000, !pky, 0.0269, !pkx, 0.0166)
 ```
 
-**(R9) Family (iv): Fundamental parameters** — see `example_inp_files` for a template. Exception to R5: no `Simple_Axial_Model()` here, FP's own geometry-based model replaces it.
+**(R9) Family (iv): Fundamental parameters** — see `example_inp_files\bragg_brentano_fundamental_parameters.inp` for a template.  If you prompt user for a Fundamental parameters peak shape suggests values from this file but emphasise the user needs to decide on appropriate values themselves. Exception to R5: no `Simple_Axial_Model()` here, FP's own geometry-based model replaces it.  
 
 **(R10) Synchrotron data** typically needs a sharper empirical peak shape — a Voigt function is a common choice; see `example_inp_files`.
 

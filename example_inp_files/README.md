@@ -8,9 +8,9 @@ Each file documents itself (`/* ... */` or `'`-comments); templates also carry a
 
 | File | Type | Distinctive |
 |---|---|---|
-| `bragg_brentano_template.inp` | Rietveld (template) | Lab Bragg-Brentano FP instrument skeleton (Ge(111) mono, Cu Kα1). Commented-out PO/Stephens/`CS_L`/`Strain_L` options. |
+| `bragg_brentano_fundamental_parameters.inp` | Rietveld (template) | Lab Bragg-Brentano fundamental parameters FP instrument skeleton (Ge(111) mono, Cu Kα1). Commented-out PO/Stephens/`CS_L`/`Strain_L` options. |
 | `tof_template.inp` | Rietveld (template) | Only neutron TOF example — `TOF_XYE`/`TOF_LAM`/`TOF_x_axis_calibration`/`TOF_Exponential`/`TOF_PV`. Same checklist structure as the Bragg-Brentano template. |
-| `y2o3_demo_stage3.inp` | Rietveld (real fit) | Fully-refined cubic Y2O3: March-Dollase PO, Stephens anisotropic broadening, artifact-peak exclusion, CIF export, full `C_matrix_normalized`. |
+| `y2o3_demo_stage3.inp` | Rietveld (real fit) | Fully-refined cubic Y2O3: March-Dollase preferred orientation, Commented out Spherical Harmonic preferred orientation, Stephens anisotropic broadening, artifact-peak exclusion, CIF export, full `C_matrix_normalized`. |
 | `rutile_sim_01.inp` | Simulation (`iters 0`) | Shortest file — forward pattern simulation from a CIF-derived structure. |
 | `tio2_peak_fit_01.inp` | Deconvolution/peak-fitting | Real lab data, one shared peak shape, no structural model. GUI peak-search → paste-into-file workflow. |
 | `tio2_index.inp` | Indexing | Peak list from `tio2_peak_fit_01.inp`'s output; all six Bravais-lattice search macros active. |

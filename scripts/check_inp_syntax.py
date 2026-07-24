@@ -2840,13 +2840,10 @@ def extract_keyword_form(clean_slice, keyword):
     Find `keyword`'s value/equation at its FIRST occurrence in clean_slice
     (a str-block-scoped slice of the fully-cleaned text) -- but skipping any
     occurrence that falls inside a 'Get( ... )' call, since that's a
-    REFERENCE to another keyword's value, not its own declaration. Without
-    this, a site written as 'x = 2*Get(y); y @ -0.16832;' would have
-    `keyword='y'` wrongly match the 'y' inside 'Get(y)' first -- textually
-    earlier than the real 'y @ -0.16832' declaration -- fail to parse a
-    value there, and return None even though 'y' really is declared later
-    on the same line. This ordering (a tied coordinate written before the
-    free one it references) is common in cif_to_str.py output. Returns one of:
+    REFERENCE to another keyword's value, not its own declaration (e.g. in
+    'x = 2*Get(y); y @ -0.16832;', `keyword='y'` must match the real
+    declaration, not the 'y' inside 'Get(y)' that appears first). Returns
+    one of:
       ('equation', expr_string, match_start_offset)
       ('value', sigil, numeric_value, name_or_None, match_start_offset)
           -- sigil in ('', '@', '!'); name is the parameter name given

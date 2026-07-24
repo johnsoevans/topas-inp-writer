@@ -135,10 +135,9 @@ def locate_keyword_span(line, keyword):
     relied on by many other callers already; this one exists purely to
     answer "what text, exactly, would a caller overwrite."
 
-    Same 'skip Get(...)-interior matches' fix as extract_keyword_form's own
-    (see its docstring) -- a site line like 'x = 2 * Get(y);  y @
-    -0.16832;' must find the REAL 'y' declaration, not the 'y' inside
-    'Get(y)' earlier on the same line.
+    Skips a match inside a 'Get( ... )' call, same as extract_keyword_form
+    (see its docstring) -- a line like 'x = 2 * Get(y);  y @ -0.16832;'
+    must find the real 'y' declaration, not the 'y' inside 'Get(y)'.
     """
     m = None
     for cand in re.finditer(r"\b" + re.escape(keyword) + r"\b", line):

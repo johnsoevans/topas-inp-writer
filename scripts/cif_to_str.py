@@ -119,6 +119,7 @@ from symmetry_utils import (
     snap_to_fraction,
     classify_adps,
     format_adp_tie,
+    complete_centering_operators,
     ADP_NAMES,
     COORD_NAME,
 )
@@ -497,12 +498,52 @@ def convert(path, tol=0.0015):
     if sg is None:
         sg = find_scalar_tag(lines, "_space_group")  # nonstandard but seen in the wild
 
+    nonstandard_symbol_warning = None
+    if sg and "(" in sg:
+        # A parenthesized H-M symbol (e.g. 'C m m 2 (2*c,a,b)') is a
+        # nonstandard/transformed axis setting that TOPAS's own sgcom6.exe
+        # database has no entry for -- writing it through literally into
+        # 'space_group "..."' fails the moment the file is run in TOPAS,
+        # not just silently. Deriving the correct standard-setting symbol
+        # is a nontrivial crystallographic task this script doesn't
+        # attempt (see also complete_centering_operators's own symbol
+        # check); warn instead.
+        modulation_dim = find_scalar_tag(lines, "_cell_modulation_dimension")
+        if modulation_dim:
+            nonstandard_symbol_warning = (
+                f"space_group symbol {sg!r} is a nonstandard/transformed axis setting AND this "
+                f"CIF has _cell_modulation_dimension={modulation_dim} -- this is likely an "
+                f"incommensurate/modulated structure, which needs superspace-group handling this "
+                f"script doesn't attempt. TOPAS's own space-group database has no entry for a "
+                f"parenthesized symbol like this ('Space group not found in sgcom5.txt', confirmed "
+                f"directly) -- the space_group line below WILL fail the moment this file is run in "
+                f"TOPAS, not just look suspicious. Coordinate/Wyckoff constraints were still derived "
+                f"correctly from the CIF's own (complete) operator list, if present, but the file "
+                f"as a whole is not usable as-is."
+            )
+        else:
+            nonstandard_symbol_warning = (
+                f"space_group symbol {sg!r} is a nonstandard/transformed axis setting (parenthesized "
+                f"transform suffix). TOPAS's own space-group database has no entry for this form "
+                f"('Space group not found in sgcom5.txt', confirmed directly) -- the space_group "
+                f"line below WILL fail the moment this file is run in TOPAS, not just look "
+                f"suspicious. Coordinate/Wyckoff constraints were still derived correctly from the "
+                f"CIF's own (complete) operator list, if present, but 'space_group' itself needs to "
+                f"be replaced by hand with the equivalent standard-setting symbol (with a/b/c "
+                f"transformed to match) before this file will run."
+            )
+
     formula_elements = parse_formula_elements(find_scalar_tag(lines, "_chemical_formula_sum"))
 
     sym_tags, sym_rows = parse_cif_loop(lines, ["_symmetry_equiv_pos_as_xyz"])
+    op_key = "_symmetry_equiv_pos_as_xyz" if sym_rows else None
     if sym_rows == []:
         sym_tags, sym_rows = parse_cif_loop(lines, ["_space_group_symop_operation_xyz"])
-    op_key = sym_tags[0] if sym_tags else None
+        op_key = "_space_group_symop_operation_xyz" if sym_rows else None
+    # op_key is the specific required tag, NOT sym_tags[0] -- ICSD CIFs
+    # commonly declare a numeric '_symmetry_equiv_pos_site_id' column
+    # BEFORE the operator-string column, so sym_tags[0] would silently
+    # pick the wrong column and discard the CIF's own operators entirely.
     symops = []
     if op_key:
         for row in sym_rows:
@@ -510,6 +551,41 @@ def convert(path, tol=0.0015):
                 symops.append(parse_symop_string(row[op_key]))
             except ValueError:
                 continue
+
+    truncated_operator_warning = None
+    if symops and not any(
+        tuple(rows) == ((1, 0, 0), (0, 1, 0), (0, 0, 1)) and all(float(t) % 1.0 < 1e-6 for t in translation)
+        for rows, translation in symops
+    ):
+        # A genuine symmetry-equivalent-positions loop always includes the
+        # identity operator 'x, y, z'. Its absence means the loop is
+        # truncated/malformed, not just missing centering copies -- using
+        # it as-is risks find_stabilizer finding no stabilizing operator
+        # at all for some site (ZeroDivisionError in check_multiplicity)
+        # or silently wrong constraints for others. Discard in favor of
+        # the same sgcom6.exe fallback used for a CIF with no operator
+        # loop at all.
+        truncated_operator_warning = (
+            f"CIF's own _symmetry_equiv_pos_as_xyz loop ({len(symops)} operators) doesn't "
+            f"include the identity operator 'x, y, z' -- a genuine operator list always does, "
+            f"so this loop is truncated/malformed. Discarding it in favor of TOPAS's own "
+            f"space-group database, the same fallback used when a CIF has no operator loop at all."
+        )
+        symops = []
+
+    centering_warning = None
+    if symops and sg:
+        symops, n_added = complete_centering_operators(symops, sg, cell_angles=(al, be, ga))
+        if n_added:
+            centering_warning = (
+                f"CIF's own _symmetry_equiv_pos_as_xyz loop listed only the primitive/reduced "
+                f"operator set ({len(symops) - n_added} of {len(symops)}) for centered space "
+                f"group {sg!r} -- a common, legitimate ICSD convention that expects the reader "
+                f"to add the lattice-centering-translated copies itself. Added {n_added} "
+                f"centering-translated operators before deriving Wyckoff constraints/multiplicity "
+                f"below; without this, multiplicity would be undercounted by the centering factor "
+                f"for any site whose stabilizer is entirely made of the originally-listed operators."
+            )
 
     sg_fallback_warning = None
     if not symops and sg:
@@ -558,8 +634,14 @@ def convert(path, tol=0.0015):
     out_lines.append("")
 
     warnings = []
+    if nonstandard_symbol_warning:
+        warnings.append(nonstandard_symbol_warning)
+    if truncated_operator_warning:
+        warnings.append(truncated_operator_warning)
     if sg_fallback_warning:
         warnings.append(sg_fallback_warning)
+    if centering_warning:
+        warnings.append(centering_warning)
 
     used_site_names = set()
     for row in site_rows:
@@ -677,14 +759,9 @@ def convert(path, tol=0.0015):
             val = point[i]
             if kind[0] == "free":
                 # No snapping here -- a FREE coordinate is by definition not
-                # symmetry-constrained to any fraction (that's what "free"
-                # means), so its true value is whatever the CIF actually
-                # measured, not the nearest "nice" fraction. Snapping this
-                # was a real bug: it silently nudged the refined starting
-                # value to 2/3 etc. whenever the CIF's own value happened to
-                # land within `tol` of one by coincidence, discarding real
-                # precision the CIF author refined to (e.g. 0.6664 -> 2/3 =
-                # 0.666667, an 0.0003 shift with no crystallographic basis).
+                # symmetry-constrained to any fraction, so its true value
+                # is whatever the CIF actually measured, not the nearest
+                # "nice" fraction the raw number happens to be close to.
                 coord_parts.append(f"{coord} @ {val:.10g}")
             elif kind[0] == "fixed":
                 snapped, exact = snap_to_fraction(val, tol)
