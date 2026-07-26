@@ -1,0 +1,74 @@
+
+data_
+_chemical_name_mineral Y2O3
+_cell_length_a  10.55
+_cell_length_b  10.55
+_cell_length_c  10.55
+_cell_angle_alpha 90
+_cell_angle_beta  90
+_cell_angle_gamma 90
+_cell_volume 1190.376
+_symmetry_space_group_name_H-M Ia-3
+loop_
+	_symmetry_equiv_pos_site_id
+	_symmetry_equiv_pos_as_xyz
+	  1 'x, y, z'
+	  2 '-x, y+1/2, -z+1/2'
+	  3 '-x+1/2, -y, z+1/2'
+	  4 '-x+1/2, y+1/2, z'
+	  5 '-y, -z, -x'
+	  6 '-y, z+1/2, -x+1/2'
+	  7 '-y+1/2, -z, x+1/2'
+	  8 '-y+1/2, z+1/2, x'
+	  9 '-z, -x, -y'
+	 10 '-z, x+1/2, -y+1/2'
+	 11 '-z+1/2, -x, y+1/2'
+	 12 '-z+1/2, x+1/2, y'
+	 13 'z, -x+1/2, y+1/2'
+	 14 'z, x, y'
+	 15 'z+1/2, -x+1/2, -y'
+	 16 'z+1/2, x, -y+1/2'
+	 17 'y, -z+1/2, x+1/2'
+	 18 'y, z, x'
+	 19 'y+1/2, -z+1/2, -x'
+	 20 'y+1/2, z, -x+1/2'
+	 21 'x, -y+1/2, z+1/2'
+	 22 '-x, -y, -z'
+	 23 'x+1/2, -y+1/2, -z'
+	 24 'x+1/2, y, -z+1/2'
+	 25 'x+1/2, y+1/2, z+1/2'
+	 26 '-x+1/2, y, -z'
+	 27 '-x, -y+1/2, z'
+	 28 '-x, y, z+1/2'
+	 29 '-y+1/2, -z+1/2, -x+1/2'
+	 30 '-y+1/2, z, -x'
+	 31 '-y, -z+1/2, x'
+	 32 '-y, z, x+1/2'
+	 33 '-z+1/2, -x+1/2, -y+1/2'
+	 34 '-z+1/2, x, -y'
+	 35 '-z, -x+1/2, y'
+	 36 '-z, x, y+1/2'
+	 37 'z+1/2, -x, y'
+	 38 'z+1/2, x+1/2, y+1/2'
+	 39 'z, -x, -y+1/2'
+	 40 'z, x+1/2, -y'
+	 41 'y+1/2, -z, x'
+	 42 'y+1/2, z+1/2, x+1/2'
+	 43 'y, -z, -x+1/2'
+	 44 'y, z+1/2, -x'
+	 45 'x+1/2, -y, z'
+	 46 '-x+1/2, -y+1/2, -z+1/2'
+	 47 'x, -y, -z+1/2'
+	 48 'x, y+1/2, -z'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_symmetry_multiplicity
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_B_iso_or_equiv
+Y1 Y+3   0 0.25 0.25 0.25 1 1.0
+Y2 Y+3   0 0.95 0.00 0.25 1 1.0
+O1 O-2   0 0.40 0.15 0.40 1 1.0

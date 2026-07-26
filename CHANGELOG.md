@@ -1,6 +1,9 @@
 # Changelog
 
-## 1.0.13 - 2026-07-22
+## 1.0.14 - 2026-07-26
+- Added test_examples folder
+
+## 1.0.13 - 2026-07-23
 - Updates to cif_to_str.py and  27-rietveld-workflow-conventions.md
 
 ## 1.0.12 - 2026-07-22
