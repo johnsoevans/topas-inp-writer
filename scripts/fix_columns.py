@@ -49,6 +49,7 @@ Usage:
     python3 fix_columns.py file.inp -o out.inp        # write elsewhere
     python3 fix_columns.py file.inp --check           # print result to stdout, don't write
     python3 fix_columns.py file.inp --lines 26-31      # only touch lines 26-31 (1-indexed, inclusive)
+    python3 fix_columns.py file.inp --indent 4         # 4 spaces per indent level (default: 3)
 
 `--lines` is meant for "fix columns on the selected text": alignment
 groups/column widths are still computed from the FULL file (so a
@@ -56,6 +57,11 @@ selection covering only part of a group still lines up with the rest of
 that group), but only lines whose 1-indexed number falls inside the given
 range are actually rewritten -- everything else is left byte-for-byte
 untouched. Omit `--lines` to fix columns through the whole file.
+
+`--indent` only affects la/lo/lh/ymin_on_ymax lines nested under 'lam'
+(site-line alignment doesn't add indentation of its own). Pass the same
+value to format_inp_hierarchy.py's own --indent when both are used
+together, so indentation stays consistent between the two scripts.
 """
 
 import sys
@@ -236,13 +242,12 @@ def parse_lam_line(line):
 
 def fix_lam_group(lines_with_idx):
     """lines_with_idx: list of (line_index, indent, fields), where `indent`
-    is the FORCED indent to write (one level -- 3 spaces, matching
-    format_inp_hierarchy.py's own convention -- deeper than the nearest
-    preceding 'lam' keyword line, not each line's own original indent).
-    la/lo/lh lines are logically children of 'lam' even though 'lam' has
-    no braces of its own to make that nesting visually obvious -- confirmed
-    directly by the user (TOPAS-Academic's author). Returns
-    {line_index: new_line_text}.
+    is the FORCED indent to write (one indent_unit -- see fix_columns's
+    own docstring -- deeper than the nearest preceding 'lam' keyword
+    line, not each line's own original indent). la/lo/lh lines are
+    logically children of 'lam' even though 'lam' has no braces of its
+    own to make that nesting visually obvious -- confirmed directly by
+    the user (TOPAS-Academic's author). Returns {line_index: new_line_text}.
     """
     col_width = {
         kw: max(len(fields[kw]) for _, _, fields in lines_with_idx) for kw in LAM_KEYWORDS[:-1]
@@ -258,7 +263,7 @@ def fix_lam_group(lines_with_idx):
     return result
 
 
-def fix_columns(text, line_range=None):
+def fix_columns(text, line_range=None, indent_unit="   "):
     """
     line_range: optional (start, end) 1-indexed, inclusive line numbers
     ("fix columns on the selected text"). Alignment groups and column
@@ -267,6 +272,15 @@ def fix_columns(text, line_range=None):
     group -- but only lines whose 1-indexed number falls inside the
     range are actually rewritten; everything else is returned unchanged.
     Pass None (the default) to fix columns through the whole file.
+
+    indent_unit: one level of indent, used only for forcing la/lo/lh/
+    ymin_on_ymax lines one level deeper than their nearest preceding
+    'lam' line (see the la/lo/lh loop below) -- site-line alignment
+    itself doesn't add indentation, it only pads within a line's
+    existing indent. Defaults to 3 spaces, matching
+    format_inp_hierarchy.py's own default; pass the same value to both
+    when calling either from a caller that lets the width be configured,
+    so the two scripts' output never drifts apart on this.
     """
     # keepends=True: each entry keeps its own original line terminator (or
     # none, for a final line with no trailing newline), so reassembly never
@@ -317,7 +331,7 @@ def fix_columns(text, line_range=None):
         m_lam = LAM_KW_RE.match(bare)
         if m_lam:
             flush_lam_group()
-            lam_indent = m_lam.group(1) + "   "
+            lam_indent = m_lam.group(1) + indent_unit
             continue
         p_lam = parsed_lam[i]
         if p_lam is not None and lam_indent is not None:
@@ -361,12 +375,19 @@ def main():
         help="only fix columns on this 1-indexed, inclusive line range (e.g. 26-31) -- "
         "'fix columns on the selected text'; omit to fix columns through the whole file",
     )
+    parser.add_argument(
+        "--indent", type=int, default=3, metavar="N",
+        help="spaces per indent level for la/lo/lh/ymin_on_ymax lines nested under 'lam' "
+        "(default: 3). Pass the same value here as to format_inp_hierarchy.py's own "
+        "--indent when both are used on the same project, so indentation never drifts "
+        "between the two scripts.",
+    )
     args = parser.parse_args()
 
     with open(args.inp_file, encoding="utf-8") as f:
         text = f.read()
 
-    fixed = fix_columns(text, line_range=args.lines)
+    fixed = fix_columns(text, line_range=args.lines, indent_unit=" " * args.indent)
 
     if args.check:
         print(fixed)

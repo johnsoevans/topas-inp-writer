@@ -9,102 +9,364 @@ The following describes keyword dependencies. Trailing ‘...’ implies that mo
 
 ```
 Ttop
+    ' Can be defined at the top level
     Tcomm_1
     Tcomm_2
-    Ttop_xdd
-    Tglobal
+    TCharge_flipping
+    TRefinement_control
+    TIndexing
+    TMinimization
+    TMolecular_dynamics
+    TReuse_bins
+    Tr_wp
     Txdd
     Txdd_scr
-    Tindexing
-    Tcharge_flipping
+    ' Reachable via a str or xdd block
+    TEnergy_minimization
+    TMagnetism
+    TQuantitative
+    TMisc_keywords
+    TOperators_functions
+    TReserved_parameter_names
+    TPre_processor
 
-Ttop_xdd
-    [convolution_step #1]
-    [Rp !E] [Rs !E]
-    [x_calculation_step !E]
+TEnergy_minimization
+    [str]...
+        ...
+        [madelung #]
+        [site]...
+            ...
+            [g !N] [q E] [s E]
+        [repulsion_refine]
+        [grs_interaction [qi !E qj !E] $s1 $s2 c !E]...
+            [no_coulomb]
+        [penalty = Get(grs_lp_rep);]
+        [penalty = Get(grs_lp_refine);]
 
-Trwp
-    [r_p #] [r_wp #] [r_exp #] [gof #] [r_p_dash #] [r_wp_dash #] [r_exp_dash #]
-    [weighted_Durbin_Watson #]
+TOperators_functions
+    ' Arithmetic
+    [Add +]
+    [Subtract -]
+    [Multiply *]
+    [Divide /]
+    [Power x^y]
+    ' Conditional
+    [Equal_to a == b]
+    [Less_than a < b]
+    [Less_than_or_equal a <= b]
+    [Greater_than a > b]
+    [Greater_than_or_equal a >= b]
+    [And(a, b, ...)]
+    [Or(a, b, ...)]
+    ' Mathematical
+    [ArcCos(x)]
+    [ArcSin(x)]
+    [ArcTan(x)]
+    [ArcTan2(y, x)]
+    [Cos(x)]
+    [Cosh(x)]
+    [Erf_Approx(x)]
+    [Erfc_Approx(x)]
+    [Exp(x)]
+    [Gamma_Approx(x)]
+    [Gamma_Ln_Approx(x)]
+    [Gamma_P(a, x)]
+    [Gamma_Q(a, x)]
+    [Ln(x)]
+    [Sin(x)]
+    [Sinh(x)]
+    [Sqrt(x)]
+    [Tan(x)]
+    [Tanh(x)]
+    ' Special
+    [For(Mi = 0, Mi < M, Mi = Mi+1, ...)]
+    [Get($keyword)]
+    [If(conditional_test, true_eqn, false_eqn)]
+    [Sum(summation_eqn, initializer, conditional_test, increment_eqn)]
+    ' Miscellaneous
+    [Abs(x)]
+    [Break]
+    [Break_Cycle]
+    [Concat(a, b, c, ...)]
+    [Error(p)]
+    [Load_Eval(b)]
+    [Max(a, b, c, ...)]
+    [Min(a, b, c, ...)]
+    [Mod(x, y)]
+    [Obj_There(a)]
+    [Prm_There(a)]
+    [Rand(a, b)]
+    [Rand_Normal(mean, std)]
+    [Round(x)]
+    [To_Prm(a, b, c, ...)]
+    [To_String(a)]
+    [Sign(x)]
+    ' Further functions, not in Table 3-1
+    [AB_Cyl_Corr(R)]
+    [AL_Cyl_Corr(R)]
+    [Bkg_at(x)]
+    [Constant(expression)]
+    [Ln_Normal_x_at_CD(u, s, v, toll)]
+    [PV_Lor_from_GL(gauss_FWHM, lorentzian_FWHM)]
+    [Sites_Geometry_Distance($Name)]
+    [Sites_Geometry_Angle($Name)]
+    [Sites_Geometry_Dihedral_Angle($Name)]
+    [Value_at_X(object, x)]
+    [Voigt_Integral_Breadth_GL(gauss_FWHM, lorentzian_FWHM)]
+    [Voigt_FWHM_GL(gauss_FWHM, lorentzian_FWHM)]
+    [Yobs_Avg(x1, x2)]
+    [Ycalc_at(x)]
+    [Yobs_at(#x)]
+    [Yobs_dx_at(#x)]
+    [Yobs_Min(x1, x2)]
 
-TMinimization
-    [line_min] [use_extrapolation] [no_normal_equations] [use_LU]
-    [approximate_A]
-        [A_matrix_memory_allowed_in_Mbytes !E]
-        [A_matrix_elements_tollerance !E]
-        [A_matrix_report_on]
-    [approximate_A_check_for_must_be_zero #n]
-    [chi2 !E]
-    [chi2_convergence_criteria !E]
-    [continue_after_convergence]
-    [bootstrap_errors !Ecycles]
-        [fraction_of_yobs_to_resample !E]
-        [determine_values_from_samples]
-        [resample_from_current_ycalc]
-    [do_errors]
-    [do_errors_include_restraints]
-    [do_errors_include_penalties]
-    [only_penalties]
-    [percent_zeros_before_sparse_A #]
-    [penalty !E]...
-    [penalties_weighting_K1 !E]
-    [pen_weight !E]
-    [quick_refine !E [quick_refine_remove !E] ]
-    [randomize_on_errors]
-    [restraint !E]
-    [save_best_chi2]
-    [use_LU_for_errors]
+TReserved_parameter_names
+    A_star, B_star, C_star
+    Change
+    D_spacing
+    H, K, L, M
+    Iter, Cycle, Cycle_Iter
+    Lam
+    Lpa, Lpb, Lpc
+    Mi
+    Peak_Calculation_Step
+    QR_Removed, QR_Num_Times_Consecutively_Small
+    R, Ri
+    Rp, Rs
+    T
+    Th
+    X, X1, X2
+    Xo
+    Val
+    Yobs, Ycalc, SigmaYobs
 
-Tglobal
-    TMinimization
-    Trwp
+TMagnetism
+    [str]...
+        ...
+        [mag_only_for_mag_sites]
+        [mag_space_group $symbol]
+        [site $site [x E] [y E] [z E]]...
+            ...
+            [mlx E] [mly E] [mlz E] [mg E]
+            [mag_only]
+            ' site dependent macros
+            [MM_CrystalAxis_Display(mxc, myc, mzc)]
+            [MM_CrystalAxis_Refine(mxc, mxv, myc, myv, mzc, mzv, mlx_v, mly_v, mlz_v)]
+            [MM_Cartesian_Display(mxc, myc, mzc)]
+            [MM_Cartesian_Refine(mxc, mxv, myc, myv, mzc, mzv, mlx_v, mly_v, mlz_v)]
+
+TQuantitative
+    [xdd]...
+        ...
+        [mixture_MAC #]
+        [mixture_density_g_on_cm3 #]
+        [weight_percent_amorphous !E]
+        [elemental_composition]
+        [element_weight_percent $atom $Name #]...
+        [element_weight_percent_known $atom #]...
+        [prm = Get(sum_smvs) ... ;]
+        [prm = Get(mixture_MAC) ... ; ]
+        [prm = Get(mixture_density_g_on_cm3) ... ; ]
+        [Mixture_LAC_1_on_cm(0)]
+        [str]...
+            ...
+            [cell_mass !E] [cell_volume !E] [weight_percent !E]
+            [spiked_phase_measured_weight_percent !E] [corrected_weight_percent !E]
+            [phase_MAC !E]
+            [prm = Get(sum_smvs) ... ; ]
+            [prm = Get(smv) ... ; ]
+            [prm = Get(sum_smvs_minus_this) ... ; ]
+            [prm = Get_Element_Weight(atom) ... ; ]
+            ' Quantative macros
+            [Phase_LAC_1_on_cm(0)]
+            [Phase_Density_g_on_cm3(0)]
+            [Known_Weight_Percent (#)]
+            [Apply_Brindley_Spherical_R_PD(& R, & PD)]
+            [Phase_LAC_1_on_cm(#)]
+            [Phase_LAC_Eqn_1_on_cm]
+            [Phase_LAC_1_on_cm(u)]
+            [Phase_Density_g_on_cm3(#)]
+
+TReuse_bins
+    [lat_prms $name {
+        Tlat_prms
+    }]...
+    [str_dets $name {
+        Tstr_details
+        Tspace_group
+        Tmin_max_r
+        Trigid
+        Tf0_f1_f11_atom
+    }]...
+    [phase_dets $name {
+        [lor_fwhm E]...
+        [gauss_fwhm E]...
+        [th2_offset E]...
+        [scale_pks E]...
+        [transform_X E]...
+        [stretch_pks E]...
+    }]...
+    [use { $names }]...
+
+TPre_processor
+    [macro $user_defined_macro_name { ... }]
+    [#include $file] [#ingest $file] [#external_INP $file]
+    [#delete_macros { $macros_to_be_deleted }]
+    [#define] [#undef]
+    [#if] [#elseif] [#else] [#endif] [#ifdef] [#ifndef]
+    [#prm] [#out]
+    [#seed]
+    [#list $name1 $name1 ... { ... }]... [#list_n $list]
+    ' directives invoked on macro expansion
+    [#m_if] [#m_elseif] [#m_else] [#m_endif]
+    ' macro arguments comparative directives
+    [#m_ifarg] [#m_code] [#m_eqn] [#m_code_refine] [#m_one_word]
+    ' directives that change an argument
+    [#m_argu] [#m_unique_not_refine] [#m_first_word]
+    [#m_unique $string]
+
+TRefinement_control
     [A_matrix] [C_matrix] [A_matrix_normalized] [C_matrix_normalized]
     [conserve_memory]
+    [fft_max_order #22]
     [file_name_for_best_solutions $file]
     [force_positive_fwhm]
-    [inp_text $name] …[inp_text_insert $name { … }]…
+    [inp_text $name]...[inp_text_insert $name { ... }]...
     [iters #]
+    [load_save_locals]
     [no_LIMIT_warnings]
-    [num_cycles #]
+    [num_cycles !E]
+    [num_runs !E]
     [out_A_matrix $file]
+    [out_file = $E]
+    [out_prm_vals_on_end $file]...
+    [out_prm_vals_per_iteration $file]... | [out_prm_vals_on_convergence $file]...
     [out_refinement_stats]
     [out_rwp $file]
-    [out_prm_vals_per_iteration $file]... | [out_prm_vals_on_convergence $file]...
-    [out_prm_vals_on_end $file]…
+    [pdb_cif_to_str_file $file]...
+        [pdb_cif_sites $sites]
+        [pdb_cif_to_str #0]
+        [pdb_ignode_adps !E0]
     [process_times]
-    [randomise_file_out_normal $file]
     [seed [#]]
+    [sleep !E]
     [suspend_writing_to_log_file #1]
+    [system_after_save_OUT { $system_commands } ]...
+    [system_before_save_OUT { $system_commands } ]...
     [temperature !E]...
     [use_tube_dispersion_coefficients]
     [verbose #1]
 
+TMolecular_dynamics
+    [molecular_dynamics]
+        [md_time_step !E0.002]
+        [md_time !E0]
+        [md_scale !E1]
+        Tadditional_prm_attributes
+
+Tadditional_prm_attributes
+    [_md_k !E1]
+    [_mass !E1]
+    [_md_force !E0]
+
+Tgenerate_stack_sequences
+    [generate_stack_sequences {
+        [number_of_sequences !E]
+        [number_of_stacks_per_sequence !E]
+        [save_sequences $file]
+        [save_sequences_as_strs $file]
+            [user_defined_starting_transition $transition_name]
+        [layers_tol !#0.5]
+        [n_avg !E]
+        [num_unique_vx_vy !N]
+        [match_transition_matrix_stats {...}]
+        [transition $transition_name]...
+            [use_layer $layer]
+            [height E]
+            [n !N]
+            [to $to_transition_name !E]...
+                [ta E] [tb E] [tz E]
+                [a_add E] [b_add E] [z_add E]
+    }]
+
+Txdd__xdd_scr
+    [bkg [@] # # #...]
+    [convolution_step #1]
+    [d_spacing_to_energy_in_eV_for_f1_f11 !E]
+    [degree_of_crystallinity #]
+        [amorphous_area  #]
+        [crystalline_area  #]
+    [exclude #x1 #x2]...
+    [extra_X_left !E] [extra_X_right !E]
+    Tfit_obj
+    [neutron_data]
+    [rebin_with_dx_of !E  [rebin_start_x_at !E]]
+    [Rp !E] [Rs !E]
+    [smooth #]
+    [start_X !E] [finish_X !E]
+    [weighting !E [recal_weighting_on_iter]]
+    [x_calculation_step !E]
+    [xdd_out $file [append]]...
+        Tout_record
+    [yobs_eqn !N E]
+    [yobs_to_xo_posn_yobs !E]
+
+Tfit_obj
+    [fit_obj E [min_X !E] [max_X !E]]...
+        [fit_obj_phase !E]
+        [fo_transform_X !E]
+    Tcolour_line_width_point_size
+
+Tcolour_line_width_point_size
+    [_clp # # # # #]
+
+Tr_wp
+    [r_p #] [r_wp #] [r_exp #] [gof #] [r_p_dash #] [r_wp_dash #] [r_exp_dash #]
+    [weighted_Durbin_Watson #]
+
+TMinimization
+    [A0_matrix_is_constant]
+    [approximate_A]
+        [A_matrix_elements_tollerance !E]
+        [A_matrix_memory_allowed_in_Mbytes !E]
+        [A_matrix_report_on]
+    [approximate_A_check_for_must_be_zero #n]
+    [bootstrap_errors !Ecycles]
+        [determine_values_from_samples]
+        [fraction_of_yobs_to_resample !E]
+        [resample_from_current_ycalc]
+    [chi2 !E]
+    [chi2_convergence_criteria !E]
+    [continue_after_convergence]
+    [do_errors]
+    [do_errors_include_penalties]
+    [do_errors_include_restraints]
+    Get(number_independent_parameters)
+    [line_min] [use_extrapolation] [no_normal_equations] [use_LU]
+    [only_penalties]
+    [pen_weight !E]
+    [penalties_weighting_K1 !E]
+    [percent_zeros_before_sparse_A #]
+    [quick_refine !E [quick_refine_remove !E]]
+    [randomize_on_errors]
+    [save_best_chi2]
+    [use_LU_for_errors]
+
 Txdd
-    [xdd $file [{$data}] [range #] [xye_format] [gsas_format] [fullprof_format] ]...
-        Ttop_xdd
-        Txdd_comm_1
-        Tcomm_1
-        Tcomm_2
-        Tmin_max_rc
-        Trwp
-        [gui_add_bkg !E]
-        [xdd_sum !E] and [xdd_array !E]
-        [cross_corr $name #value
-            cross_corr_s !E
-        [user_y $name { #include $file }]... | [user_y $name $file]...
-            [xye_format]
-            [rebin_with_dx_of !E]
-            [user_y_hat E]...
-            [user_y_gauss_fwhm E]...
-            [user_y_lor_fwhm E]...
-            [user_y_exp_conv_const E [user_y_exp_limit E]]...
-        [xo_Is]...
-            [xo E  I E]...
-            Tcomm_1_2_phase_1_2
+    [xdd $file [{$data}] [range #] [xye_format] [gsas_format] [fullprof_format]]...
+        [xdd_file !E]
+        [xdd_tag !E]
+        [gui_reload] [gui_ignore]
+        [cross_corr $name #value]
+            [cross_corr_s !E]
         [d_Is]...
             [d E  I E]...
             Tcomm_1_2_phase_1_2
             [lebail #]
+        [element_weight_percent $atom $Name #]...
+        [element_weight_percent_known $atom #]...
+        [elemental_composition]
+        [gui_add_bkg !E]
         [hkl_Is]...
             [lp_search !E]
             [I_parameter_names_have_hkl $start_of_parameter_name]
@@ -113,68 +375,126 @@ Txdd
             Tcomm_1_2_phase_1_2
             Thkl_lat
             [lebail #]
+        [mixture_density_g_on_cm3 #]
+        [Mixture_LAC_1_on_cm(0)]
+        [mixture_MAC #]
+        [out_sfn4_yobs !E] [out_sfn4_ycalc !E]
+        [pdf_data]
+        [pdf_generate {
+            [dr !E]
+            [gr_sst_file = "File";]
+            [gr_to_fq !E]
+            [hat !E [num_hats !E]]
+            [r_max !E]
+        }]
+        [rebin_with_dx_of !E  [rebin_start_x_at !E]]
+        [scale_phase_X E]...
         [str | dummy_str]...
-            Tstr_details
-            Thkl_lat
+            [point_by_point_beq_fo_etc]
             Tcomm_1_2_phase_1_2
-            Tmin_max_rs
-            [rigid]...
+            Thkl_lat
+            Tmin_max_r
+            Tpdf
+            Trigid
             Tspace_group
+            Tstr_details
+        Tcomm_1
+        Tcomm_2
+        Tmin_max_r
+        Tpdf_convolute
+        Tr_wp
+        Txdd__xdd_scr
+        [user_y $name { #include $file }]... | [user_y $name $file]...
+            [xye_format]
+            [rebin_with_dx_of !E]
+            [user_y_hat E]...
+            [user_y_gauss_fwhm E]...
+            [user_y_lor_fwhm E]...
+            [user_y_exp_conv_const E [user_y_exp_limit E]]...
+        [weight_percent_amorphous !E]
+        [xdd_array !E]... [xdd_sum !E]...
+        [xo_Is]...
+            [xo E  I E]...
+            Tcomm_1_2_phase_1_2
+            [create_pks_fn $fn_name]
+            [create_pks_name $a_name]
+
+Tpdf
+    [pdf_scale_simple]
+    [pdf_zero E]
+    [pdf_ymin_on_ymax 0.001]
+    [pdf_info]
+    Tpdf_convolute
+    [pdf_for_pairs $sites_1 $sites_2]...
+        [pdf_only_eq_0]
+        [pdf_gauss_fwhm E]
+        Tpdf_convolute
+    [pdf_partial_1 $sites]
+    [pdf_partial_2 $sites]
+    [pdf_partial_when !E]
+
+Tpdf_convolute
+    [pdf_convolute E]...
+        [min_X !E] [max_X !E]
+        [convolute_X_recal !E]
+
+Trigid
+    [rigid]...
+        [point_for_site $site [ux | ua E] [uy | ub E] [uz | uc E]]...
+            [in_cartesian] [in_FC]
+        [z_matrix atom_1 [atom_2 E] [atom_3 E] [atom_4 E]]...
+        [rotate E [qx | qa E] [qy | qb E] [qz | qc E]]...
+            [operate_on_points $sites]
+            [in_cartesian] [in_FC]
+        [translate [tx | ta E] [ty | tb E] [tz | tc E]]...
+            [operate_on_points $sites]
+            [in_cartesian] [in_FC]
+            [rand_xyz !E]
+            [start_values_from_site $unique_site_name]
 
 Tcomm_1_2_phase_1_2
+    Tcolour_line_width_point_size
     Tcomm_1
     Tcomm_2
     Tphase_1
     Tphase_2
 
 Txdd_scr
-    [xdd_scr $file] ...
-        Txdd_comm_1
+    [xdd_scr $file]...
         Tcomm_2
-        Ttop_xdd
+        Txdd__xdd_scr
         Tmin_max_r
         [str]...
-            Tstr_details
-            Tphase_1
             Tcomm_2
             Thkl_lat
             Tmin_max_r
-            [rigid]...
-            Tspace_group
+            Tphase_1
+            Trigid
             Tscr_1
+            Tspace_group
+            Tstr_details
 
 Tscr_1
     [Flack E]
+    [dont_merge_equivalent_reflections]
+    [dont_merge_Friedel_pairs]
+    [ignore_differences_in_Friedel_pairs]
     [i_on_error_ratio_tolerance #]
     [num_highest_I_values_to_keep #]
 
-Txdd_comm_1
-    [bkg [@] # # #...]
-    [degree_of_crystallinity #]
-    [d_spacing_to_energy_in_eV_for_f1_f11 !E]
-    [exclude #ex1 #ex2]...
-    [extra_X_left !E] [extra_X_right !E]
-    [fit_obj E [min_X !E] [max_X !E] ]...
-    [neutron_data]
-    [rebin_with_dx_of !E]
-    [smooth #]
-    [start_X !E] [finish_X !E]
-    [weighting !E [recal_weighting_on_iter] ]
-    [xdd_out $file [append] ]...
-        Tout_record
-    [yobs_eqn !N E]
-    [yobs_to_xo_posn_yobs !E]
-
 Tcomm_1
     [axial_conv]...
+        filament_length E sample_length E receiving_slit_length E
+        [primary_soller_angle E]
+        [secondary_soller_angle E]
+        [axial_n_beta !E]
     [capillary_diameter_mm E]...
         capillary_u_cm_inv E
         [capillary_convergent_beam] [capillary_divergent_beam] [capillary_parallel_beam]
         [capillary_focal_length_mm E]
         [capillary_xy_n #]
-    [lpsd_th2_angular_range_degrees E]...
     [circles_conv E]...
-    [exp_conv_const E  [exp_limit E] ]...
+    [exp_conv_const E  [exp_limit E]]...
     [ft_conv E]...
     [ft_conv_re_im]...
         [ft_conv_re E]
@@ -182,24 +502,25 @@ Tcomm_1
         [ft_min !E]
         [ft_x_axis_range !E]
     [gauss_fwhm E]...
-    [h1 E  h2 E  m1 E  m2 E]
-    [hat E [num_hats #1] ]...
+    [hat E [num_hats #1]]...
+    [lor_fwhm E]...
+    [lpsd_th2_angular_range_degrees E]...
     [modify_peak]
         [modify_peak_apply_before_convolutions]
         [modify_peak_eqn !E]
-            [current_peak_min_x !E]
-            [current_peak_max_x !E]
+            [current_peak_min_x !E] [current_peak_max_x !E]
+        Get(current_peak)
+        Get(current_peak_x)
     [more_accurate_Voigt]
-    [lor_fwhm E]...
     [numerical_lor_gauss_conv]
     [numerical_lor_ymin_on_ymax #0.0001]
     [one_on_x_conv E]...
     [pk_xo E]
-    [push_peak]...
-    [pv_lor E  pv_fwhm E]
-    [spv_h1 E  spv_h2 E  spv_l1 E  spv_l2 E]
-    [stacked_hats_conv [whole_hat E [hat_height E] ]...[half_hat E [hat_height E] ]...]...
+    [stacked_hats_conv]...
+        [whole_hat E [hat_height E]]...
+        [half_hat E [hat_height E]]...
     [th2_offset E]...
+    Tpeak_stack
     [user_defined_convolution E min E max E]...
     [WPPM_ft_conv E]...
     [WPPM_ft_conv_re_im E]...
@@ -210,78 +531,142 @@ Tcomm_1
         [WPPM_break_on_small !E]
         [WPPM_correct_Is]
 
+Tpeak_stack
+    [push_peak]
+    [bring_2nd_peak_to_top]
+    [bring_n_peak_to_top !E]
+    [add_pop_1st_2nd_peak]
+    [scale_top_peak E]
+    [set_top_peak_area E]
+
 Tcomm_2
-    [f0_f1_f11_atom]...
-        [f0 E] [f1 E] [f11 E]
-    [lam [ymin_on_ymax #] [no_th_dependence] [Lam !E] [calculate_Lam] ]
-    [scale_pks E]...
-    [scale_phase_X E]
-    [prm|local E [min !E][max !E][del !E][update !E][stop_when !E][val_on_continue !E]]...
     [existing_prm E]...
-    [penalty !E]...
-    [out $file [append] ]...
+    Tf0_f1_f11_atom
+    [lam [ymin_on_ymax #] [no_th_dependence] [Lam !E] [calculate_Lam]]
+        [la E  lo E  [lh E] | [lg E] [lo_ref]]...
+    [out $file [append]]...
         Tout_record
+    [out_dependences $user_string]
+    [out_dependences_for $user_string $object_name]
+    [penalty !E]... [restraint !E]...
+    [prm|local E [min !E][max !E][del !E][update !E][stop_when !E][val_on_continue !E][_rem !E]]...
+    [scale_phase_X E]...
+    [scale_pks E]...
+
+Tf0_f1_f11_atom
+    [f0_f1_f11_atom [f0 E] [f1 E] [f11 E]]...
 
 Tphase_1
-    [atom_out $file [append] ]...
+    [atom_out | mag_atom_out $file [append]]...
         Tout_record
     [auto_scale !E]
     [del_approx !E]
+    [stretch_pks E]
+    [transform_X E]
     [phase_name $phase_name]
-    [phase_out $file [append] ]...
-    [phase_out_X $file [append] ] …
+    [phase_out $file [append]]...
+        Tout_record
+    [phase_out_X $file [append]]...
+        Tout_record
     [brindley_spherical_r_cm !E]
     [r_bragg #]
     [remove_phase !E]
     [scale E]
 
 Tphase_2
-    [peak_buffer_step  E [report_on] ]
+    [peak_buffer_step  E [report_on]]
+    [peak_buffer_based_on !E [peak_buffer_based_on_tol !E]]...
     [peak_type $type]
+        [pv_lor E  pv_fwhm E]
+        [h1 E  h2 E  m1 E  m2 E]
+        [spv_h1 E  spv_h2 E  spv_l1 E  spv_l2 E]
     [numerical_area E]
 
 Tstr_details
-    [append_cartesian] [append_fractional  [in_str_format] ]
-    [append_bond_lengths  [consider_lattice_parameters] ]
+    [append_cartesian] [append_fractional  [in_str_format]]
+    [append_bond_lengths  [consider_lattice_parameters]]
     [atomic_interaction N E] | [ai_anti_bump N]...
+        [ai_sites_1 $sites_1] [ai_sites_2 $sites_2]
+        [ai_no_self_interation]
+        [ai_closest_N !E]
+        [ai_radius !E]
+        [ai_exclude_eq_0]
+        [ai_only_eq_0]
     [box_interaction [from_N #] [to_N #] [no_self_interaction]  $site_1 $site_2 N E]...
+    [cell_mass !E] [cell_volume !E] [weight_percent !E]
+        [spiked_phase_measured_weight_percent !E] [corrected_weight_percent !E]
+    [phase_MAC !E]
+    [Phase_LAC_1_on_cm(0)]
+    [Phase_Density_g_on_cm3(0)]
     [fourier_map !E]
     [grs_interaction [from_N #][to_N #][no_self_interaction] $site_1 $site_2 qi # qj # N E]...
+        [no_coulomb]
+    [repulsion_refine]
+    [madelung #]
+    [dont_save_extrapolated_pks]
+    [mag_only_for_mag_sites]
+    [mag_space_group $symbol]
     [hkl_plane $hkl]...
     [no_f11]
     [normalize_FCs]
-    [occ_merge $sites [occ_merge_radius !E] ]...
+    [occ_merge $sites [occ_merge_radius !E]]...
     [p1_fractional_to_file $file] [in_str_format]...
-    [site $site]...
-        [adps] [u11 E] [u22 E] [u33 E] [u12 E] [u13 E] [u23 E]
-        Tmin_r_max_r
-    [sites_distance N] | [sites_angle N] | [sites_flatten N [sites_flatten_tol !E] ]...
+    [site $site [x E] [y E] [z E]]...
+        [occ $atom E [beq E] [scale_occ E]]...
+        [num_posns #] [rand_xyz !E] [inter !E #]
+        [[adps] | [[u11 E] [u22 E] [u33 E] [u12 E] [u13 E] [u23 E]]]
+        Tmin_max_r
+        [adps_scale E]
+        [mlx E] [mly E] [mlz E] [mg E]
+        [mag_only]
+        [co #]
+        [g !N] [q E] [s E]
+        [track !E]
+        [layer $layer]
+    [stack $layer]...
+        [sx E] [sy E] [sz E]
+        [generate_these $sites]
+            [generate_name_append $append_to_site_name]
+    Tgenerate_stack_sequences
+    [track_buffer !E]
+    [sites_distance N] | [sites_angle N] | [sites_flatten N [sites_flatten_tol !E]]...
+        [site_to_restrain $site [ #ep [ #n1 #n2 #n3 ] ] ]...
     [sites_geometry N]...
     [siv_s1_s2 # #]
     [report_on_str]
     [view_structure]
 
 Thkl_lat
-    [a E] [b E] [c E] [al E] [be E] [ga E]
-    [normals_plot !E]...
+    Tlat_prms
+    [normals_plot !E [normals_plot_min_d !E]]...
+    [omit_hkls !E]
     [phase_penalties $sites N [hkl_Re_Im #h #k #l #Re #Im]...]...
     [spherical_harmonics_hkl $name]...
     [str_hkl_angle N h k l]...
-    [omit_hkls !E]
+
+Tlat_prms
+    [a E b E c E [al E90] [be E90] [ga E90]]
 
 Tout_record
     [out_record]...
+        [out_eqn !E]
+        [out_fmt $c_fmt_string]
+        [out_fmt_err $c_fmt_string]...
 
-Tmin_r_max_r
+Tmin_max_r
     [min_r #] [max_r #]
 
 Tspace_group
     [space_group $symbol]
 
-Miscellanous
+TMisc_keywords
     [aberration_range_change_allowed !E]
     [default_I_attributes !E]
-    load, move_to, for
+    [load]
+    [move_to $]
+    [for { .. } ]
+    [new $object]
+    [dummy $word] [dummy_prm E]
 ```
 
 ## Alphabetical listing of keywords
@@ -330,6 +715,8 @@ Defines an atomic interaction with the name N between sites identified by $site_
 
 ai_closest_N: interactions between $sites_1 and $sites_2 are sorted by distance and only the first ai_closest_N number of interactions are considered.
 
+ai_radius: only the interactions between $sites_1 and $sites_2 that are within the distance ai_radius are considered.
+
 When ai_radius and ai_closest_N are both defined then interactions from both sets of corresponding interaction are considered.
 
 
@@ -364,9 +751,9 @@ Examples benzene_ai1.inp, benzene_ai2.inp and benzene_ai3.inp demonstrates the u
 | atomic_interaction ai1 = If(R < 3, (R-3)^2, 0); ai_exclude_eq_0 ai_sites_1 C* ai_sites_2 C*  ai_radius 3 penalty = If(Cycle_Iter < 10, ai1, 0); |
 | --- |
 
-[atom_out $file [append] ]...
+[atom_out | mag_atom_out $file [append] ]...
 
-Used for writing site dependent details to file. See out for a description of out_record. The Out_CIF_STR macro uses atom_out
+Used for writing site dependent details to file. See out for a description of out_record. The Out_CIF_STR macro uses atom_out. mag_atom_out selects magnetic sites.
 
 [axial_conv]...
 
@@ -486,7 +873,7 @@ cloud allows for the tracking of atoms defined in $sites in three dimensions. It
 | continue_after_convergence ... cloud “X1” cloud_population 100 cloud_save SOME_FILE.CLD |
 | --- |
 
-On termination of refinement the CLD file is saved; it can be viewed using the rigid body editor of the GUI; see examples ae14-12.inp for a cloud example. cloud_population is the maximum number of population members. Each population member comprises the fractional coordinates of $sites and an associated Rwp value.
+On termination of refinement the CLD file is saved; it can be viewed using the rigid body editor of the GUI. cloud_population is the maximum number of population members. Each population member comprises the fractional coordinates of $sites and an associated Rwp value.
 
 cloud_save_xyzs saves a cloud population to file.
 
@@ -652,7 +1039,7 @@ The Create_hklm_d_Th2_Ip_file macro creates an hkl file listing in the "load hkl
 
 [inp_text_insert $name { … }]…
 
-inp_text provides a means of defining INP text at one place in a file and having that text inserted at another place in the INP file, or in an #include file, using inp_text_insert. The inp_text is updated on refinement termination. inp_text is very useful for simplifying complicated INP files where placing control parameters at the top of the file is of benefit; see test_example INP-TEXT.INP. An example is as follows:
+inp_text provides a means of defining INP text at one place in a file and having that text inserted at another place in the INP file, or in an #include file, using inp_text_insert. The inp_text is updated on refinement termination. inp_text is very useful for simplifying complicated INP files where placing control parameters at the top of the file is of benefit. An example is as follows:
 
 
 | inp_text back_ground { bkg @  17.365576`  14.5555883`  14.038067` } xdd … inp_text_insert back_ground |
@@ -724,7 +1111,7 @@ Suppresses LIMIT_MIN and LIMIT_MAX warnings.
 
 Returns the numerically calculated area under the phase.
 
-[num_cycles #]
+[num_cycles !E]
 
 
 | continue_after_convergence iters 1000000000 num_cycles 100 |
@@ -884,7 +1271,7 @@ phase_penalties for a single hkl is defined as follows:
 
 where s assigned phase, c = calculated phase, Ic = calculated intensity and d is the reflection d-spacing. The name N returns the sum of the phase_penalties and it can be used in equations and in particular penalty equations. c is calculated from sites identified in $sites.
 
-#h, #k, #l are user defined hkls; they are used for formulating the phase penalties. #Re and #Im are the real and imaginary parts of s. An example usage of phase penalties (see examples ae14-12.inp and ae5-auto.inp) is as follows:
+#h, #k, #l are user defined hkls; they are used for formulating the phase penalties. #Re and #Im are the real and imaginary parts of s. An example usage of phase penalties (see example ae5-auto.inp) is as follows:
 
 
 | penalty = pp1; phase_penalties * pp1 load hkl_Re_Im { 0   1   2   1  0 1   0  -2   1  0 1  -2  -1   1  0 } |
@@ -1180,9 +1567,7 @@ x_calculation_step can be a function of Xo and Th. In some situations, it may be
 
 [xdd $file [{ $data }] [range #] [xye_format] [gsas_format] [fullprof_format] ]...
 
-[gui_reload]
-
-[gui_ignore]
+[gui_reload] [gui_ignore]
 
 
 | xdd pbso4.raw |
@@ -1216,7 +1601,7 @@ gui_reload, rebin_with_dx_of, smooth, yobs_eqn, yobs_to_xo_posn_yobs
 
 Used for writing xdd dependent details to file. The out_eqn can contain the reserved parameter names of X, Yobs, Ycalc and SigmaYobs. See out for a description of out_record. The Out_Yobs_Ycalc_and_Difference macro is a good example of using xdd_out.
 
-[xdd_scr  $file] ...
+[xdd_scr  $file]...
 
 [dont_merge_equivalent_reflections]
 
@@ -1233,6 +1618,8 @@ Used for writing xdd dependent details to file. The out_eqn can contain the rese
 [num_highest_I_values_to_keep #num]
 
 xdd_scr defines single crystal data from the file $file. The file can have extensions of *.HKL for ShelX HKL4 format or *.SCR for SCR format. All xdd and str keywords that are not dependent on powder data can be used by xdd_scr. Single crystal data is internally stored in 2 versus Fo2 format; this allows the use of start_X, finish_X and exclude keywords; a lam definition is required.
+
+dont_merge_equivalent_reflections prevent merging of equivalent reflections, see also section 19.9.3. dont_merge_Friedel_pairs prevent merging of Friedel pairs. ignore_differences_in_Friedel_pairs force the use of Eq. (19-12) for calculating F2. auto_scale rewrites the scale parameter in terms of F2; this eliminates the need for the scale parameter. The value determined for auto_scale is updated at the end of refinement. i_on_error_ratio_tolerance filters out hkl's that does not meet the condition:
 
 |Fo| >  i_on_error_ratio_tolerance | Sigma(Fo) |
 

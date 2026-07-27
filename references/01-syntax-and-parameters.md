@@ -102,6 +102,13 @@ More general again is the use of the Get function as used in the Cubic macro:
 
 Here the constraints are formulated without the need for a parameter name.
 
+## Get() path resolution: arrays and missing objects
+
+**Arrays.** The walk is not always a single unambiguous chain. Where a path passes through a member that is a genuine array — several same-named items under one parent, such as many `site`s in a `str` or many `str`s in an `xdd` — `Get()` always resolves to the **first** item, with no way to express which one was meant. TOPAS issues a warning naming the ambiguity when this happens. Treat that warning as a signal that the equation needs rewriting to reach the intended object explicitly, not as noise.
+
+**Missing objects are created, not reported.** If a name on the path does not exist, `Get()` creates it — and creates every missing object along the path, each at the position the path defines for it. `Get(a, b, c)` with none of the three present builds all three. This makes `Get()` unusable as a test for whether something exists: it does not report absence, it ends it. It also means a mistyped name inside `Get()` fails silently rather than raising an error, leaving structure in the refinement that was never written by hand.
+
+Both rules above describe the behaviour at the level a user needs. A few items are handled differently internally, so treat this as a working model rather than an exact account of the kernel, and check against a real run before relying on either rule in an unusual case.
 
 ## Try and use parameter attributes
 

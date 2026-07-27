@@ -73,7 +73,7 @@ python3 scripts/topas_install.py --keyword-tree-html         # a generated keywo
 
 `check_inp_syntax.py` and `expand_inp_macros.py` both call this automatically and print a one-line note to stderr confirming they found your install. The walk results are cached to disk (`%LOCALAPPDATA%\topas-inp-writer\install_cache.json`, keyed by `TOPAS_DIR` + the mtime of `tc.exe`/`ta.exe`/`topas.exe` found directly at its root), so repeated shell-outs across a whole session — or across sessions — reuse the last walk instead of re-walking every call; the cache self-invalidates the moment that executable's mtime changes (a real install/upgrade), and is skipped entirely (falling back to a fresh walk every call, as before) if `TOPAS_DIR` is set to a true ancestor directory with no executable directly at its root.
 
-**Without `TOPAS_DIR` set**, six things degrade cleanly rather than silently: `check_inp_syntax.py`'s macro-arity check (its other checks are unaffected); `expand_inp_macros.py`'s expansion of library macros (macros defined in the file itself still expand); reading the literal content of a worked example (the index's topic descriptions remain available, just not the source to copy from); "Show Schema" (no bundled fallback at all); `generate_macro_browser.py` (exits immediately, needs the real `.inc` library); `topas_keyword_tree.py` (needs `-o` given explicitly). If a colleague doesn't have `TOPAS_DIR` set, tell them plainly what it unlocks rather than guessing at file contents.
+**Without `TOPAS_DIR` set**, four things degrade cleanly rather than silently: `check_inp_syntax.py`'s macro-arity check (its other checks are unaffected); `expand_inp_macros.py`'s expansion of library macros (macros defined in the file itself still expand); reading the literal content of a worked example (the index's topic descriptions remain available, just not the source to copy from); "Show Schema" (no bundled fallback at all). If a colleague doesn't have `TOPAS_DIR` set, tell them plainly what it unlocks rather than guessing at file contents.
 
 ## Reference file map
 
@@ -194,16 +194,7 @@ Open only what's relevant to the current task.
 
   Macro-expands the file first and scans for equations in `prm`/`local` (including `!`-prefixed ones, unlike `find_refined_params.py`, since this needs the full graph regardless of refined status) and a curated keyword list (site `x`/`y`/`z`/`occ`/`beq`/`u11..u23`, lattice `a`/`b`/`c`/`al`/`be`/`ga`/`scale`, `rotate`/`translate`, rigid-body Z-matrix `ta`/`tb`/`tc`). The header's stat badge shows the count of refineable independent parameters (same definition as `find_refined_params.py`, including its for-loop multiplier rule). `local` re-scoping is handled the same way (same name in multiple `local` statements = genuinely different parameters, resolved to the nearest preceding declaration). Rigid-body `z_matrix` rows are parsed for their own bond/angle/torsion equations in both TOPAS `z_matrix` syntax forms (block form and inline form). **Deliberately shows the FULL computation graph, not the independent-leaf-collapsed view TOPAS's own `out_dependences`/`out_dependences_for` gives** — this script's output is a strict superset, traceable node-by-node, by design.
 
-- `scripts/topas_keyword_tree.py` — **run this whenever the user asks to see/visualize the TOPAS keyword hierarchy itself** (a browsable map of the language's own keywords, as opposed to `param_dependency_trees.py` which graphs one file's actual parameters). Two sources in one two-panel page: `references/21-keyword-index.md`'s "Data structures" fenced block (rendered as the Tree panel, rooted at `Ttop`, where a bare `Txxx` member line means "insert everything that type defines here too"), and every other reference chapter's own keyword mentions (indexing, charge-flipping, stacking faults, minimization, PDF, quant, rigid bodies, magnetic, protein, GUI, misc, ...), shown as additional "by topic" groups.
-  ```
-  python3 scripts/topas_keyword_tree.py                    # -> <TOPAS_DIR>/topas_keyword_tree.html (skipped + reopened if it already exists)
-  python3 scripts/topas_keyword_tree.py --force             # regenerate even if the output file already exists
-  python3 scripts/topas_keyword_tree.py -o out.html         # custom output path (works without TOPAS_DIR)
-  python3 scripts/topas_keyword_tree.py --no-open
-  ```
-  Since this tree only depends on this skill's own bundled reference files, a plain rerun with no flags skips regeneration and reopens the existing file; pass `--force` after editing a reference chapter. Opens in the default browser (never VS Code), matching this skill's HTML-visualization convention. Chapter numbering and root-level ordering are sourced from the real manual's own chapter numbers and document order (not this skill's own `00`-`26` filename scheme or alphabetical order). Known limitation: a rigid body's `z_matrix { ... }` block is not parsed internally (its rows put an atom label, not a keyword, before `=`); `KEYWORD_EQ_LIST`-equivalent keyword lists used for by-topic extraction are curated, not exhaustive.
-
-- **"Show Schema" is a standing trigger phrase** for displaying TOPAS's internal kernel data-structure page (`kernel_structure_tree.html`) — an interactive tree of the kernel's own `Txxx` complex types, distinct from `topas_keyword_tree.py` (which browses the documented keyword hierarchy, not the kernel's internal schema). This page isn't generated by this skill — only the pre-rendered HTML travels with each TOPAS release. Resolve and open it with:
+- **"Show Schema" is a standing trigger phrase** for displaying TOPAS's internal kernel data-structure page (`kernel_structure_tree.html`) — an interactive tree of the kernel's own `Txxx` complex types. This page isn't generated by this skill — only the pre-rendered HTML travels with each TOPAS release. Resolve and open it with:
   ```
   python3 scripts/topas_install.py --kernel-schema-html
   ```
@@ -216,15 +207,6 @@ Open only what's relevant to the current task.
   python3 scripts/c_matrix_heatmap.py path/to/file.inp --format html            # -> file_c_matrix.html
   ```
   `png`: zero third-party dependencies (hand-encoded via stdlib `zlib`, bundled bitmap font); axis ticks are the 1-based index only, full names printed to stdout. `html`: self-contained interactive page with full parameter names, hover tooltips — generally the better default unless a static image is specifically needed. Both parse the block as plain text (no macro expansion needed), so it works on a literal block in a `.inp` or a real `.out` result.
-
-- `scripts/generate_macro_browser.py` — builds an interactive HTML browser for every `macro`/`macro &` definition across the real `.inc` library (discovered by directory scan, not a hardcoded list).
-  ```
-  python3 scripts/generate_macro_browser.py                                    # -> <TOPAS_DIR>/macro_browser.html
-  python3 scripts/generate_macro_browser.py --docx path/to/Technical_Reference.docx   # use a .docx instead of the auto-resolved PDF
-  python3 scripts/generate_macro_browser.py --no-pdf                           # skip §21.2 descriptions entirely
-  python3 scripts/topas_install.py --macro-browser-html                        # resolve (and open) an already-generated one
-  ```
-  Ground truth for name/argument list/arity/body is always the real `.inc` source; §21.2 descriptions are an optional best-effort explanation layer, auto-resolved from the manual PDF by default (`--docx` if you have the live editing copy, which takes priority). A macro with no §21.2 match is shown in full, honestly labeled "not in §21.2" rather than fabricating or borrowing a description from a neighboring entry. Each macro's detail panel has an "Open in editor" button (`vscode://file/...`); the TOPAS install directory is entered once and cached in the browser's `localStorage`.
 
 - `scripts/plot_str_3d.py` — **run this whenever the user asks for a 3D plot/view of a `str` phase's crystal structure**. Renders one `str` block as a self-contained interactive HTML page (drag to orbit, scroll to zoom, a perspective slider, an off-by-default site-labels checkbox) — unit cell as a wireframe box, every site symmetry-expanded across the cell as colored spheres, cation-anion bonds by covalent-radius-sum cutoff. No third-party dependencies (hand-written vanilla-JS canvas 3D engine, works offline/in a strict-CSP viewer).
   ```

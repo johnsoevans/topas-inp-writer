@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.15 - 2026-07-27
+- Applied Alan's changes-for-john-1.md requests where possible
+- This deletes Alans html generating scripts
+- Updated formatting py scripts to be 3 spaces by default (Alan) or 4 as an option
+- Added keyword-descriptions.json to references
+
 ## 1.0.14 - 2026-07-26
 - Added test_examples folder
 

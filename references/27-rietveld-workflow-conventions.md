@@ -8,7 +8,7 @@ Every concrete rule below carries a stable tag like `(R7)` so it can be cited, c
 
 **(R1) Never guess the wavelength.** If the radiation/wavelength isn't clear from what the user has said, ask before proceeding — don't infer it from the data or assume a common default.
 
-**(R2) `LP_Factor()` is mandatory for every `xdd` fitted, with no exceptions** — even with no monochromator, include it with the angle fixed at 0 (`LP_Factor(!th2_monochromator, 0)`). **Never guess the monochromator angle.** If not stated explicitly, ask the user, optionally offering common real values as a shortlist. Intensity Corrections, for Cu radiation: Ge 27.26°, Graphite 26.4°, Quartz 26.6°. For Mo radiation: Ge 12.46°. Still confirm which applies (or that there is none) rather than assuming.
+**(R2) `LP_Factor()` is mandatory for every `xdd` fitted, with no exceptions** — even with no monochromator, include it with the angle fixed at 0 (`LP_Factor(!th2_monochromator, 0)`). **Never guess the monochromator angle.** If not stated explicitly, ask the user, optionally offering common real values as a shortlist. Intensity Corrections, for Cu radiation: Ge 27.26°, Graphite 26.6°, Quartz 26.4°. For Mo radiation: Ge 12.46°. Still confirm which applies (or that there is none) rather than assuming.
 
 **(R3) Peak-shape family determines the wavelength/emission macro — this pairing is conditional, not a blanket default:**
 - TCHZ (refined, or fixed as an instrument resolution function) with unmonochromated lab Cu Kα1/Kα2 data → `CuKa2_analyt(yminymax)`. This loads the analytical Kα1/Kα2 emission profile TCHZ needs to reproduce the doublet correctly; plain `CuKa2` (a simpler two-line approximation) gives a subtly wrong peak shape when paired with TCHZ.
@@ -166,7 +166,9 @@ These requirements are independent of the instrument-specific sections above (Cu
 
 Most standard Rietveld rules above still apply to a quantitative job — the exceptions and additions specific to quant work are below.
 
-**(R44) ADPs are handled differently from the normal staging (R12):** don't refine per-site/per-type ADPs by the usual rules. Ask the user whether to keep each phase's own ADPs as given in its CIF (fixed), or apply one shared refined ADP across every site in every phase.  Be specific when wording this question.
+**(R44) ADPs are handled differently from the normal staging (R12):** don't refine per-site/per-type ADPs by the usual rules. Ask the user to choose between exactly these two options, verbatim — do not paraphrase, split into a per-phase variant, or otherwise invent a third option:
+1. "Fixed at each phase's own CIF value" (each phase keeps its own ADPs as given in its CIF, none of them refined).
+2. "One shared ADP across every site in every phase" (a single refined ADP applies globally, not one shared value per phase).
 
 **(R45) Don't refine atomic coordinates in a quantitative analysis unless specifically told to.** Cell parameters, scale, peak shape, and ADPs (per R44) are normally enough; coordinates stay fixed at their CIF values.
 

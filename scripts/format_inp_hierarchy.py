@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 format_inp_hierarchy.py -- Reindent a TOPAS .inp file to reflect its
-hierarchical structure, using 3 spaces per indent level (never a tab).
+hierarchical structure, using 3 spaces per indent level by default
+(never a tab) -- see --indent to use a different width.
 
 If a line packs more than one keyword/statement onto it, it is left
 exactly as-is (not split) -- the WHOLE line is just indented as a single
@@ -38,19 +39,17 @@ formatter tracks TWO things together:
      system_before_save_OUT, etc.) -- the general, always-correct case.
   2. A stack of "open implicit sections", pushed/popped based on TOPAS's
      own keyword hierarchy: the "Data structures" section of
-     references/21-keyword-index.md (Ttop/Tcomm_2/Txdd/Tstr_details/...),
-     the same schema topas_keyword_tree.py already parses for its
-     keyword-hierarchy browser. Confirmed directly by the user (TOPAS-
-     Academic's author): "indentation comes from keyword hierarchy;
-     therefore please look at the keyword hierarchy when doing
-     indenting" -- this replaced an earlier, purely hand-curated
-     RANK_KEYWORDS table. build_keyword_children_map() reuses
-     topas_keyword_tree.py's own parser (extract_data_structures_block/
-     parse_hierarchy/Node/TYPE_REF_RE) to build {keyword: {valid child
-     keywords}}, transparently resolving type-mixin references (a bare
-     Txxx line means "insert that type's own members here too, at the
-     SAME level" -- see topas_keyword_tree.py's own docstring for why)
-     and unioning children across every place a keyword occurs in the
+     references/21-keyword-index.md (Ttop/Tcomm_2/Txdd/Tstr_details/...).
+     Confirmed directly by the user (TOPAS-Academic's author):
+     "indentation comes from keyword hierarchy; therefore please look
+     at the keyword hierarchy when doing indenting" -- this replaced an
+     earlier, purely hand-curated RANK_KEYWORDS table.
+     build_keyword_children_map() parses that schema
+     (extract_data_structures_block/parse_hierarchy/Node/TYPE_REF_RE,
+     defined locally below) to build {keyword: {valid child keywords}},
+     transparently resolving type-mixin references (a bare Txxx line
+     means "insert that type's own members here too, at the SAME
+     level") and unioning children across every place a keyword occurs in the
      schema (`str` is a member of both Txdd and Txdd_scr; its resolved
      children merge Tstr_details + Thkl_lat + Tcomm_1_2_phase_1_2 +
      Tmin_max_rs + rigid + Tspace_group; etc.).
@@ -107,6 +106,13 @@ Usage:
     python3 format_inp_hierarchy.py file.inp              # rewrite in place
     python3 format_inp_hierarchy.py file.inp -o out.inp   # write elsewhere
     python3 format_inp_hierarchy.py file.inp --check      # preview to stdout, don't write
+    python3 format_inp_hierarchy.py file.inp --indent 4   # 4 spaces per indent level (default: 3)
+
+`--indent` also governs how deep fix_columns.py nests la/lo/lh/
+ymin_on_ymax lines under 'lam' (this script calls fix_columns() as its
+first step -- see below), so the two scripts never disagree on what
+"one level" means. Pass the same value to fix_columns.py's own --indent
+when running it standalone on the same project.
 """
 
 import sys
@@ -117,9 +123,73 @@ import subprocess
 import shutil
 
 from fix_columns import fix_columns, LAM_LINE_RE  # same directory; run first so site/lam keywords line up
-import topas_keyword_tree as tkt      # same directory; reuses its Data-structures schema parser
 
-INDENT_UNIT = "   "  # exactly 3 spaces, never a tab
+INDENT_UNIT = "   "  # default: exactly 3 spaces, never a tab -- see --indent
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REFERENCES_DIR = os.path.join(SCRIPT_DIR, "..", "references")
+
+TYPE_REF_RE = re.compile(r"^T\w+$")
+
+
+def extract_data_structures_block(md_text):
+    """The fenced code block under '## Data structures' in
+    21-keyword-index.md -- TOPAS's own keyword-hierarchy schema."""
+    heading_idx = md_text.find("## Data structures")
+    if heading_idx == -1:
+        raise ValueError("'## Data structures' heading not found in the reference file")
+    fence_start = md_text.find("```", heading_idx)
+    if fence_start == -1:
+        raise ValueError("Opening ``` fence not found after '## Data structures'")
+    fence_start = md_text.find("\n", fence_start) + 1
+    fence_end = md_text.find("```", fence_start)
+    if fence_end == -1:
+        raise ValueError("Closing ``` fence not found")
+    return md_text[fence_start:fence_end]
+
+
+class Node:
+    def __init__(self, text):
+        self.text = text
+        self.children = []
+
+
+def parse_hierarchy(block_text):
+    """Returns {type_name: [Node, ...]} -- each type's own direct member
+    list (a small tree, since a member can itself have further-indented
+    children representing a genuine nested child object, e.g. [xdd ...]
+    containing [xo_Is]... containing [xo E I E]...)."""
+    type_defs = {}
+    current_type = None
+    stack = []  # list of (depth, node_list)
+
+    for raw in block_text.split("\n"):
+        if not raw.strip():
+            continue
+        indent = len(raw) - len(raw.lstrip(" "))
+        depth = indent // 4
+        text = raw.strip()
+
+        if depth == 0:
+            current_type = text
+            type_defs[current_type] = []
+            stack = [(0, type_defs[current_type])]
+            continue
+
+        if current_type is None:
+            continue  # malformed/unexpected -- skip rather than crash
+
+        node = Node(text)
+        while stack and stack[-1][0] >= depth:
+            stack.pop()
+        if not stack:
+            type_defs[current_type].append(node)
+            stack = [(0, type_defs[current_type])]
+        else:
+            stack[-1][1].append(node)
+        stack.append((depth, node.children))
+
+    return type_defs
 
 FIRST_TOKEN_RE = re.compile(r"^([A-Za-z_]\w*)")
 
@@ -227,7 +297,7 @@ def _resolve_member_names(nodes, type_defs, seen_types):
     when THAT keyword's own children are asked for."""
     names = set()
     for n in nodes:
-        if tkt.TYPE_REF_RE.match(n.text) and n.text in type_defs:
+        if TYPE_REF_RE.match(n.text) and n.text in type_defs:
             if n.text not in seen_types:
                 names |= _resolve_member_names(type_defs[n.text], type_defs, seen_types | {n.text})
         else:
@@ -238,23 +308,22 @@ def _resolve_member_names(nodes, type_defs, seen_types):
 def build_keyword_children_map(references_dir=None):
     """{lowercased keyword name: set of lowercased valid child keyword
     names}, derived from 21-keyword-index.md's "## Data structures"
-    fenced block -- TOPAS's own keyword-hierarchy schema, reusing
-    topas_keyword_tree.py's parser. Cached after the first call (the
-    schema doesn't change mid-process)."""
+    fenced block -- TOPAS's own keyword-hierarchy schema. Cached after
+    the first call (the schema doesn't change mid-process)."""
     global _keyword_children_cache
     if _keyword_children_cache is not None:
         return _keyword_children_cache
 
-    ref_path = os.path.join(references_dir or tkt.REFERENCES_DIR, "21-keyword-index.md")
+    ref_path = os.path.join(references_dir or REFERENCES_DIR, "21-keyword-index.md")
     with open(ref_path, encoding="utf-8") as f:
         md_text = f.read()
-    type_defs = tkt.parse_hierarchy(tkt.extract_data_structures_block(md_text))
+    type_defs = parse_hierarchy(extract_data_structures_block(md_text))
 
     by_name = {}
 
     def index_nodes(nodes):
         for n in nodes:
-            if tkt.TYPE_REF_RE.match(n.text) and n.text in type_defs:
+            if TYPE_REF_RE.match(n.text) and n.text in type_defs:
                 continue  # a type-mixin reference isn't a keyword itself
             for name in _member_names_in_text(n.text):
                 by_name.setdefault(name.lower(), []).append(n)
@@ -458,8 +527,11 @@ def compute_verbatim_flags(clean_lines):
     return flags
 
 
-def format_inp_hierarchy(text, references_dir=None):
-    text = fix_columns(text)  # align site/lam-line keywords before reindenting
+def format_inp_hierarchy(text, references_dir=None, indent_unit=INDENT_UNIT):
+    # Same indent_unit passed to fix_columns() so la/lo/lh/ymin_on_ymax
+    # nesting under 'lam' matches the structural indent used below --
+    # the two scripts' idea of "one level" can never drift apart.
+    text = fix_columns(text, indent_unit=indent_unit)  # align site/lam-line keywords before reindenting
     raw_lines = text.splitlines(keepends=True)
     orig_bare_lines = [l.splitlines()[0] if l.splitlines() else "" for l in raw_lines]
     endings = [l[len(b):] for l, b in zip(raw_lines, orig_bare_lines)]
@@ -522,7 +594,7 @@ def format_inp_hierarchy(text, references_dir=None):
         verbatim_extra = -1 if verbatim else 0
 
         total_depth = max(0, print_brace_depth + len(section_stack) + verbatim_extra)
-        out_lines.append(INDENT_UNIT * total_depth + stripped)
+        out_lines.append(indent_unit * total_depth + stripped)
 
         if is_opener:
             section_stack.append((first_kw_lower, print_brace_depth))
@@ -542,12 +614,18 @@ def main():
     parser.add_argument("--check", action="store_true", help="print the result to stdout instead of writing any file")
     parser.add_argument("--no-open", action="store_true",
                          help="don't reopen/focus the file in VS Code afterward (default: do reopen it)")
+    parser.add_argument(
+        "--indent", type=int, default=3, metavar="N",
+        help="spaces per indent level (default: 3). Pass the same value to fix_columns.py's "
+        "own --indent when both are used on the same project, so indentation never drifts "
+        "between the two scripts.",
+    )
     args = parser.parse_args()
 
     with open(args.inp_file, encoding="utf-8") as f:
         text = f.read()
 
-    fixed = format_inp_hierarchy(text)
+    fixed = format_inp_hierarchy(text, indent_unit=" " * args.indent)
 
     if args.check:
         print(fixed)
