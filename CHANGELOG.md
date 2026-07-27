@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.16 - 2026-07-27
+- Fixed a bug that stopped readme.md in subfolders being packaged
+
 ## 1.0.15 - 2026-07-27
 - Applied Alan's changes-for-john-1.md requests where possible
 - This deletes Alans html generating scripts
