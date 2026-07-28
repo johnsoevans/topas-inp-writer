@@ -145,6 +145,7 @@ import difflib
 from fractions import Fraction
 import topas_install
 import symmetry_utils
+import cif_to_str
 from expand_inp_macros import parse_call_args
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -3130,19 +3131,22 @@ def check_symmetry_constraints(clean_text, text_with_values, issues):
 
     Reuses the exact same crystallography engine as cif_to_str.py
     (symmetry_utils.py) -- classify_crystal_system/ANGLE_CONSTRAINTS_BY_SYSTEM/
-    LENGTH_TIES_BY_SYSTEM for lattice-parameter constraints, classify_adps
-    for per-site ADP constraints -- run here in the opposite direction:
-    instead of generating correct syntax from a CIF, it parses the .inp's
-    OWN already-written syntax and compares it against what the space
-    group requires.
+    LENGTH_TIES_BY_SYSTEM/is_rhombohedral_axes_cell for lattice-parameter
+    constraints, classify_adps for per-site ADP constraints -- run here in
+    the opposite direction: instead of generating correct syntax from a
+    CIF, it parses the .inp's OWN already-written syntax and compares it
+    against what the space group requires.
 
     Space-group operators are resolved via symmetry_utils.resolve_sg_operators
-    (TOPAS's own sgcom6.exe / sg/ database) -- an .inp file never carries its
-    own operator list the way a CIF can, so this is the only source here,
-    not a fallback. Needs TOPAS_DIR; silently produces no findings (not an
-    error) if it's unavailable, matching this script's existing degrade-
-    gracefully pattern for the macro-arity/keyword-typo checks when the live
-    install isn't reachable.
+    (TOPAS's own sgcom6.exe / sg/ database) for a bare symbol, or
+    cif_to_str.resolve_colon_suffixed_sg_operators for a colon-suffixed one
+    (':1'/':2'+ origin choice, ':H'/':R' axes choice -- resolve_sg_operators's
+    own filename prediction doesn't handle these) -- an .inp file never
+    carries its own operator list the way a CIF can, so this pair is the
+    only source here, not a fallback. Needs TOPAS_DIR; silently produces no
+    findings (not an error) if it's unavailable, matching this script's
+    existing degrade-gracefully pattern for the macro-arity/keyword-typo
+    checks when the live install isn't reachable.
 
     Built-in lattice-parameter macros (Cubic/Tetragonal/Hexagonal/Trigonal/
     Rhombohedral -- see LATTICE_MACRO_SYSTEMS) already implement the correct
@@ -3168,11 +3172,19 @@ def check_symmetry_constraints(clean_text, text_with_values, issues):
         skipped -- this checker's simple per-coordinate tie model can't
         validate them either way.
       - The rhombohedral-vs-hexagonal-axes disambiguation (see
-        symmetry_utils.determine_length_ties) is resolved from the .inp's
-        own explicit al/be/ga values when present; a completely absent 'ga'
-        under a hexagonal/trigonal space group is flagged regardless of
-        which axes setting was intended, since it silently defaults to
-        TOPAS's 90 rather than the required 120 either way.
+        symmetry_utils.is_rhombohedral_axes_cell, shared with
+        determine_length_ties/determine_angle_ties) is resolved from the
+        .inp's own explicit 'al' value alone when present (be/ga are
+        typically already Get()-tied equations, not literals, in a
+        correctly-written rhombohedral .inp, so requiring them as literals
+        too would miss the real case); a completely absent 'ga' under a
+        hexagonal/trigonal space group (and not already identified as
+        rhombohedral-axes) is flagged regardless of which axes setting was
+        intended, since it silently defaults to TOPAS's 90 rather than the
+        required 120 either way. When rhombohedral-axes is confirmed, 'c'
+        is required tied to 'a' (length_ties) and 'be'/'ga' tied to 'al'
+        (angle_ties), checked the same way as every other tie in this
+        function.
       - A coordinate written as a bare/'@' independent value is only
         flagged if something can actually move it away from the tie: the
         coordinate itself is '@'-refined, or the coordinate it should track
@@ -3213,7 +3225,24 @@ def check_symmetry_constraints(clean_text, text_with_values, issues):
 
     def get_symops(symbol):
         if symbol not in _SG_OPERATOR_CACHE:
-            symops, _header, _msg = symmetry_utils.resolve_sg_operators(symbol)
+            # symmetry_utils.resolve_sg_operators's own filename prediction
+            # has no origin-choice handling at all (':2'+ suffix) and only a
+            # partial rhombohedral-axes-suffix strip (':R'/':H', via
+            # strip_rhombohedral_axes_suffix -- silently ignores the suffix
+            # rather than resolving the axes it actually names). A colon-
+            # suffixed symbol (e.g. 'R_3_c:R', exactly what the
+            # rhombohedral-axes check below expects to see) is delegated to
+            # cif_to_str.resolve_colon_suffixed_sg_operators instead, which
+            # knows sgcom6.exe's real output-filename convention for these
+            # (':2' -> '...q2.sg', ':R' -> '...r.sg', not a naive
+            # concatenation) -- without it here, this whole checker silently
+            # produces zero findings for any colon-suffixed space_group
+            # symbol, including the rhombohedral-axes .inp files the check
+            # below exists to catch.
+            if cif_to_str.parse_colon_suffix(symbol)[1] is not None:
+                symops, _header, _msg = cif_to_str.resolve_colon_suffixed_sg_operators(symbol)
+            else:
+                symops, _header, _msg = symmetry_utils.resolve_sg_operators(symbol)
             _SG_OPERATOR_CACHE[symbol] = symops
         return _SG_OPERATOR_CACHE[symbol]
 
@@ -3260,24 +3289,32 @@ def check_symmetry_constraints(clean_text, text_with_values, issues):
         else:
             length_ties = dict(symmetry_utils.LENGTH_TIES_BY_SYSTEM.get(system, {}))
             angle_reqs = dict(symmetry_utils.ANGLE_CONSTRAINTS_BY_SYSTEM.get(system, {}))
+            angle_ties = {}
 
             if system == "hexagonal_or_trigonal":
                 al_form = extract_keyword_form(preamble, "al")
                 be_form = extract_keyword_form(preamble, "be")
                 ga_form = extract_keyword_form(preamble, "ga")
-                explicit_vals = {}
-                for name, form in (("al", al_form), ("be", be_form), ("ga", ga_form)):
-                    if form and form[0] == "value":
-                        explicit_vals[name] = form[2]
-                if len(explicit_vals) == 3:
-                    is_hex_axes = (abs(explicit_vals["al"] - 90) < 0.05
-                                   and abs(explicit_vals["be"] - 90) < 0.05
-                                   and abs(explicit_vals["ga"] - 120) < 0.05)
-                    is_rhomb_axes = (abs(explicit_vals["al"] - explicit_vals["be"]) < 0.05
-                                      and abs(explicit_vals["be"] - explicit_vals["ga"]) < 0.05)
-                    if not is_hex_axes and is_rhomb_axes:
-                        length_ties["c"] = "a"
-                if ga_form is None:
+                # symmetry_utils.is_rhombohedral_axes_cell (shared with
+                # cif_to_str.py/symmetrize_str.py via determine_length_ties/
+                # determine_angle_ties, so all three call sites always agree)
+                # only actually needs 'al' -- deliberately NOT requiring
+                # be/ga to also be explicit literal values, since a
+                # correctly-generated rhombohedral .inp ties be/ga to al via
+                # 'be = Get(al);' equations rather than repeating the value
+                # as a bare literal (e.g. 'al 99.06 / be = Get(al); /
+                # ga = Get(al);' for R_3_c:R) -- checking only al still
+                # catches a rhombohedral cell whose be/ga haven't been tied
+                # yet.
+                al_val = al_form[2] if al_form is not None and al_form[0] == "value" else None
+                be_val = be_form[2] if be_form is not None and be_form[0] == "value" else None
+                ga_val = ga_form[2] if ga_form is not None and ga_form[0] == "value" else None
+                is_rhomb_axes = symmetry_utils.is_rhombohedral_axes_cell((al_val, be_val, ga_val))
+                if is_rhomb_axes:
+                    length_ties["c"] = "a"
+                    angle_reqs = {}
+                    angle_ties = {"be": "al", "ga": "al"}
+                if ga_form is None and not is_rhomb_axes:
                     issues.append(
                         ("warning", line_of(clean_text, content_start),
                          f"space_group {symbol!r} resolves to a hexagonal/trigonal crystal system, "
@@ -3329,6 +3366,37 @@ def check_symmetry_constraints(clean_text, text_with_values, issues):
                          f"'{system}'), which requires '{name}' fixed at {expected} degrees -- "
                          f"verify manually.")
                     )
+
+            for dep, indep in angle_ties.items():
+                form = extract_keyword_form(preamble, dep)
+                if form is None:
+                    continue
+                tie_m = GET_TIE_RE.match(form[1]) if form[0] == "equation" else None
+                # Same exact-bare-tie requirement as the length_ties check
+                # above ('be = Get(al);', no negation/multiplier/offset) --
+                # the rhombohedral-axes setting requires al/be/ga equal, not
+                # a scaled/shifted relationship.
+                ok = (bool(tie_m) and not tie_m.group("neg") and not tie_m.group("mul_pre")
+                      and not tie_m.group("mul_x") and not tie_m.group("mul_j")
+                      and not tie_m.group("off_sign") and tie_m.group("name") == indep)
+                if ok:
+                    continue
+                # Same refinement-status reasoning as the length_ties/site-
+                # coordinate tie checks: a bare independent angle poses no
+                # drift risk unless something can actually move.
+                if form[0] == "value" and form[1] != "@":
+                    indep_form = extract_keyword_form(preamble, indep)
+                    indep_refined = indep_form is not None and indep_form[0] == "value" and indep_form[1] == "@"
+                    if not indep_refined:
+                        continue
+                kind_desc = f"'{form[0]}'" if form[0] == "equation" else f"an independent {form[0]} ('{form[1] + ' ' if form[1] else ''}{form[2]}')" if form[0] == "value" else form[0]
+                issues.append(
+                    ("warning", line_of(clean_text, content_start + form[-1]),
+                     f"'{dep}' is required to equal '{indep}' for space_group {symbol!r}'s "
+                     f"rhombohedral-axes setting (crystal system '{system}'), but is written as "
+                     f"{kind_desc} rather than '{dep} = Get({indep});' -- refinement could pull "
+                     f"them apart, violating the space group's own symmetry.")
+                )
 
         str_scope = resolve_str_scope_values(preamble)
         for name, site_slice, site_pos in find_sites(block_clean):

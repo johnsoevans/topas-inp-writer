@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.17 - 2026-07-27
+- More bugs around rhombohedral r/h space groups found by symmetrize_str.py
+
 ## 1.0.16 - 2026-07-27
 - Fixed a bug that stopped readme.md in subfolders being packaged
 

@@ -104,6 +104,7 @@ import re
 import math
 import argparse
 import subprocess
+import shutil
 from fractions import Fraction
 
 import topas_install
@@ -114,6 +115,8 @@ from symmetry_utils import (
     check_multiplicity,
     determine_fixed_angles,
     determine_length_ties,
+    determine_angle_ties,
+    is_rhombohedral_axes_cell,
     classify_crystal_system,
     ANGLE_CONSTRAINTS_BY_SYSTEM,
     resolve_sg_operators,
@@ -133,8 +136,9 @@ from symmetry_utils import (
 # ---------------------------------------------------------------------------
 # Colon-suffixed space-group symbol resolution (':1'/':2' centrosymmetric
 # origin choice, ':H'/':R' rhombohedral axes choice) -- deliberately kept
-# local to this script rather than in symmetry_utils.py, which is the
-# shared, externally-maintained skill file this workflow doesn't modify.
+# local to this script rather than in symmetry_utils.py, since it's specific
+# to sgcom6.exe/tc.exe's own filename conventions for these suffixes, not
+# general crystallography shared with check_inp_syntax.py's validation side.
 # symmetry_utils.resolve_sg_operators's own .sg-filename prediction has no
 # special handling for these suffixes (it only strips whitespace/underscores
 # and maps '/' -> 'o'), which silently mispredicts the real filename
@@ -154,6 +158,51 @@ from symmetry_utils import (
 #   the suffix with 'r' (axes) or 'qN' (origin), e.g. 'r-3mr.sg',
 #   'p4onbmq2.sg' -- not a naive concatenation of the suffix.
 # ---------------------------------------------------------------------------
+
+def beq_bounds(val):
+    """Explicit min/max attributes for an `@`-flagged beq, wide enough to
+    always contain `val` with margin. TOPAS's own default beq bound is
+    `min Max(-10, Val-10) max Min(20, Val+10)` (Technical Reference Table
+    2-1) -- a HARD CEILING at 20 regardless of the starting value, so a
+    CIF-derived beq above 20 would otherwise be silently clamped down to
+    20.0 the moment the .str loads, before any refinement even runs.
+    Whether a beq this large is physically plausible is a separate question
+    (usually it signals a CIF data-quality issue, not real atomic motion --
+    see references/01-syntax-and-parameters.md's own note on this) -- this
+    function's only job is making sure the pipeline doesn't silently alter
+    the CIF's own stated value out from under itself."""
+    return f"min {min(-50.0, val - 50.0):.6g} max {max(50.0, val + 50.0):.6g}"
+
+
+NONPHYSICAL_BEQ_MAX = 5.0
+
+
+def beq_physicality_warning(label, source_desc, beq):
+    """Flags a beq (or beq-equivalent, e.g. 8*pi^2*U for a U-form ADP) that's
+    negative or implausibly large -- see references/01-syntax-and-parameters.md's
+    own note: typical range is roughly 0.1-1.5 A^2 for simple inorganics, up to
+    a few A^2 for flexible/organic structures; NONPHYSICAL_BEQ_MAX=5 sits
+    generously above that. Diagnostic only (does not change what gets written
+    to the .str) -- surfaced so a batch run's summary can flag which CIFs
+    likely owe a bad refinement to source ADP data quality rather than a
+    pipeline bug, without requiring per-file manual review to find out."""
+    if beq is None:
+        return None
+    if beq < 0:
+        return (
+            f"{label}: {source_desc} = {beq:.4g} -- NEGATIVE, physically impossible for a "
+            f"real thermal displacement (not a conversion bug). Likely a CIF data-quality "
+            f"issue -- verify before trusting any refinement result touching this site."
+        )
+    if beq > NONPHYSICAL_BEQ_MAX:
+        return (
+            f"{label}: {source_desc} = {beq:.4g} -- well outside the typical physical range "
+            f"(~0.1-1.5 A^2, up to a few for flexible/organic structures). Likely a CIF "
+            f"data-quality issue, not a conversion bug -- verify before trusting any "
+            f"refinement result touching this site."
+        )
+    return None
+
 
 def parse_colon_suffix(symbol):
     """Split a trailing CIF colon-suffix off `symbol`. Returns
@@ -229,6 +278,72 @@ def resolve_colon_suffixed_sg_operators(symbol):
     return symops, header, f"Resolved via TOPAS's own space-group database: {sg_path}"
 
 
+_SG_CACHE_WARMED = set()
+
+
+def tc_exe_runtime_filename_for_colon_symbol(base, kind, val):
+    """Predicts the .sg filename tc.exe itself looks for at RUNTIME --
+    identical to sg_filename_for_colon_symbol except for origin choice 1:
+    tc.exe wants '<symbol>1.sg', which sgcom6.exe itself never writes since
+    it has no ':1' concept at all (its own bare-symbol output has no digit,
+    e.g. 'p4onbm.sg') -- confirmed by directly reading tc.exe's own "Cannot
+    open file ..." error message."""
+    s = re.sub(r"[\s_]", "", base).lower().replace("/", "o")
+    if kind == "axes":
+        return s + ".sg" if val == "H" else s + "r.sg"
+    return s + "1.sg" if val == "1" else s + "q" + val + ".sg"
+
+
+def warm_sg_cache(sg_symbol):
+    """
+    Ensures tc.exe can resolve `space_group "sg_symbol"` at RUNTIME without
+    itself needing to shell out to sgcom6.exe (tc.exe can't find it on
+    PATH). A no-op for a bare (non-colon-suffixed) symbol -- tc.exe resolves
+    those natively, no special handling needed.
+
+    Delegates the actual generation step to resolve_colon_suffixed_sg_operators
+    above (already used for the origin-choice/axes-choice comparison itself,
+    so this rarely does any new work -- see its own docstring): it already
+    invokes sgcom6.exe if the .sg file is missing, under the filename
+    sgcom6.exe itself writes -- correct as-is for axes choice and origin
+    choice 2+, which is everything this script's own detection logic above
+    ever actually emits. The one thing that path doesn't cover is origin
+    choice 1 specifically, which needs a SECOND filename (a plain copy)
+    because tc.exe's own runtime lookup for that one case doesn't match
+    what sgcom6.exe wrote -- handled here for completeness, even though
+    this script's own detection never emits a literal ':1' suffix itself
+    (only a CIF whose own H-M symbol already states ':1' explicitly could
+    reach this branch).
+    """
+    if sg_symbol in _SG_CACHE_WARMED:
+        return None
+    _SG_CACHE_WARMED.add(sg_symbol)
+
+    base, kind, val = parse_colon_suffix(sg_symbol)
+    if kind is None:
+        return None
+
+    symops, header, message = resolve_colon_suffixed_sg_operators(sg_symbol)
+    if not symops:
+        return message
+
+    topas_dir, found = topas_install.get_topas_dir()
+    if not found:
+        return None  # resolve_colon_suffixed_sg_operators already succeeded, so TOPAS_DIR is set
+    sg_dir = os.path.join(topas_dir, "sg")
+    gen_filename = sg_filename_for_colon_symbol(base, kind, val)
+    runtime_filename = tc_exe_runtime_filename_for_colon_symbol(base, kind, val)
+    if runtime_filename != gen_filename:
+        gen_path = os.path.join(sg_dir, gen_filename)
+        runtime_path = os.path.join(sg_dir, runtime_filename)
+        if os.path.isfile(gen_path) and not os.path.isfile(runtime_path):
+            try:
+                shutil.copyfile(gen_path, runtime_path)
+            except OSError:
+                pass
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Origin-choice detection (ITA groups with two listed origins) -- deliberately
 # kept local to this script for the same reason as the colon-suffix handling
@@ -257,8 +372,12 @@ def resolve_colon_suffixed_sg_operators(symbol):
 ORIGIN_CHOICE_AMBIGUOUS_SG_NUMBERS = {
     48, 50, 59, 68, 70, 85, 86, 88,
     125, 126, 129, 130, 133, 134, 137, 138, 141, 142,
-    201, 222, 224, 227,
+    201, 203, 222, 224, 227, 228,
 }
+# The official ITA Volume A list of the 24 origin-choice-ambiguous space
+# groups (confirmed directly against 203_WUXSUF.cif -- IT#203, F d -3 --
+# whose own 96 listed operators match origin choice 2, not TOPAS's
+# bare-symbol default of origin choice 1).
 
 
 def _canonical_operator(rows, translation, ndigits=6):
@@ -603,6 +722,73 @@ def convert(path, tol=0.0015, refine=False):
     if sg is None:
         sg = find_scalar_tag(lines, "_space_group")  # nonstandard but seen in the wild
 
+    if sg and ":" in sg:
+        # A CIF-supplied colon suffix can carry stray whitespace around the
+        # colon itself (confirmed: COD's 166_9008575.cif has
+        # _symmetry_space_group_name_H-M = 'R -3 m :R', with a space BEFORE
+        # the colon). Left as-is, the later `sg.replace(' ', '_')` that
+        # builds the TOPAS symbol turns that space into a stray underscore
+        # ('R_-3_m_:R'), which sgcom6.exe can't resolve. A colon never
+        # otherwise appears inside a real H-M symbol, so collapsing all
+        # whitespace immediately around any colon is always safe.
+        sg = re.sub(r"\s*:\s*", ":", sg)
+
+    if sg:
+        # Some ICSD CIFs encode the rhombohedral/hexagonal axes choice as a
+        # trailing bare token in the H-M symbol itself instead of TOPAS's
+        # colon-suffix convention -- confirmed directly: 160_73628.cif's own
+        # _symmetry_space_group_name_H-M is 'R 3 m R' (trailing 'R'),
+        # 148_1857_O12_Pr7.cif's is 'R -3 R'. No real H-M symbol otherwise
+        # ends in a bare, space-separated 'R'/'H' (direction descriptors are
+        # digits, '-3'/'-4'/'-6', 'm', 'c', 'n', 'd', '/', not lattice-type
+        # letters, which only ever appear as the FIRST token). Left
+        # unnormalized, this collided with the axes-choice check below (both
+        # conditions are independently true -- no colon suffix present, AND
+        # the cell angles are rhombohedral), producing a malformed doubled
+        # symbol like 'R_-3_R:R' that sgcom6.exe can't resolve at all
+        # ("Cannot open file r-3rr.sg") -- confirmed on 12 real ICSD CIFs in
+        # a full-corpus run. Normalize to the colon form up front so that
+        # check sees an already-explicit suffix and leaves it alone.
+        sg_tokens = sg.split()
+        if len(sg_tokens) > 1 and sg_tokens[-1].upper() in ("R", "H") and parse_colon_suffix(sg)[1] is None:
+            sg = " ".join(sg_tokens[:-1]) + ":" + sg_tokens[-1].upper()
+
+    stray_annotation_warning = None
+    if sg and parse_colon_suffix(sg)[1] is None:
+        # ICSD in particular commonly appends a single bare uppercase letter
+        # to _space_group_name_H-M_alt beyond just 'R'/'H' -- confirmed on
+        # 199 real ICSD CIFs (e.g. 'F d -3 m Z', 'F d -3 m S', 'P 4/n m m Z')
+        # -- almost certainly ICSD's own internal origin/setting-choice
+        # annotation, but its letter-to-choice mapping isn't reliably known
+        # here and guessing it would risk silently writing the WRONG origin
+        # choice with false confidence. No real ITA H-M symbol otherwise
+        # ends in a bare uppercase letter (direction-descriptor tokens are
+        # digits, '-3'/'-4'/'-6', or lowercase glide/mirror letters
+        # 'm'/'c'/'n'/'a'/'b'/'d'/'e'; uppercase lattice letters like 'F'
+        # only ever appear as the FIRST token). Left in place, this letter
+        # gets baked verbatim into 'space_group "..."' (e.g.
+        # 'F_d_-3_m_Z') -- confirmed directly to make sgcom6.exe silently
+        # resolve a DIFFERENT (and for 227_134710_Gd2_O7_Ti2.cif, wrong)
+        # origin than the CIF's own operators actually correspond to,
+        # producing a real refinement's Rwp landing at 48.6% instead of
+        # ~0% even though cell/coordinates start at the exact true value.
+        # Stripping it here instead lets the origin-choice check below
+        # (which compares the CIF's own real operators against both of
+        # TOPAS's database resolutions -- no guessing needed) determine the
+        # correct setting from hard evidence.
+        sg_tokens = sg.split()
+        if len(sg_tokens) > 1 and len(sg_tokens[-1]) == 1 and sg_tokens[-1].isalpha() and sg_tokens[-1].isupper():
+            stray_annotation_warning = (
+                f"H-M symbol {sg!r} has an unrecognized trailing single-letter annotation "
+                f"({sg_tokens[-1]!r}) -- not TOPAS's ':R'/':H' axes-choice convention, and its "
+                f"meaning isn't reliably known here (commonly seen on ICSD CIFs, likely an "
+                f"internal origin/setting-choice marker). Stripped before use so the space_group "
+                f"symbol itself resolves cleanly; if this space group has ambiguous origin "
+                f"choices, the origin-choice check below independently verifies/corrects the "
+                f"setting from the CIF's own real operators rather than relying on this letter."
+            )
+            sg = " ".join(sg_tokens[:-1])
+
     nonstandard_symbol_warning = None
     if sg and "(" in sg:
         # A parenthesized H-M symbol (e.g. 'C m m 2 (2*c,a,b)') is a
@@ -694,20 +880,23 @@ def convert(path, tol=0.0015, refine=False):
                 f"for any site whose stabilizer is entirely made of the originally-listed operators."
             )
 
-    # Origin-choice check -- only ever engages when ALL of these hold, so it's
-    # a no-op for the overwhelming majority of CIFs (any single-origin space
-    # group, any CIF whose symbol already carries a colon suffix, and any CIF
-    # without its own operator loop to check against in the first place):
+    # Origin-choice / axes-choice checks -- only ever engage when ALL of
+    # their own conditions hold, so both are a no-op for the overwhelming
+    # majority of CIFs (any unambiguous space group, any CIF whose symbol
+    # already carries a colon suffix, and any CIF without its own operator
+    # loop to check against in the first place). it_number is shared by both
+    # checks below.
+    it_number_raw = find_scalar_tag(lines, "_symmetry_Int_Tables_number")
+    if it_number_raw is None:
+        it_number_raw = find_scalar_tag(lines, "_space_group_IT_number")  # ICSD alt tag name
+    try:
+        it_number = int(strip_cif_uncertainty(it_number_raw)) if it_number_raw else None
+    except ValueError:
+        it_number = None
+
     sg_origin_suffix = ""
     origin_choice_warning = None
     if symops_from_cif and sg and parse_colon_suffix(sg)[1] is None:
-        it_number_raw = find_scalar_tag(lines, "_symmetry_Int_Tables_number")
-        if it_number_raw is None:
-            it_number_raw = find_scalar_tag(lines, "_space_group_IT_number")  # ICSD alt tag name
-        try:
-            it_number = int(strip_cif_uncertainty(it_number_raw)) if it_number_raw else None
-        except ValueError:
-            it_number = None
         if it_number in ORIGIN_CHOICE_AMBIGUOUS_SG_NUMBERS:
             sg_bare_topas = sg.replace(" ", "_")
             symops_o1, _, _ = resolve_sg_operators(sg_bare_topas)
@@ -738,6 +927,42 @@ def convert(path, tol=0.0015, refine=False):
                     f"VERIFY THE SETTING MANUALLY against the CIF's own operators."
                 )
 
+    # Axes-choice check (the 7 rhombohedral-lattice space groups only): a CIF
+    # using RHOMBOHEDRAL axes (al=be=ga mutually equal, not the hexagonal-
+    # axes 90/90/120 pattern) but stating its symbol bare (no ':R' suffix)
+    # causes tc.exe's own runtime resolution to default to the HEXAGONAL-axes
+    # description (18 general-position operators) instead -- a real,
+    # confirmed bug (161_BRSISN10.cif, R3c/IT#161, al=be=ga=99.06): num_posns
+    # for the origin-adjacent Sn1 site (correctly 2 under the CIF's own 6
+    # rhombohedral operators, per find_stabilizer/check_multiplicity above)
+    # was silently rewritten to 18 by tc.exe at runtime, even though the
+    # constraints derived from the CIF's own operators are themselves
+    # correct -- the same "silent runtime rewrite" failure mode as the
+    # origin-choice case above, just for axes choice instead.
+    RHOMBOHEDRAL_SG_NUMBERS = {146, 148, 155, 160, 161, 166, 167}
+    sg_axes_suffix = ""
+    axes_choice_warning = None
+    if (symops_from_cif and sg and parse_colon_suffix(sg)[1] is None
+            and it_number in RHOMBOHEDRAL_SG_NUMBERS
+            and al is not None and be is not None and ga is not None):
+        if is_rhombohedral_axes_cell((al, be, ga)):
+            sg_axes_suffix = ":R"
+            axes_choice_warning = (
+                f"Space group {sg!r} (IT #{it_number}) is one of the 7 rhombohedral-lattice "
+                f"space groups, describable in either a hexagonal-axes (18 general-position "
+                f"operators) or rhombohedral-axes (6 operators) setting -- this CIF states "
+                f"neither via a colon suffix, but its cell angles ({al:.2f}, {be:.2f}, "
+                f"{ga:.2f}) are the rhombohedral-axes pattern (mutually equal, not 90/90/120), "
+                f"matching its own {len(symops)} listed operators. Writing space_group as "
+                f"{sg.replace(' ', '_') + sg_axes_suffix!r} instead of the CIF's bare form -- "
+                f"using the bare symbol here would make TOPAS's runtime symmetry generation "
+                f"default to the hexagonal-axes description instead, silently disagreeing with "
+                f"the CIF's own rhombohedral-axes coordinates/cell (confirmed directly: "
+                f"num_posns for the Sn site silently rewritten from 2 to 18 at tc.exe runtime "
+                f"on 161_BRSISN10.cif) even though the constraints above, derived from the "
+                f"CIF's own operators, are themselves correct."
+            )
+
     sg_fallback_warning = None
     if not symops and sg:
         if parse_colon_suffix(sg)[1] is not None:
@@ -764,6 +989,28 @@ def convert(path, tol=0.0015, refine=False):
     aniso_tags, aniso_rows = parse_cif_loop(lines, ["_atom_site_aniso_label"] + list(ADP_CIF_TAGS.values()))
     aniso_by_label = {row["_atom_site_aniso_label"]: row for row in aniso_rows} if aniso_rows else {}
 
+    # Anisotropic-beta (reduced-form, beta_ij = 2*pi^2 * a_i* * a_j* * U_ij) ADPs
+    # -- this script has NO conversion for this format at all (only
+    # _atom_site_aniso_U_* and isotropic B_iso_or_equiv/U_iso_or_equiv are
+    # handled), so a CIF using it gets its ADPs silently dropped (falls back
+    # to whatever isotropic tag is also present, or nothing at all) unless
+    # flagged here. Confirmed present on ~120 real ICSD CIFs in one corpus
+    # (e.g. 12_20818_Ca1_Gd4_O7.cif) -- a real, distinct gap, not yet fixed.
+    _beta_tags, _beta_rows = parse_cif_loop(lines, ["_atom_site_aniso_label", "_atom_site_aniso_beta_11"])
+    beta_adp_labels = {row["_atom_site_aniso_label"] for row in _beta_rows} if _beta_rows else set()
+    beta_adp_warning = None
+    if beta_adp_labels:
+        shown = sorted(beta_adp_labels)[:8]
+        beta_adp_warning = (
+            f"{len(beta_adp_labels)} site(s) ({', '.join(shown)}"
+            f"{', ...' if len(beta_adp_labels) > 8 else ''}) provide anisotropic displacement "
+            f"parameters as _atom_site_aniso_beta_* (reduced-form beta coefficients) -- this "
+            f"script does NOT support that format. ADPs for these sites are silently dropped "
+            f"(falling back to an isotropic B_iso_or_equiv/U_iso_or_equiv value if also present, "
+            f"otherwise left unset) -- treat any refinement result touching these sites as "
+            f"unreliable until beta-form conversion is implemented."
+        )
+
     fixed_angles = determine_fixed_angles(symops, (al, be, ga)) if symops else set()
     length_ties = determine_length_ties(symops, (a, b, c), (al, be, ga)) if symops else {}
     # Angles/lengths the crystal system locks to a SPECIFIC value (not
@@ -777,6 +1024,23 @@ def convert(path, tol=0.0015, refine=False):
     # anisotropic ADPs below; harmless for the iters-0 simulate-only batch
     # (a refine flag with no refinement cycles is a no-op there).
     angle_constraints = ANGLE_CONSTRAINTS_BY_SYSTEM.get(classify_crystal_system(symops), {}) if symops else {}
+    # Rhombohedral-axes disambiguation (symmetry_utils.determine_angle_ties):
+    # classify_crystal_system only reads the OPERATORS' rotation parts, so a
+    # single 3-fold axis reads as "hexagonal_or_trigonal" regardless of
+    # which of the two possible axis settings the CIF's actual cell values
+    # represent -- but ANGLE_CONSTRAINTS_BY_SYSTEM's entry for that system
+    # (al=be=90, ga=120) is only true for the standard HEXAGONAL-axes
+    # setting. A RHOMBOHEDRAL-axes cell has al=be=ga mutually equal but NOT
+    # fixed to any particular value by symmetry -- confirmed as a real bug
+    # on 161_BRSISN10.cif (R3c, rhombohedral axes, al=be=ga=99.06): wrongly
+    # writing all three as bare/never-refinable "forced" values, when only
+    # their mutual equality is actually required. Ties be/ga to al the same
+    # way length_ties above ties b/c to a (determine_length_ties, called
+    # earlier, already applies the identical rhombohedral-axes criterion to
+    # the lengths).
+    angle_ties = determine_angle_ties(symops, (al, be, ga)) if symops else {}
+    if angle_ties:
+        angle_constraints = {}
 
     flag = "@ " if refine else ""
 
@@ -789,18 +1053,29 @@ def convert(path, tol=0.0015, refine=False):
         for name, val in (("al", al), ("be", be), ("ga", ga)):
             if name in fixed_angles:
                 continue  # forced to 90, relies on TOPAS's own default -- omitted entirely
-            if name in angle_constraints:
+            if name in angle_ties:
+                out_lines.append(f"   {name} = Get({angle_ties[name]});")
+            elif name in angle_constraints:
                 out_lines.append(f"   {name} {val}")  # forced (e.g. hexagonal ga=120) but not omittable -- never refined
             else:
                 out_lines.append(f"   {name} {flag}{val}")
+    sg_cache_warning = None
     if sg:
-        sg_topas = sg.replace(" ", "_") + sg_origin_suffix
+        sg_topas = sg.replace(" ", "_") + sg_origin_suffix + sg_axes_suffix
         out_lines.append(f'   space_group "{sg_topas}"')
+        sg_cache_warning = warm_sg_cache(sg_topas)
     out_lines.append("")
 
     warnings = []
+    if sg_cache_warning:
+        warnings.append(
+            f"space group cache: {sg_cache_warning} -- 'space_group \"{sg_topas}\"' above will "
+            f"fail at tc.exe runtime ('Cannot open file ...sg') until this is resolved."
+        )
     if nonstandard_symbol_warning:
         warnings.append(nonstandard_symbol_warning)
+    if stray_annotation_warning:
+        warnings.append(stray_annotation_warning)
     if truncated_operator_warning:
         warnings.append(truncated_operator_warning)
     if sg_fallback_warning:
@@ -809,6 +1084,10 @@ def convert(path, tol=0.0015, refine=False):
         warnings.append(centering_warning)
     if origin_choice_warning:
         warnings.append(origin_choice_warning)
+    if axes_choice_warning:
+        warnings.append(axes_choice_warning)
+    if beta_adp_warning:
+        warnings.append(beta_adp_warning)
 
     used_site_names = set()
     site_orbits = []  # [(label, species, occ, [orbit_points])] -- cross-site duplicate-atom detection
@@ -859,6 +1138,9 @@ def convert(path, tol=0.0015, refine=False):
                 beq = None
         else:
             beq = None
+        beq_warning = beq_physicality_warning(label, "isotropic beq (or U_iso-derived beq)", beq)
+        if beq_warning:
+            warnings.append(beq_warning)
         cif_mult = row.get("_atom_site_symmetry_multiplicity")
         cif_mult = int(cif_mult) if cif_mult and cif_mult.isdigit() else None
 
@@ -871,12 +1153,20 @@ def convert(path, tol=0.0015, refine=False):
             )
             if label in aniso_by_label:
                 adp_row = aniso_by_label[label]
+                for name in ("u11", "u22", "u33"):
+                    cif_val = parse_cif_value(adp_row.get(ADP_CIF_TAGS[name], "0")) or 0.0
+                    aniso_warning = beq_physicality_warning(
+                        label, f"{name}={cif_val:.4g} (beq-equivalent = 8*pi^2*{name})",
+                        8 * math.pi ** 2 * cif_val,
+                    )
+                    if aniso_warning:
+                        warnings.append(aniso_warning)
                 adp_part = "  " + "  ".join(
                     f"{name} @ {(parse_cif_value(adp_row.get(ADP_CIF_TAGS[name], '0')) or 0.0):.10g}"
                     for name in ADP_NAMES
                 )
             else:
-                adp_part = f"  beq @ {beq}" if beq is not None else ""
+                adp_part = f"  beq @ {beq} {beq_bounds(beq)}" if beq is not None else ""
             out_lines.append(
                 f"   site {site_name}  num_posns 0  x @ {x}  y @ {y}  z @ {z}  occ {type_symbol} {occ}{adp_part}"
             )
@@ -1059,6 +1349,13 @@ def convert(path, tol=0.0015, refine=False):
             adp_parts = []
             for name in ADP_NAMES:
                 cif_val = parse_cif_value(adp_row.get(ADP_CIF_TAGS[name], "0")) or 0.0
+                if name in ("u11", "u22", "u33"):
+                    aniso_warning = beq_physicality_warning(
+                        label, f"{name}={cif_val:.4g} (beq-equivalent = 8*pi^2*{name})",
+                        8 * math.pi ** 2 * cif_val,
+                    )
+                    if aniso_warning:
+                        warnings.append(aniso_warning)
                 kind = adp_constraint[name]
                 if kind[0] == "free":
                     adp_parts.append(f"{name} @ {cif_val:.10g}")
@@ -1068,7 +1365,7 @@ def convert(path, tol=0.0015, refine=False):
                     adp_parts.append(f"{name} = {format_adp_tie(kind[1])};")
             adp_part = "  " + "  ".join(adp_parts)
         else:
-            adp_part = f"  beq @ {beq}" if beq is not None else ""
+            adp_part = f"  beq @ {beq} {beq_bounds(beq)}" if beq is not None else ""
         out_lines.append(f"   site {site_name}  num_posns {computed_mult}  {'  '.join(coord_parts)}  occ {type_symbol} {occ:.6g}{adp_part}")
 
     return "\n".join(out_lines), warnings

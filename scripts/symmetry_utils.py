@@ -17,7 +17,10 @@ Covers:
     (classify_adps -- u11/u22/u33/u12/u13/u23, via R U R^T = U rather than
     the affine position transformation)
   - Per-lattice-system angle/length constraint derivation (which of
-    al/be/ga are forced to 90 or 120, which of b/c are tied to a)
+    al/be/ga are forced to 90 or 120, which of b/c are tied to a, and --
+    for the rhombohedral-axes setting of the 7 rhombohedral space groups --
+    which of b/c are tied to a AND which of be/ga are tied to al; see
+    is_rhombohedral_axes_cell/determine_length_ties/determine_angle_ties)
 
 See cif_to_str.py's own module docstring for the crystallographic reasoning
 behind each piece (equation derivation, rhombohedral-axes disambiguation,
@@ -901,19 +904,17 @@ def determine_length_ties(symops, cell_lengths, cell_angles=None, tol_rel=0.001,
     b=Get(a); c=Get(a); be=Get(al); ga=Get(al);). Rotation matrices alone
     can't distinguish the two settings; the actual angle values can -- if
     al/be/ga are mutually equal but not close to the hexagonal (90, 90, 120)
-    pattern, this is the rhombohedral-axes case, and c is tied to a as well
-    (the angle values themselves are left explicit and independent here,
-    not tied to each other -- only lengths are in scope in this function).
+    pattern, this is the rhombohedral-axes case, and c is tied to a as well.
+    The angle values themselves are tied to each other too -- see
+    determine_angle_ties, which uses the same disambiguation and should
+    always be called alongside this function for a 'hexagonal_or_trigonal'
+    system so a rhombohedral-axes cell's angles don't get left independent
+    while only its lengths are tied.
     """
     system = classify_crystal_system(symops)
     ties = dict(LENGTH_TIES_BY_SYSTEM.get(system, {}))
-    if system == "hexagonal_or_trigonal" and cell_angles is not None:
-        al, be, ga = cell_angles
-        if al is not None and be is not None and ga is not None:
-            is_hex_axes = abs(al - 90) < tol_deg and abs(be - 90) < tol_deg and abs(ga - 120) < tol_deg
-            is_rhombohedral_axes = abs(al - be) < tol_deg and abs(be - ga) < tol_deg
-            if not is_hex_axes and is_rhombohedral_axes:
-                ties = {"b": "a", "c": "a"}
+    if system == "hexagonal_or_trigonal" and is_rhombohedral_axes_cell(cell_angles, tol_deg):
+        ties = {"b": "a", "c": "a"}
     a, b, c = cell_lengths
     values = {"a": a, "b": b, "c": c}
     confirmed = {}
@@ -922,6 +923,65 @@ def determine_length_ties(symops, cell_lengths, cell_angles=None, tol_rel=0.001,
         if v1 is not None and v2 is not None and abs(v1 - v2) / v2 < tol_rel:
             confirmed[dependent] = independent
     return confirmed
+
+
+def is_rhombohedral_axes_cell(cell_angles, tol_deg=0.05):
+    """
+    True if `cell_angles` (al, be, ga) represents the rhombohedral-axes
+    setting (a=b=c, al=be=ga, generally != 90) rather than the standard
+    hexagonal-axes setting (al=be=90, ga=120), for one of the 7 rhombohedral
+    space groups whose rotation-only classification is ambiguously
+    'hexagonal_or_trigonal' either way (see determine_length_ties/
+    determine_angle_ties's own docstrings for the full crystallographic
+    background). Shared by both of those functions so the two ties
+    (lengths, angles) are always derived from the identical criterion.
+
+    `be`/`ga` may be None (unknown, e.g. already written as a Get() equation
+    rather than a literal in an existing .inp) -- only `al` actually needs a
+    concrete value: a genuine hexagonal cell always has al fixed at exactly
+    90, so any al meaningfully different from 90 is on its own sufficient
+    evidence of the rhombohedral-axes case. When be/ga ARE available (e.g.
+    fresh CIF data, all three always literal), they're cross-checked too, as
+    extra confirmation that al/be/ga are mutually equal rather than al alone
+    having drifted from 90 for some unrelated reason.
+    """
+    al, be, ga = cell_angles
+    if al is None:
+        return False
+    is_hex_axes_al = abs(al - 90) < tol_deg
+    if be is not None and ga is not None:
+        is_hex_axes = is_hex_axes_al and abs(be - 90) < tol_deg and abs(ga - 120) < tol_deg
+        is_rhombohedral_axes = abs(al - be) < tol_deg and abs(be - ga) < tol_deg
+        return not is_hex_axes and is_rhombohedral_axes
+    return not is_hex_axes_al
+
+
+def determine_angle_ties(symops, cell_angles, tol_deg=0.05):
+    """
+    Determine which of be/ga should be expressed as `= Get(al);` rather than
+    an independent value, for the rhombohedral-axes setting of the 7
+    rhombohedral space groups (see determine_length_ties's own docstring for
+    the full disambiguation background -- this function is its angle
+    counterpart, using the identical is_rhombohedral_axes_cell criterion so
+    the two never drift apart). Returns {'be': 'al', 'ga': 'al'} for a
+    confirmed rhombohedral-axes cell, {} otherwise (including every other
+    crystal system, where TOPAS's own ANGLE_CONSTRAINTS_BY_SYSTEM/90-degree
+    default already covers the angles and no inter-angle tie is needed).
+
+    Unlike determine_length_ties, this does NOT independently re-verify the
+    tie against already-stated be/ga values before confirming it -- be/ga
+    are frequently absent or already written as Get() equations (not
+    literals) in the exact partially-fixed .inp text this is meant to
+    validate, so requiring a literal match here would defeat the purpose.
+    Callers that already have concrete literal be/ga values (e.g. freshly
+    parsed CIF data) and want that extra guard should compare them
+    separately, the same way callers of determine_length_ties get an
+    automatic guard for free.
+    """
+    system = classify_crystal_system(symops)
+    if system != "hexagonal_or_trigonal" or not is_rhombohedral_axes_cell(cell_angles, tol_deg):
+        return {}
+    return {"be": "al", "ga": "al"}
 
 
 # ---------------------------------------------------------------------------

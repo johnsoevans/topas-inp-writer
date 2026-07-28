@@ -29,14 +29,17 @@ involved in generating any of it, and none is needed to reuse it.
 
 This is a sibling to check_inp_syntax.py's check_symmetry_constraints
 (same file, same function) -- it reuses the EXACT same underlying engine
-(symmetry_utils.classify_coordinates/classify_adps/classify_crystal_system,
+(symmetry_utils.classify_coordinates/classify_adps/classify_crystal_system/
+is_rhombohedral_axes_cell/determine_length_ties/determine_angle_ties,
 check_inp_syntax.resolve_site_coordinates/resolve_str_scope_values/
-extract_keyword_form/GET_TIE_RE) for CLASSIFYING what symmetry allows. The
-two tools differ only in what they do with that classification: that
-function flags a real drift RISK (something currently refined that could
-numerically diverge from its required constraint) as an English warning
-string; this tool always normalizes to the canonical form outright and
-emits a structured verdict (+ a ready-to-apply text replacement) instead.
+extract_keyword_form/GET_TIE_RE, and cif_to_str.resolve_colon_suffixed_
+sg_operators for colon-suffixed space_group symbols) for CLASSIFYING what
+symmetry allows. The two tools differ only in what they do with that
+classification: that function flags a real drift RISK (something currently
+refined that could numerically diverge from its required constraint) as an
+English warning string; this tool always normalizes to the canonical form
+outright and emits a structured verdict (+ a ready-to-apply text
+replacement) instead.
 
 Usage:
     python3 symmetrize_str.py file.inp --lines 25-26
@@ -91,6 +94,7 @@ from fractions import Fraction
 
 import check_inp_syntax as cis
 import symmetry_utils
+import cif_to_str
 
 
 def line_offsets(text):
@@ -319,7 +323,18 @@ def free_param_sigil_fix(scope, keyword, site, form, refineall, text, offsets, c
         return None  # already has a name and the mode's own sigil -- nothing to do
 
     new_name = name if name is not None else auto_name_for(scope, keyword, site)
-    val_text = f"{value:g}"
+    # {value:g} (Python's default 6-significant-figure format) silently
+    # truncates any starting value with more precision -- confirmed to send
+    # a heavily-parameterized P1 refinement (161_180096_Ce2_Fe1_O2_Se2.cif,
+    # 288 independent free parameters, no symmetry ties at all) from a
+    # baseline Rwp of 3.6e-07% to 0.12%, and a second P1 file to a non-
+    # converging timeout, purely from this rounding perturbing the starting
+    # point enough to land in a different local minimum on re-refinement --
+    # confirmed directly: restoring full precision (no other change) put
+    # the first file's Rwp back to 3.6e-07%, matching baseline almost
+    # exactly. :.10g matches the precision cif_to_str.py itself already
+    # uses for ADP values elsewhere.
+    val_text = f"{value:.10g}"
     new_text = f"{keyword} {wanted_sigil}{new_name} {val_text}" if wanted_sigil else f"{keyword} {new_name} {val_text}"
 
     abs_pos = content_start + site_pos + form[-1]
@@ -620,21 +635,34 @@ def evaluate_cell(text, offsets, content_start, preamble, symbol, system, refine
 
     length_ties = dict(symmetry_utils.LENGTH_TIES_BY_SYSTEM.get(system, {}))
     angle_reqs = dict(symmetry_utils.ANGLE_CONSTRAINTS_BY_SYSTEM.get(system, {}))
+    angle_ties = {}
 
     if system == "hexagonal_or_trigonal":
         al_form = cis.extract_keyword_form(preamble, "al")
         be_form = cis.extract_keyword_form(preamble, "be")
         ga_form = cis.extract_keyword_form(preamble, "ga")
-        explicit = {}
-        for nm, f in (("al", al_form), ("be", be_form), ("ga", ga_form)):
-            if f and f[0] == "value":
-                explicit[nm] = f[2]
-        if len(explicit) == 3:
-            is_hex = abs(explicit["al"] - 90) < 0.05 and abs(explicit["be"] - 90) < 0.05 and abs(explicit["ga"] - 120) < 0.05
-            is_rhomb = abs(explicit["al"] - explicit["be"]) < 0.05 and abs(explicit["be"] - explicit["ga"]) < 0.05
-            if not is_hex and is_rhomb:
-                length_ties["c"] = "a"
-        if ga_form is None:
+        # classify_crystal_system can't distinguish the hexagonal-axes setting
+        # (al=90, be=90, ga=120) from the rhombohedral-axes setting of the
+        # SAME 7 space groups (al=be=ga, generally not 90/90/120) -- both
+        # share the same rotation-matrix-derived classification.
+        # symmetry_utils.is_rhombohedral_axes_cell (shared with
+        # determine_length_ties/determine_angle_ties, so all three call
+        # sites always agree) only actually needs 'al' -- deliberately NOT
+        # requiring be/ga to also be explicit literal values, since a
+        # correctly-generated rhombohedral .inp ties be/ga to al via Get()
+        # equations rather than repeating the value as a bare literal (e.g.
+        # 'al 99.06 / be = Get(al); / ga = Get(al);' for R_3_c:R) -- checking
+        # only al still catches a rhombohedral cell whose be/ga haven't been
+        # tied yet.
+        al_val = al_form[2] if al_form is not None and al_form[0] == "value" else None
+        be_val = be_form[2] if be_form is not None and be_form[0] == "value" else None
+        ga_val = ga_form[2] if ga_form is not None and ga_form[0] == "value" else None
+        is_rhomb = symmetry_utils.is_rhombohedral_axes_cell((al_val, be_val, ga_val))
+        if is_rhomb:
+            length_ties["c"] = "a"
+            angle_reqs = {}
+            angle_ties = {"be": "al", "ga": "al"}
+        if ga_form is None and not is_rhomb:
             items.append(make_item(
                 "cell", "ga", None, "skip",
                 f"space_group {symbol!r} resolves to a hexagonal/trigonal crystal system, which "
@@ -695,7 +723,42 @@ def evaluate_cell(text, offsets, content_start, preamble, symbol, system, refine
         rline, sc, ec, old_text = resolved
         items.append(make_item("cell", dep, rline, "fix", reason, old_text, required_new_text, sc, ec))
 
+    for dep, indep in angle_ties.items():
+        form = cis.extract_keyword_form(preamble, dep)
+        if form is None:
+            items.append(make_item(
+                "cell", dep, None, "skip",
+                f"'{dep}' is required to equal '{indep}' for space_group {symbol!r}'s rhombohedral-"
+                f"axes setting, but is absent from this str block. This tool doesn't insert new "
+                f"lines; add '{dep} = Get({indep});' manually."))
+            continue
+        tie_m = cis.GET_TIE_RE.match(form[1]) if form[0] == "equation" else None
+        ok = (bool(tie_m) and not tie_m.group("neg") and not tie_m.group("mul_pre")
+              and not tie_m.group("mul_x") and not tie_m.group("mul_j")
+              and not tie_m.group("off_sign") and tie_m.group("name") == indep)
+        line_no = cis.line_of(text, content_start + form[-1])
+        if ok:
+            items.append(make_item("cell", dep, line_no, "ok", f"already correctly tied ('{dep} = Get({indep});')."))
+            continue
+        required_new_text = f"{dep} = Get({indep});"
+        if form[0] == "value":
+            reason = (f"'{dep}' is required to equal '{indep}' for space_group {symbol!r}'s "
+                      f"rhombohedral-axes setting, but is written as an independent value -- a tied "
+                      f"cell angle should always be expressed as its Get() equation.")
+        else:
+            reason = (f"'{dep}' is required to equal '{indep}' for space_group {symbol!r}'s "
+                      f"rhombohedral-axes setting, but is written as {form[0]} rather than "
+                      f"'{dep} = Get({indep});'.")
+        resolved = resolve_and_span(text, offsets, content_start + form[-1], dep)
+        if resolved is None:
+            items.append(make_item("cell", dep, line_no, "skip", reason + " (couldn't locate a single-line replaceable span)"))
+            continue
+        rline, sc, ec, old_text = resolved
+        items.append(make_item("cell", dep, rline, "fix", reason, old_text, required_new_text, sc, ec))
+
     for name in ("al", "be", "ga"):
+        if name in angle_ties:
+            continue
         expected = angle_reqs.get(name)
         form = cis.extract_keyword_form(preamble, name)
         if expected is None:
@@ -802,7 +865,24 @@ def analyze_selection(path, line_start, line_end, refineall=False):
     symbol = sg_m.group(1).strip('"')
 
     if symbol not in _SG_OPERATOR_CACHE:
-        symops, _header, msg = symmetry_utils.resolve_sg_operators(symbol)
+        # symmetry_utils.resolve_sg_operators's own filename prediction has
+        # no origin-choice handling at all (':2'+ suffix) and only a partial
+        # rhombohedral-axes-suffix strip (':R'/':H', via
+        # strip_rhombohedral_axes_suffix -- silently ignores the suffix
+        # rather than resolving the axes it actually names). A colon-
+        # suffixed symbol is delegated to cif_to_str.resolve_colon_suffixed_
+        # sg_operators instead, which knows sgcom6.exe's real output-filename
+        # convention for these (':2' -> '...q2.sg', ':R' -> '...r.sg', not a
+        # naive concatenation) -- confirmed directly: resolve_sg_operators
+        # reported "sgcom6.exe did not produce a .sg file for symbol
+        # 'F_d_-3_m:2' (expected ...fd-3m:2.sg)" even though sgcom6.exe HAD
+        # already generated the real file (fd-3mq2.sg) as a side effect of
+        # that same call -- it invoked sgcom6.exe successfully and then
+        # checked for the wrong filename.
+        if cif_to_str.parse_colon_suffix(symbol)[1] is not None:
+            symops, _header, msg = cif_to_str.resolve_colon_suffixed_sg_operators(symbol)
+        else:
+            symops, _header, msg = symmetry_utils.resolve_sg_operators(symbol)
         _SG_OPERATOR_CACHE[symbol] = (symops, msg)
     symops, resolve_msg = _SG_OPERATOR_CACHE[symbol]
     if not symops:
