@@ -1,6 +1,9 @@
 # Changelog
 
-## 1.0.17 - 2026-07-27
+## 1.0.18 - 2026-07-30
+- Added word report writing and matplotlib script to make a png file
+
+## 1.0.17 - 2026-07-29
 - More bugs around rhombohedral r/h space groups found by symmetrize_str.py
 
 ## 1.0.16 - 2026-07-27
