@@ -124,6 +124,7 @@ from symmetry_utils import (
     snap_to_fraction,
     classify_adps,
     format_adp_tie,
+    format_coordinate_tie,
     complete_centering_operators,
     apply_symop,
     mod1,
@@ -157,6 +158,16 @@ from symmetry_utils import (
 #   suffix unchanged for GENERATION, but its own output filename replaces
 #   the suffix with 'r' (axes) or 'qN' (origin), e.g. 'r-3mr.sg',
 #   'p4onbmq2.sg' -- not a naive concatenation of the suffix.
+#
+# TOPAS's own .inp files never carry CIF's colon convention, but real .inp
+# files DO carry a BARE equivalent of the axes-choice suffix glued directly
+# onto the symbol with no colon (e.g. 'R3mH', 'R3mR') -- TOPAS itself
+# accepts these leniently the same way it accepts ':H'/':R'. parse_colon_suffix
+# below recognizes this bare form too (axes choice only -- there's no bare
+# equivalent of the origin-choice suffix), gated on the base symbol (after
+# stripping the trailing letter) already being one of the 7 known
+# rhombohedral space-group base symbols, so it can't misfire on an
+# unrelated symbol that happens to end in H or R.
 # ---------------------------------------------------------------------------
 
 def beq_bounds(val):
@@ -204,18 +215,62 @@ def beq_physicality_warning(label, source_desc, beq):
     return None
 
 
+RHOMBOHEDRAL_BASE_SYMBOLS = {
+    re.sub(r"[\s_]", "", s).lower()
+    for s in ("R3", "R-3", "R32", "R3m", "R3c", "R-3m", "R-3c")
+}
+
+
 def parse_colon_suffix(symbol):
-    """Split a trailing CIF colon-suffix off `symbol`. Returns
-    (base_symbol, kind, value): kind is 'axes' (value 'H'/'R') or 'origin'
-    (value the digit string) or None (value None) if there was none."""
+    """Split a trailing space-group axes/origin-choice suffix off `symbol`.
+    Returns (base_symbol, kind, value): kind is 'axes' (value 'H'/'R') or
+    'origin' (value the digit string) or None (value None) if there was
+    none.
+
+    Handles two distinct spellings for the axes-choice case:
+      - CIF's colon form (':H'/':R', e.g. 'R_3_m_:H') -- always recognized.
+      - TOPAS's own lenient BARE form with the letter GLUED directly onto
+        the symbol with no colon and no preceding space/underscore (e.g.
+        'R3mH', 'R3mR'), confirmed to occur in real .inp files (an .inp
+        never carries CIF's colon convention). Only recognized when the
+        base left after stripping the trailing letter is ALREADY one of
+        the 7 known rhombohedral space-group base symbols
+        (RHOMBOHEDRAL_BASE_SYMBOLS) -- confirmed against sgcom5.txt that
+        none of these 7 symbols themselves end in a bare 'H' or 'R', so
+        this can't misfire on an unrelated symbol that merely happens to
+        end in one of those letters.
+
+        Deliberately requires the letter to be GLUED (no space/underscore
+        immediately before it): a CIF's own H-M symbol can independently
+        end in a SPACE-separated bare 'R'/'H' token (e.g. ICSD's
+        'R -3 m H', confirmed real on 166_57164_S1.cif) -- that form is a
+        different, pre-existing code path (the sg_tokens[-1] check below,
+        which normalizes it to the colon form up front so the later
+        origin-choice/axes-choice cross-checks against the CIF's own
+        operators still run). Matching that spaced form here too would
+        short-circuit those checks earlier than intended, silently
+        skipping a real safety check rather than just changing cosmetic
+        output. Bare origin-choice suffixes (no TOPAS equivalent of ':2')
+        are NOT handled here -- only the axes-choice case has a confirmed
+        bare spelling.
+    """
     m = re.search(r":\s*([HhRr]|\d+)\s*$", symbol)
-    if not m:
-        return symbol, None, None
-    val = m.group(1)
-    base = symbol[: m.start()]
-    if val.upper() in ("H", "R"):
-        return base, "axes", val.upper()
-    return base, "origin", val
+    if m:
+        val = m.group(1)
+        base = symbol[: m.start()]
+        if val.upper() in ("H", "R"):
+            return base, "axes", val.upper()
+        return base, "origin", val
+
+    stripped = symbol.strip()
+    if (len(stripped) >= 2 and stripped[-1].upper() in ("H", "R")
+            and stripped[-2] not in (" ", "_")):
+        base_candidate = stripped[:-1]
+        normalized = re.sub(r"[\s_]", "", base_candidate).lower()
+        if normalized in RHOMBOHEDRAL_BASE_SYMBOLS:
+            return base_candidate, "axes", stripped[-1].upper()
+
+    return symbol, None, None
 
 
 def generation_symbol_for_colon_suffix(symbol):
@@ -708,6 +763,33 @@ def topas_safe_identifier(label, used=None):
 # ---------------------------------------------------------------------------
 
 def convert(path, tol=0.0015, refine=False):
+    """
+    Convert the CIF at `path` into a TOPAS `str { }` block. Returns
+    (str_block_text, warnings) -- `warnings` is a list of plain-English
+    strings, never raised as exceptions, since a CIF can be partially
+    convertible (a per-site problem shouldn't lose the other 40 sites) and
+    the caller decides how loudly to surface them. See the module docstring
+    for the per-site method and its known limitations.
+
+    `tol`: coordinate-match tolerance, used for BOTH stabilizer detection
+    (is this site really on that special position?) and fraction snapping
+    (is this 0.16667 really 1/6?).
+
+    `refine`: whether to emit a '@' refine flag on the lattice parameters
+    that the crystal system leaves genuinely free. Off by default, matching
+    this script's main use as a simulate-only (`iters 0`) converter, where a
+    refine flag is a no-op. Symmetry-forced values are NEVER given '@'
+    regardless of this flag -- an angle/length the crystal system fixes or
+    ties is emitted as a bare value or a Get() equation either way.
+
+    Order matters within this function and is not arbitrary: the space-group
+    symbol is normalized (stray annotations, axes/origin colon suffixes)
+    BEFORE operators are resolved, operators are centering-completed BEFORE
+    any multiplicity or Wyckoff constraint is derived from them, and the
+    origin/axes-choice checks run only once the CIF's own operator list is
+    known to be trustworthy -- each step's own comment block explains the
+    real, corpus-confirmed failure it exists to prevent.
+    """
     lines = read_cif_lines(path)
 
     a = parse_cif_value(find_scalar_tag(lines, "_cell_length_a") or "")
@@ -1291,35 +1373,15 @@ def convert(path, tol=0.0015, refine=False):
                     coord_parts.append(f"{coord} {snapped:.10g}")
             elif kind[0] == "tied":
                 _, other, sign, offset = kind
-                tie_body = format_adp_tie([(Fraction(sign), other)])
-                if abs(offset) < 1e-6:
-                    coord_parts.append(f"{coord} = {tie_body};")
-                else:
-                    # Re-derive the sign from the MOD-1-REDUCED offset, not
-                    # from the raw (possibly >1-in-magnitude or negative)
-                    # offset classify_coordinates returns -- confirmed as a
-                    # real bug: for offset=-0.75, `offset % 1.0` correctly
-                    # gives the display MAGNITUDE 0.25, but combining that
-                    # with the RAW offset's sign ("-", since -0.75 < 0) wrote
-                    # "- 1/4" (i.e. an effective offset of -0.25), which is
-                    # NOT congruent to the true -0.75 mod 1 (0.75) -- off by
-                    # exactly 0.5, silently generating a genuinely wrong
-                    # coordinate. Reducing first and choosing +/- from the
-                    # REDUCED value keeps the small-magnitude-offset display
-                    # preference (e.g. "- 1/4" over "+ 3/4") while staying
-                    # mathematically correct: a reduced value > 0.5 is
-                    # rewritten as -(1 - reduced), which is congruent to it
-                    # mod 1 by construction.
-                    reduced = offset % 1.0
-                    disp_offset = reduced - 1.0 if reduced > 0.5 else reduced
-                    off_snapped, off_exact = snap_to_fraction(abs(disp_offset), tol)
-                    op = "+" if disp_offset >= 0 else "-"
-                    if off_exact is not None:
-                        coord_parts.append(
-                            f"{coord} = {tie_body} {op} {off_exact.numerator}/{off_exact.denominator};"
-                        )
-                    else:
-                        coord_parts.append(f"{coord} = {tie_body} {op} {abs(off_snapped):.10g};")
+                # Shared with symmetrize_str.py via symmetry_utils, so the
+                # tie this script GENERATES and the tie that tool reports as
+                # REQUIRED can never drift apart -- including the non-obvious
+                # reduce-offset-mod-1-before-choosing-its-sign rule, which
+                # had silently diverged while each file kept its own copy.
+                # See format_coordinate_tie's own docstring.
+                coord_parts.append(
+                    f"{coord} = {format_coordinate_tie(other, sign, offset, tol)};"
+                )
             else:  # complex
                 has_complex = True
                 coord_parts.append(f"{coord} @ {val:.10g}  ' complex site-symmetry constraint, verify manually")

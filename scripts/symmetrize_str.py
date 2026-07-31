@@ -197,22 +197,18 @@ def format_fixed_value(value):
 
 def format_tie_expr(other, sign, offset):
     """Coordinate tie RHS formatting -- e.g. 'Get(x)', '-Get(x)',
-    '2 * Get(x)', 'Get(x) + 1/3'. Delegates the multiplicative part to
-    symmetry_utils.format_adp_tie (the SAME formatter cif_to_str.py uses to
-    generate coordinate ties -- see its own call site,
-    'tie_body = format_adp_tie([(Fraction(sign), other)])') rather than a
-    separate reimplementation, since `sign` is not always +-1 (e.g. a
-    'x - 2y = 0' stabilizer row ties x to y with sign=2) and a naive
-    '"" if sign == 1 else "-"' would silently mangle that into the wrong
-    equation, '-Get(other)', rather than '2 * Get(other)'."""
-    from fractions import Fraction
-    expr = symmetry_utils.format_adp_tie([(Fraction(sign), other)])
-    offset_mod1 = offset % 1.0
-    if offset_mod1 > 1e-6:
-        off_snapped, off_exact = symmetry_utils.snap_to_fraction(offset_mod1)
-        off_disp = f"{off_exact.numerator}/{off_exact.denominator}" if off_exact else f"{off_snapped:.6g}"
-        expr += f" + {off_disp}" if offset >= 0 else f" - {off_disp}"
-    return expr
+    '2 * Get(x)', 'Get(x) + 1/3'. A thin wrapper over
+    symmetry_utils.format_coordinate_tie, the SAME formatter cif_to_str.py
+    generates its coordinate ties with, so this tool's "required form" text
+    can never drift from what that one actually writes.
+
+    Previously reimplemented locally here, which had silently diverged: the
+    additive offset's display sign was taken from the RAW offset while its
+    magnitude came from `offset % 1.0`, so a required offset of -1/3 (real,
+    e.g. R-3m's y = x - 1/3 tie) was emitted as '- 2/3' -- not congruent
+    mod 1, i.e. a genuinely wrong coordinate. See format_coordinate_tie's
+    own docstring for the reduce-then-sign rule."""
+    return symmetry_utils.format_coordinate_tie(other, sign, offset)
 
 
 CELL_PARAM_NAMES = {"a": "lp_a", "b": "lp_b", "c": "lp_c", "al": "lp_al", "be": "lp_be", "ga": "lp_ga"}

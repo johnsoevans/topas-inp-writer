@@ -16,6 +16,10 @@ Covers:
     for both position (classify_coordinates) and the ADP tensor
     (classify_adps -- u11/u22/u33/u12/u13/u23, via R U R^T = U rather than
     the affine position transformation)
+  - Formatting a derived constraint back out as a TOPAS equation RHS
+    (format_adp_tie for an ADP tie, format_coordinate_tie for a
+    coordinate tie) -- shared so a constraint that one caller GENERATES
+    and another reports as REQUIRED is always written identically
   - Per-lattice-system angle/length constraint derivation (which of
     al/be/ga are forced to 90 or 120, which of b/c are tied to a, and --
     for the rhombohedral-axes setting of the 7 rhombohedral space groups --
@@ -768,6 +772,44 @@ def format_adp_tie(terms):
         else:
             parts.append((" - " if neg else " + ") + body)
     return "".join(parts)
+
+
+def format_coordinate_tie(other, sign, offset, tol=0.0015):
+    """
+    Format a classify_coordinates 'tied' constraint -- (other_coord, sign,
+    offset), meaning `this = sign*other + offset` (mod 1) -- as a TOPAS
+    equation RHS, e.g. 'Get(x)', '-Get(x)', '2 * Get(y)', 'Get(x) - 1/3'.
+    Shared by cif_to_str.py (generation) and symmetrize_str.py
+    (normalization) so both express an identical requirement identically.
+
+    The multiplicative part is delegated to format_adp_tie, since `sign` is
+    not always +-1 (an 'x - 2y = 0' stabilizer row ties x to y with sign=2)
+    and a naive '"" if sign == 1 else "-"' would silently mangle that into
+    '-Get(other)' rather than '2 * Get(other)'.
+
+    The additive offset is reduced MOD 1 *before* its display sign is
+    chosen, which is the whole reason this lives here rather than being
+    re-derived per caller -- confirmed as a real bug the one time it was:
+    for offset=-0.75, `offset % 1.0` correctly gives the display MAGNITUDE
+    0.25, but pairing that with the RAW offset's sign ('-', since
+    -0.75 < 0) writes '- 1/4', i.e. an effective offset of -0.25, which is
+    NOT congruent to the true -0.75 mod 1 (0.75) -- off by exactly 0.5,
+    silently generating a genuinely wrong coordinate. Reducing first and
+    taking +/- from the REDUCED value keeps the small-magnitude display
+    preference (e.g. '- 1/4' over '+ 3/4') while staying correct by
+    construction: a reduced value > 0.5 is rewritten as -(1 - reduced),
+    congruent to it mod 1.
+    """
+    body = format_adp_tie([(Fraction(sign), other)])
+    if abs(offset) < 1e-6:
+        return body
+    reduced = offset % 1.0
+    disp_offset = reduced - 1.0 if reduced > 0.5 else reduced
+    off_snapped, off_exact = snap_to_fraction(abs(disp_offset), tol)
+    op = "+" if disp_offset >= 0 else "-"
+    if off_exact is not None:
+        return f"{body} {op} {off_exact.numerator}/{off_exact.denominator}"
+    return f"{body} {op} {abs(off_snapped):.10g}"
 
 
 # ---------------------------------------------------------------------------

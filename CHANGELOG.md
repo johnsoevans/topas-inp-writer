@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.19 - 2026-07-31
+- Opus refactor found minor inconsistency between symmetry_utils and symmetrize_str.py
+
 ## 1.0.18 - 2026-07-30
 - Added word report writing and matplotlib script to make a png file
 
