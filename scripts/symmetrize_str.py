@@ -414,21 +414,35 @@ def evaluate_coordinate(coord, kind, form, forms, text, offsets, content_start, 
     if kind[0] == "fixed":
         value = kind[1]
         if form[0] == "value":
-            if form[1] == "" and form[3] is None:
+            is_eq, val_text = format_fixed_value(value)
+            bare = form[1] == "" and form[3] is None
+            # 'value' (kind[1]) is derived FROM the coordinate's own written
+            # number (see classify_coordinates), so a bare/unnamed form is
+            # only genuinely "nothing to fix" when that number is already
+            # the canonical form -- a plain fixed constant that isn't close
+            # to a common fraction. When it IS close to one (format_
+            # fixed_value's is_eq=True), the written decimal is only an
+            # APPROXIMATION (e.g. 0.6667 for 2/3) that must still be
+            # rewritten to the exact 'coord = N/D;' equation -- a rounded
+            # decimal here produces a real TOPAS equivalent-position-
+            # distance warning (see format_fixed_value's own docstring),
+            # so this can't be waved through just because it's unnamed.
+            if bare and not is_eq:
                 return make_item("site", coord, None, "ok",
                                   "already a bare, unnamed fixed value -- tautologically consistent "
                                   "with the resolved special-position value, since that value is "
                                   "derived from this same number.")
-            # A name and/or '!'/'@' sigil is present on a coordinate site
-            # symmetry fixes at an exact constant -- always stripped to a
-            # bare value: a special-position coordinate has nothing to
-            # refine, so it should carry no parameter name at all.
-            is_eq, val_text = format_fixed_value(value)
             new_text = f"{coord} = {val_text};" if is_eq else f"{coord} {val_text}"
             if form[1] == "@":
                 reason = (f"'@'-refined independently, but site symmetry under space_group {symbol!r} "
                           f"fixes it at an exact value ({value:.6g}) -- refining it risks drifting off "
                           f"the special position, so its name and sigil are removed entirely.")
+            elif bare:
+                reason = (f"written as a rounded decimal ('{coord} {form[2]:g}'), but site symmetry "
+                          f"under space_group {symbol!r} fixes it at the exact fraction {val_text} -- "
+                          f"a decimal approximation of a special-position coordinate should be written "
+                          f"as its exact fraction equation instead, to avoid a spurious (if tiny) TOPAS "
+                          f"equivalent-position-distance warning.")
             else:
                 reason = (f"named {form[3]!r}, but site symmetry under space_group {symbol!r} fixes "
                           f"it at an exact value ({value:.6g}) with nothing to refine -- a fixed "

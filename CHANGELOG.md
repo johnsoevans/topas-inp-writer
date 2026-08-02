@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.20 - 2026-08-01
+- minor changes to symmetrize_str.py and skills
+
 ## 1.0.19 - 2026-07-31
 - Opus refactor found minor inconsistency between symmetry_utils and symmetrize_str.py
 

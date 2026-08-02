@@ -1271,6 +1271,48 @@ def check_at_sigil_value(clean_text, issues):
         )
 
 
+def check_bkg_repeated_at_sigil(clean_text, issues):
+    """
+    'bkg' takes exactly one '@' in front of its whole Chebyshev
+    coefficient list -- 'bkg @ 0 0 0 0 0 0' refines all six coefficients.
+    A recurring real mistake (confirmed directly by the user) is instead
+    writing one '@' per coefficient, e.g. 'bkg @ 0 @ 0 @ 0 @ 0 @ 0 @ 0' --
+    plausible by analogy with macro-call arguments (where each slot does
+    take its own '@'), but wrong for bkg's flat value list.
+
+    Scans each 'bkg' keyword's value list (numbers, optionally
+    backtick-error-suffixed, and '@' sigils) up to the first token that
+    isn't part of that grammar, and flags it if more than one '@' shows
+    up in that span.
+    """
+    for m in re.finditer(r"\bbkg\b", clean_text):
+        pos = m.end()
+        n = len(clean_text)
+        at_count = 0
+        j = pos
+        while j < n:
+            while j < n and clean_text[j] in " \t\r\n":
+                j += 1
+            if j >= n:
+                break
+            if clean_text[j] == "@":
+                at_count += 1
+                j += 1
+                continue
+            num_m = E_ARG_NUMBER_TOKEN_RE.match(clean_text[j:])
+            if num_m and num_m.group(0):
+                j += num_m.end()
+                continue
+            break
+        if at_count > 1:
+            issues.append(
+                ("warning", line_of(clean_text, m.start()),
+                 f"'bkg' has {at_count} '@' sigils in its value list -- 'bkg' takes exactly "
+                 f"ONE '@' in front of the whole coefficient list (e.g. 'bkg @ 0 0 0 0 0 0'), "
+                 f"not one per value. Remove the extra '@' signs.")
+            )
+
+
 XYZ_FRACTION_TARGETS = (("1/3", 1.0 / 3.0), ("2/3", 2.0 / 3.0))
 # 0.0015 catches CIF-rounded decimals from 3 to 5 places (0.333 .. 0.33333)
 # without reaching into territory a genuinely-refined general-position
@@ -2406,7 +2448,7 @@ def load_library_macro_arities():
     merged = {}
     bodiless = set()
     try:
-        fnames = os.listdir(MACRO_LIB_DIR)
+        fnames = [f for f in os.listdir(MACRO_LIB_DIR) if f.lower().endswith(".inc")]
     except OSError:
         return merged, bodiless
     for fname in fnames:
@@ -3598,6 +3640,7 @@ def check_file(path, keywords, library_arities, library_bodiless, single_arg_key
     check_single_e_arg_keywords(clean, keywords_plus_macros, e_arg_keywords, issues)
     check_zero_arg_keywords(clean, zero_arg_keywords, issues)
     check_at_sigil_value(clean, issues)
+    check_bkg_repeated_at_sigil(clean, issues)
     check_xyz_near_one_third(clean, issues)
     min_max_macro_names = harvest_macros_with_min_max_body(clean)
     check_prm_local_missing_min_max(clean, min_max_macro_names, issues)
