@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.21 - 2026-08-04
+- dummy update to check installation
+
 ## 1.0.20 - 2026-08-01
 - minor changes to symmetrize_str.py and skills
 
