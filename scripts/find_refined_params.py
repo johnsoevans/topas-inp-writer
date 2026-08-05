@@ -49,6 +49,12 @@ expanded text:
      so this only fires when the keyword list is EXACTLY the 6 ADP names
      and the value count matches; anything else is left alone rather
      than guessed at.
+  5. `load sh_Cij_prm { k00 !sh_c00 1.0  k41 sh_c41 -0.129 ... }` -- the
+     explicit spherical-harmonic coefficient list TOPAS writes back into
+     the .out after a run. LABEL NAME VALUE triples; the non-'!' names
+     are the independent coefficients. Only the explicit list is counted;
+     a bare `sh_order N` with no list is still not (see the gap note
+     below).
   4. A curated (not exhaustive) list of common directly-written (non-@,
      non-macro) NAMED keyword values -- `beq`/`u11..u23`/`a`/`b`/`c`/
      `al`/`be`/`ga`/`scale` -- e.g. `beq b1 1.34160`. Deduplicated by
@@ -86,16 +92,24 @@ Known limitations, stated plainly rather than overclaimed:
     comparing "Num independent parameters"): `secondary_soller_angle`
     inside a `Full_Axial_Model(...)` call is one such uncurated
     directly-'@'-flagged keyword.
-  - `spherical_harmonics_hkl ... sh_order N` generates a Laue-class-
-    dependent NUMBER of refined coefficients purely inside the kernel --
-    there is no static text pattern in the .inp source that reveals this
-    count (it depends on the phase's Laue class and N via kernel-internal
-    combinatorics), so it is NOT counted at all by this script. Confirmed
-    directly: test_examples/clay.inp's `sh_order 8` block alone accounts
-    for 44 of tc.exe's 222 reported independent parameters (222 vs this
-    script's 178 with the block artificially disabled, vs 174 with it
-    left in) -- by far the largest single known gap seen in practice, and
+  - `spherical_harmonics_hkl ... sh_order N` written WITHOUT an explicit
+    coefficient list generates a Laue-class-dependent NUMBER of refined
+    coefficients purely inside the kernel -- there is no static text
+    pattern in the .inp source that reveals this count (it depends on the
+    phase's Laue class and N via kernel-internal combinatorics), so that
+    bare form is still NOT counted at all. Confirmed directly:
+    test_examples/clay.inp's `sh_order 8` block alone accounts for 44 of
+    tc.exe's 222 reported independent parameters (222 vs this script's
+    178 with the block artificially disabled, vs 174 with it left in) --
+    by far the largest single known gap seen in practice, and
     deliberately left unimplemented rather than guessed at.
+    ONCE TOPAS HAS RUN, though, it writes the coefficients back out in
+    full as `load sh_Cij_prm { k00 !sh_c00 1.0  k41 sh_c41 -0.129 ... }`,
+    each with its own name and '!' flag. Since R34 mandates copying the
+    .out back over the .inp after every run, that explicit form is the
+    normal state of a working refinement file, and its non-'!' rows ARE
+    now counted (point 5 below) -- exactly, not by guesswork. So the gap
+    above applies only to a fresh, never-yet-refined file.
   - The `load hkl_m_d_th2 I { ... }` parser (point 3) treats any
     non-'!' intensity as independent, matching the manual's documented
     default ("intensity parameters are given the code of @"). This is
@@ -470,6 +484,84 @@ def parse_adp_load_blocks(clean_text, exclude_spans):
     return results
 
 
+def parse_sh_cij_load_blocks(clean_text, exclude_spans):
+    """Recognizes 'load sh_Cij_prm { k00 !sh_c00 1.0  k41 sh_c41 -0.129 ... }'
+    -- the EXPLICIT spherical-harmonic coefficient list.
+
+    This does NOT contradict the module docstring's standing note that
+    `spherical_harmonics_hkl ... sh_order N` alone is uncountable. That
+    note is about a FRESH file, where only the order is written and the
+    kernel decides the Laue-class-dependent coefficient count internally
+    -- no static text reveals it, and that case is still not counted.
+
+    But once TOPAS has run, it writes the coefficients back out in full,
+    each with its own name and '!' flag. R34 mandates copying the .out
+    back over the .inp after every run, so this explicit form is the
+    NORMAL state of a working refinement file, and counting the non-'!'
+    rows in it is exact rather than a guess.
+
+    Rows are LABEL NAME VALUE triples (label = k00/k41/k61/..., the
+    harmonic's own tag; name = the refinable parameter). Named by
+    construction, so deduplicated by name and never for-loop multiplied,
+    same treatment as parse_named_keyword_values()."""
+    results = []
+    seen_names = set()
+    n = len(clean_text)
+    for m in LOAD_RE.finditer(clean_text):
+        if _in_any_span(m.start(), exclude_spans):
+            continue
+        pos = m.end()
+        while pos < n and clean_text[pos] in " \t\r\n":
+            pos += 1
+        km = IDENT_RE.match(clean_text, pos)
+        if not km or km.group(0) != "sh_Cij_prm":
+            continue
+        pos = km.end()
+        while pos < n and clean_text[pos] in " \t\r\n":
+            pos += 1
+        if pos >= n or clean_text[pos] != "{":
+            continue
+        pos += 1
+        while pos < n:
+            while pos < n and clean_text[pos] in " \t\r\n":
+                pos += 1
+            if pos < n and clean_text[pos] == "}":
+                break
+            label_m = IDENT_RE.match(clean_text, pos)      # k00, k41, ...
+            if not label_m:
+                break
+            pos = label_m.end()
+            while pos < n and clean_text[pos] in " \t\r\n":
+                pos += 1
+            fixed = False
+            if pos < n and clean_text[pos] == "!":
+                fixed = True
+                pos += 1
+                while pos < n and clean_text[pos] in " \t\r\n":
+                    pos += 1
+            name_m = IDENT_RE.match(clean_text, pos)
+            if not name_m:
+                break
+            name = name_m.group(0)
+            pos = name_m.end()
+            while pos < n and clean_text[pos] in " \t\r\n":
+                pos += 1
+            val_m = NUMBER_RE.match(clean_text[pos:])
+            if not val_m or not val_m.group(0):
+                break
+            try:
+                val = float(val_m.group(0).split("`")[0])
+            except ValueError:
+                break
+            pos += val_m.end()
+            if fixed or name in seen_names:
+                continue
+            seen_names.add(name)
+            results.append({"keyword": label_m.group(0), "name": name, "value": val,
+                            "line": line_of(clean_text, m.start())})
+    return results
+
+
 # Manual-confirmed row layout for the Pawley/hkl_Is refined-intensity load
 # form: 'load hkl_m_d_th2 I { h k l m d th2 @ I ... }' --
 # references/21-keyword-index.md: '[hkl_m_d_th2 # # # # # # I E]...'
@@ -608,6 +700,7 @@ def main():
     direct_at = parse_direct_at_keywords(clean, prm_local_spans)
     adp_loads = parse_adp_load_blocks(clean, prm_local_spans)
     hkl_i_loads = parse_hkl_intensity_load_blocks(clean, prm_local_spans)
+    sh_cij_loads = parse_sh_cij_load_blocks(clean, prm_local_spans)
     named_direct = parse_named_keyword_values(clean, prm_local_spans)
     occ_values = parse_occ_values(clean, prm_local_spans)
     occ_named = [p for p in occ_values if p["name"]]
@@ -693,6 +786,19 @@ def main():
     else:
         n_hkl_i_loads = 0
 
+    if sh_cij_loads:
+        # Named by construction -- shared/never multiplied, like named_direct.
+        n_sh_cij = weighted_count(sh_cij_loads, named=True)
+        lines.append(f"-- {len(sh_cij_loads)} spherical-harmonic coefficients from "
+                      f"'load sh_Cij_prm {{ ... }}' blocks "
+                      f"({n_sh_cij} counting for-loop repetition) --")
+        for p in sh_cij_loads:
+            m = loop_multiplier(p, clean, for_loop_spans, named=True)
+            lines.append(f"  {p['name']:<20} = {p['value']:<16.8g}  ({p['keyword']}, expanded-text line {p['line']}){mult_suffix(m)}")
+        lines.append("")
+    else:
+        n_sh_cij = 0
+
     if occ_values:
         # occ_anon is always eligible to multiply (like direct_at);
         # occ_named is deduplicated-by-name/shared, like named_direct.
@@ -737,8 +843,9 @@ def main():
         n_anon_prm = 0
 
     total_written = (len(deduped_named) + len(direct_at) + len(adp_loads) + len(hkl_i_loads)
-                      + len(occ_values) + len(named_direct) + len(anon_prm))
-    total = n_named + n_direct_at + n_adp_loads + n_hkl_i_loads + n_occ + n_named_direct + n_anon_prm
+                      + len(sh_cij_loads) + len(occ_values) + len(named_direct) + len(anon_prm))
+    total = (n_named + n_direct_at + n_adp_loads + n_hkl_i_loads + n_sh_cij
+             + n_occ + n_named_direct + n_anon_prm)
     lines.append(f"TOTAL independent refined parameters found: {total} "
                   f"({total_written} distinct declarations in the source text, some repeated by a "
                   f"for xdds/for strs loop -- see check_inp_syntax.find_for_loop_multipliers)")

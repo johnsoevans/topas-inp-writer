@@ -181,6 +181,29 @@ Open only what's relevant to the current task.
 
   **`for xdds { ... }`/`for strs [N to M] { ... }` loop repetition is accounted for, with a specific, non-obvious, empirically-confirmed rule: only ANONYMOUS/unnamed declarations get multiplied by the loop's iteration count, never bare NAMED ones.** TOPAS's kernel-enforced "same name = same value" rule (section 2.4) applies regardless of for-loop context, so a bare named `prm` inside a loop stays ONE shared parameter across every iteration, while an anonymous `@` genuinely gets a fresh instance each time — confirmed with minimal test files (`for xdds { prm test_named_prm ... }` on 2 xdds reports 1 independent parameter; the same test with `prm @ ...` reports 2). Anonymous `direct_at`/`adp_loads` entries and `local` (already re-scoped per iteration) are multiplied; named `prm`/`named_direct` entries never are. A bare (no-range) `for strs { ... }` nested inside another for-loop is deliberately left unmultiplied since its real scope (whole file again per outer iteration, or just the current xdd's own strs?) isn't confirmed — better to undercount than risk a wild overcount. `param_dependency_trees.py`'s independent-parameter badge reuses this exact same rule.
 
+- `scripts/run_variants.py` — **run this whenever several model variants of one `.inp` need comparing** (peak-shape families, PO orders/directions, background orders, ADP schemes, the R29 reset check, phase screening). Runs each variant on a scratch copy — the base file is never modified — and prints one comparison table:
+  ```python
+  import sys; sys.path.insert(0, r"<skill>/scripts")
+  from run_variants import VariantRunner, add_to_str, add_to_xdd, set_bkg, comment_out
+
+  r = VariantRunner("y2o3.inp", workdir="y2o3_workings")
+  r.add("sh4",   lambda t: add_to_str(t, "PO_Spherical_Harmonics(sh, 4)"))
+  r.add("sh6",   lambda t: add_to_str(t, "PO_Spherical_Harmonics(sh, 6)"))
+  r.add("steph", lambda t: add_to_str(t, "Stephens_cubic(@,0.5, @,0.0001, @,0.0001)"))
+  r.add("b16",   lambda t: set_bkg(t, 16))
+  r.run()
+  ```
+  ```
+  variant       Rwp     dRwp      GoF   Npar  limits
+  base      12.3439        -   1.2080     20  -
+  sh4       11.6927  -0.6512   1.1440     22  -
+  sh6       11.5810  -0.7629   1.1330     24  -
+  steph     12.8847  -0.4592   1.2600     23  steph_eta
+  ```
+  An unmodified `base` row is always run first and every other row reported as a delta against it. `Npar` is TOPAS's own `Num independent parameters:` count, so a variant's cost sits beside its gain; `limits` names any parameter carrying `_LIMIT_MIN_`/`_LIMIT_MAX_` in that variant's `.out`, flagging a gain that rests on a saturated term (R26/R27/R60). A failed variant reports tc.exe's actual error in its row rather than dropping out.
+
+  Per variant it strips any stale `C_matrix_normalized`, rewrites the `xdd` path to an absolute one, and **removes the recognized output-writing macro calls** (`Out_X_Yobs`, `Out_X_Ycalc`, `Out_X_Difference`, `Create_hklm_d_Th2_Ip_file`, `Create_hklm_d_Th2_IScaled_file`, `Out_CIF_STR`) — the comparison needs only the table, and on a 15k-point pattern each variant would otherwise write ~800 kB of Yobs/Ycalc that nothing reads. Pass `keep_outputs=True` to write them under per-variant filenames when a variant's fit actually needs plotting, or just re-run the single variant of interest afterwards. Scratch files are `v_<basestem>_<name>.inp`. Pass `data_dir=` when the base `.inp` is itself a scratch copy sitting somewhere other than next to its data; a missing data file is reported once, up front, instead of failing every variant identically. Text helpers are literal string surgery, not an `.inp` parser: `add_to_str`, `add_to_xdd`, `set_bkg(n)`, `comment_out(regex)` — write the transform inline for anything else. Chooses nothing and interprets nothing; it reports numbers.
+
 - `scripts/param_dependency_trees.py` — **run this whenever the user asks for a parameter dependency tree/graph, or says "do trees"** (a standing trigger phrase — run against the relevant/currently-open `.inp` file and let it open its own report). **"do trees" defaults to the interactive HTML form** (`-o <name>.html`, opened in the browser); only fall back to plain-text/VS-Code if the user explicitly asks for text. Builds the full computation graph (not just the independent-parameter list `find_refined_params.py` stops at) and renders it as two views:
   ```
   python3 scripts/param_dependency_trees.py file.inp -o report.html     # "do trees" default: interactive page, opens in browser

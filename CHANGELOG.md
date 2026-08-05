@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.22 - 2026-08-05
+- changes to skill and some py scripts
+
 ## 1.0.21 - 2026-08-04
 - dummy update to check installation
 

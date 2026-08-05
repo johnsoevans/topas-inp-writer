@@ -2,13 +2,15 @@
 
 Practical strategy conventions for running Rietveld/Pawley refinements, learned from real refinement sessions with John rather than the manual itself. These are defaults to apply automatically, not options to re-weigh each time — deviate only if the user specifies otherwise.  Note that others may not agree with these conventions!
 
-Every concrete rule below carries a stable tag like `(R7)` so it can be cited, changed, or superseded precisely in a future session — e.g. "change R7" or "add a rule after R14". Numbers are grouped under topic headings purely for readability — the heading doesn't gate or reset the numbering. **Renumbered to be sequential (R1-R43, no gaps) on 2026-07-23** — before that date, R24-R43 had drifted out of order as rules were added piecemeal; any citation to an R-number from before that date may no longer point at the same rule. Going forward, new rules should still just continue from the next free number (currently R57) rather than being inserted mid-sequence, to avoid needing another renumbering pass.
+Every concrete rule below carries a stable tag like `(R7)` so it can be cited, changed, or superseded precisely in a future session — e.g. "change R7" or "add a rule after R14". Numbers are grouped under topic headings purely for readability — the heading doesn't gate or reset the numbering. **Renumbered to be sequential (R1-R43, no gaps) on 2026-07-23** — before that date, R24-R43 had drifted out of order as rules were added piecemeal; any citation to an R-number from before that date may no longer point at the same rule. Going forward, new rules should still just continue from the next free number (currently R62) rather than being inserted mid-sequence, to avoid needing another renumbering pass. A new rule is *placed* under whichever topic heading it belongs to, even if that puts it out of numeric order in the file — the number is a stable tag, not a position.
 
 ## Wavelength and instrument setup
 
 **(R1) Never guess the wavelength.** If the radiation/wavelength isn't clear from what the user has said, ask before proceeding — don't infer it from the data or assume a common default.
 
 **(R2) `LP_Factor()` is mandatory for every `xdd` fitted, with no exceptions** — even with no monochromator, include it with the angle fixed at 0 (`LP_Factor(!th2_monochromator, 0)`). **Never guess the monochromator angle.** If not stated explicitly, ask the user, optionally offering common real values as a shortlist. Intensity Corrections, for Cu radiation: Ge 27.26°, Graphite 26.6°, Quartz 26.4°. For Mo radiation: Ge 12.46°. Still confirm which applies (or that there is none) rather than assuming.
+
+**(R58) For laboratory data, always ask whether a variable-slit (variable divergence) intensity correction is required.** Ask it in the *same* question as the R1/R2 radiation/monochromator query, not as a separate round trip — the three together are one "describe your instrument" question. If applying it: `Variable_Divergence_Intensity` (no arguments — it just sets `scale_pks = Sin(Th);`) for any normal peak-shape family, or `Variable_Divergence(c, v)` for a fundamental-parameters model, which adds the sample-length shape term as well. Omit the question only if you have been explicitly told the data is synchrotron or neutron. This is not optional politeness: an uncorrected variable slit is one of the standard causes of the strongly negative overall ADP in R13, so if the question ever gets skipped and the ADP goes negative, come back to it before blaming absorption or the structural model.
 
 **(R3) Peak-shape family determines the wavelength/emission macro — this pairing is conditional, not a blanket default:**
 - TCHZ (refined, or fixed as an instrument resolution function) with unmonochromated lab Cu Kα1/Kα2 data → `CuKa2_analyt(yminymax)`. This loads the analytical Kα1/Kα2 emission profile TCHZ needs to reproduce the doublet correctly; plain `CuKa2` (a simpler two-line approximation) gives a subtly wrong peak shape when paired with TCHZ.
@@ -42,6 +44,8 @@ TCHZ_Peak_Type(!pku, 0.00027, !pkv, -0.00053, !pkw, -6.17e-05, !pkz, 0.0000, !pk
 ## 2-theta range strategy
 
 **(R11) Start fitting to roughly 60-70° 2θ with Cu radiation and an equivalent range with other radiation** (a range with ~20-40 strong peaks), before extending to the full range. This prevents cell parameters refining to a false minimum among densely-spaced high-angle peaks — especially important for Pawley fitting and large-cell structures. **Always extend to the full range by the end of the refinement.** Follow a specific per-task instruction's own numbers if given; this is the fallback default otherwise.
+
+**(R59) Set `start_X` 2° below the first symmetry-allowed reflection, rounded DOWN to a whole degree**, calculated from the cell and space group before running anything (for multi-phase, the earliest across all phases). E.g. first reflection at 16.72° → 14.72 → write `start_X 14`. Always round down, never to nearest, so the cutoff can only ever move further from the first peak. TOPAS ignores a `start_X` that falls outside the data, so apply it blind — no check on where the scan actually begins. This keeps reflection-free low-angle air scatter out of the fit, where it otherwise forces extra background terms and tangles the background-order choice up with the range choice: on a Y2O3 scan recorded from 2°, fitting from 2° needed 20 Chebyshev terms plus `One_on_X` to match what 12 terms achieved from 10°. Still plot the full recorded range once before fitting — an amorphous hump or low-angle impurity line lives below this cutoff, and the rule governs what is *fitted*, not what is *looked at*.
 
 ## ADP (temperature factor) strategy
 
@@ -81,12 +85,15 @@ TCHZ_Peak_Type(!pku, 0.00027, !pkv, -0.00053, !pkw, -6.17e-05, !pkz, 0.0000, !pk
 
 **(R27) A Strain_L/Strain_G (or TCHZ) term pinned at its lower limit** (e.g. `LIMIT_MIN 0.0001`) should be fixed at that same limiting value the same way — left in the file, just fixed rather than refined.
 
+**(R60) Don't pre-declare `min`/`max` on a subject-specific keyword or a library macro's parameter.** `beq`, lattice parameters, `scale` and every `topas.inc` macro already carry sensible defaults, so restating them adds noise and no safety. Set bounds only on a bare `prm`/`local` you declare yourself, or where you deliberately want something tighter than the default (e.g. R48's quant screening bounds). The bounds work worth doing every run is the opposite direction: check the `.out` for `LIMIT_MIN`/`LIMIT_MAX` and act on whatever is pinned, per R26-R28.
+
 **(R28) When fixing one saturated term, do not reset or re-seed the OTHER still-useful term's current value.** E.g. if a size term is fixed at 9999 because it stopped contributing, leave the paired strain term refining from its own already-converged value — don't reinitialize it or restart the pair from scratch. Only the saturated term itself gets frozen.
 
 ## Mandatory false-minimum check before finalizing any correlated peak shape
 
-**(R29) Before treating a TCHZ (or other multi-term, mutually-correlated peak-shape family, e.g. combined Gaussian+Lorentzian size/strain) refinement as final, always reset its peak-shape terms to a flat starting value (e.g. all TCHZ terms at 0.0001) and re-refine, then compare the resulting Rwp against the staged result.** This is an automatic, unconditional, always-on final step — run it before every final write-up regardless of whether the staged convergence looked clean, with no limit warnings, no exception for "it looked fine." A clean convergence log is not proof of a genuine minimum: TCHZ and similar correlated families can walk into a false minimum during staged refinement with no visible symptom during the run itself. If the reset run converges lower, adopt it as the final answer instead and say so in the report; if it converges to the same or worse Rwp, the staged result stands — but report that the check was performed either way, don't skip reporting it just because nothing changed.
+**(R29) Before treating a TCHZ (or other multi-term, mutually-correlated peak-shape family, e.g. combined Gaussian+Lorentzian size/strain) refinement as final, always reset its peak-shape terms to small starting values and re-refine, then compare the resulting Rwp against the staged result.  For example put TCHZ terms at 0.0001 except w 0.005 and x 0.01;  put all size terms to 9999 nm and strain to 0.001** This is an automatic, unconditional, always-on final step — run it before every final write-up regardless of whether the staged convergence looked clean, with no limit warnings, no exception for "it looked fine." A clean convergence log is not proof of a genuine minimum: TCHZ and similar correlated families can walk into a false minimum during staged refinement with no visible symptom during the run itself. If the reset run converges lower, adopt it as the final answer instead and say so in the report; if it converges to the same or worse Rwp, the staged result stands — but report that the check was performed either way, don't skip reporting it just because nothing changed.
 
+**(R61) A model component rejected on a small Rwp gain must be re-tested once the rest of the model is final.** Correlated components mask each other, so a first-pass test in isolation can wrongly reject one — a component worth almost nothing on its own can be worth a large Rwp drop once some other correction is in place. Don't assume the masking runs in a predictable direction; re-test everything that was dropped (preferred orientation, anisotropic broadening, surface roughness/absorption, anisotropic ADPs). Use `scripts/run_variants.py` to batch the runs into one Rwp/dRwp/GoF/Npar/limits table rather than rebuilding a harness each time.
 
 ## Advanced topics
 
@@ -94,7 +101,9 @@ TCHZ_Peak_Type(!pku, 0.00027, !pkv, -0.00053, !pkw, -6.17e-05, !pkz, 0.0000, !pk
 
 **For the Stephens model use the crystal-system-specific `Stephens_cubic`/`Stephens_tetragonal_*`/`Stephens_hexagonal`/etc. macro** (defined directly in `topas.inc`) — it sets `gauss_fwhm`/`lor_fwhm` via `Stephens_lor_gauss`.  It is a microstrain model so will correlate with TCHZ parameters or other microstrain terms. Refine all the terms allowed by symmetry.  If a TCHZ peakshape model is used include the Stephens macro in the str section and add a note to the user about potential correlation. Don't remove the existing TCHZ without prompting.   If a macrostrain model is being used comment out the existing strain description and inform the user.  Check in example_inp_files for example usage os Stephens macro.
 
-**(R31) Preferred orientation: March-Dollase is the safest default correction.** Guess the direction from which reflections show the largest deviation in the difference curve. Even if your tests are negative **always** try a spherical harmonic correction with order 4, 6 or 8, accepting the lowest order that works. The macro is `PO_Spherical_Harmonics(sh, order)`.  After fitting with spherical harmonics check the harmonic shape itself and see if it implies a simple preferred-orientation direction(s).  If so test the corresponding March-Dollase model.
+**(R31) Preferred orientation: March-Dollase is the safest default correction.** Guess the direction from which reflections show the largest deviation in the difference curve. **Never start the March-Dollase parameter at r = 1** as it will get stuck even when a strong texture is present. Start at 0.9 (r < 1 = platy, the usual lab case); if a direction looks marginal, also try 1.1, since the refinement will not cross unity on its own. Accept the correction only if r is many esd from 1.0 *and* the Rwp gain justifies the parameter.
+
+Even if your March-Dollase tests are negative, **always** try a spherical harmonic correction with order 4, 6 or 8, accepting the lowest order that gives a significant improvement in fit. The macro is `PO_Spherical_Harmonics(sh, order)`. Spherical harmonics can find texture from a cold start, so treat them as the more reliable detector: if March-Dollase finds nothing in any direction, confirm with order 4 before concluding there is none. After fitting with spherical harmonics, check the harmonic shape itself and see if it implies a simple preferred-orientation direction(s). If so, test the corresponding March-Dollase model, and prefer it when it has a similar Rwp to the harmonic fit with fewer parameters.
 
 **(R32) Difference-curve spikes only 1-2 data points wide** (narrower than any real reflection profile) are likely electronic spikes or other artifacts — best excluded from the model entirely, not fitted.
 
@@ -112,36 +121,13 @@ TCHZ_Peak_Type(!pku, 0.00027, !pkv, -0.00053, !pkw, -6.17e-05, !pkz, 0.0000, !pk
 
 **(R56) At the end of every refinement session, write the finalized `.inp` file's full path (in double quotes) to `launch_file.txt` in the TOPAS install directory (`TOPAS_DIR`), replacing whatever path is already there.** This lets TOPAS-GUI/`F6` open straight to the just-completed refinement. Standing rule going forward — not conditional on a specific task's instructions calling for it.
 
-## Generating a Pawley/Le Bail hkl list from a converged structural model
+## Pawley comparison from a converged Rietveld model
 
-**(R38)** When a Rietveld (`str`) model has already converged and a Pawley (`hkl_Is`) fit is wanted for comparison (e.g. "how much of the residual is structural vs. peak-shape/background"), don't hand-derive or guess the reflection list — generate it directly from the converged model:
+**(R38) When a Pawley fit is wanted to check a converged Rietveld model (R15 step 12), never hand-derive the reflection list — generate it from the model itself.** Copy the refinement to a scratch `.inp`, set `iters 0`, and add `Create_hklm_d_Th2_Ip_file(hkl_list.txt)` inside the `str`. Each output line is `H K L M D_spacing 2Th I` (`I` = `I_no_scale_pks`); prefix the intensity with `@` and the line becomes a `load hkl_m_d_th2 I { }` entry directly.
 
-1. Copy the converged `str` refinement to a scratch `.inp`, set `iters 0` (no refinement, just a single calculation pass), and strip the `` `_error `` suffixes to plain numbers (or leave them — TOPAS ignores the error tag on a fixed value).
-2. Inside the `str`'s `for strs { }` block (or directly after the site list), add:
-   ```
-   Create_hklm_d_Th2_Ip_file(hkl_list.txt)
-   ```
-   This writes every generated reflection as `H K L M D_spacing 2Th I` (`I` = `I_no_scale_pks`, the structure-factor-derived intensity with the phase's own scale un-applied).
-3. Run via `tc.exe`; `hkl_list.txt` now has one line per reflection.
-4. Reformat each line into a Pawley `load hkl_m_d_th2 I { }` entry by prefixing the intensity column with `@` (making it independently refinable):
-   ```
-   H K L M D_spacing 2Th @ I
-   ```
-5. Build the Pawley `.inp`: same `xdd`/background/peak-shape/wavelength block as the Rietveld file, but replace the `str` block with:
-   ```
-   hkl_Is
-       phase_name ...
-       TCHZ_Peak_Type(...)   ' peak-shape macro goes directly inside hkl_Is, NOT inside a "for strs {}" wrapper — that wrapper is for str-phase loops only and errors on hkl_Is
-       a ... b ... c ... al ... be ... ga ...
-       space_group "..."
-       load hkl_m_d_th2 I
-       {
-           ' the @-prefixed reflection lines from step 4
-       }
-   ```
-6. Refine. Compare the converged Pawley Rwp against the Rietveld Rwp — a small gap (order 0.1 percentage points) indicates the structural model already explains essentially all of the intensity distribution; a large gap points to a structural problem (wrong space group, missing atoms, wrong site occupancy) rather than peak-shape/background inadequacy.
+Build the Pawley file from the Rietveld one by replacing the `str` block with `hkl_Is` plus that load block, keeping the same `xdd`, background, wavelength and peak-shape model so the two Rwp values are comparable — see `example_inp_files/tio2_lab_bragg_brentano_pawley.inp` for a working file. **The peak-shape macro goes directly inside `hkl_Is` or in a `for hklis {}`, not inside a `for strs {}` wrapper**, which is str-only and will error. Fix or lightly constrain the cell at the Rietveld value; the point is isolating intensity-model quality, not re-deriving the cell.
 
-This reuses the cell refined by the Rietveld fit (fix or lightly constrain it in the Pawley run, since the point is isolating intensity-model quality, not re-deriving the cell) and the same instrument block, so the two Rwp values are a fair apples-to-apples comparison.
+A small gap (order 0.3 percentage points) means the structural model already explains essentially all of the intensity distribution; a large gap points to a structural problem — wrong space group, missing atoms, wrong occupancy — rather than peak-shape or background inadequacy.
 
 ## Final report format (applies to any refinement, any instrumentation)
 
@@ -149,7 +135,7 @@ When asked to write a final report/summary of a Rietveld or Pawley refinement (a
 
 **(R39)** Start with the date the analysis was performed.
 
-**(R40)** Include a summary of the parameters refined, split into structural vs. non-structural counts. Structural = anything describing the crystal structure itself: lattice parameters (a, b, c, al, be, ga), atomic coordinates (x, y, z), occupancies, ADPs/beq/u11..u23. Non-structural = everything else: scale, background terms, peak-shape parameters (TCHZ's pku/pkv/pkw/pkx/pky/pkz etc., or CS_L/CS_G/Strain_L/Strain_G), zero-error/specimen-displacement/axial asymmetry, absorption, LP factor. State both counts explicitly (e.g. "27 parameters refined: 12 structural, 15 non-structural") rather than just a total — `scripts/find_refined_params.py` lists every independent refined parameter and can be used to build this count and split reliably rather than counting by eye.
+**(R40)** Include a summary of the parameters refined, split into structural vs. non-structural counts. Structural = anything describing the crystal structure itself: lattice parameters (a, b, c, al, be, ga), atomic coordinates (x, y, z), occupancies, ADPs/beq/u11..u23. Non-structural = everything else: scale, background terms, peak-shape parameters (TCHZ's pku/pkv/pkw/pkx/pky/pkz etc., or CS_L/CS_G/Strain_L/Strain_G), zero-error/specimen-displacement/axial asymmetry, absorption, LP factor. State both counts explicitly (e.g. "27 parameters refined: 12 structural, 15 non-structural") rather than just a total. **Take the total from TOPAS's own `Num independent parameters: N` console line** — it is free, authoritative (the kernel's own count after full macro expansion) and printed on every run. The structural/non-structural split is a judgement call either way; for a file you wrote yourself, read it straight off the file's own section layout rather than running anything. Reach for `scripts/find_refined_params.py` only when the file is too complex to read by eye (multi-phase, heavy `for xdds`/macro expansion, `#include`s, someone else's file), and **always reconcile its total against TOPAS's** — a mismatch means it missed a `load` block.
 
 **(R41)** If a structure was refined, include a table of fractional coordinates with errors in parentheses. One row per site: label, x, y, z (each as `value(error)`, e.g. `0.07393(128)`, using the digits already present in the `` `_error `` suffix — don't re-derive or round differently). Include occupancy and beq/ADP columns too if refined.
 

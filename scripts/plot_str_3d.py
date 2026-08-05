@@ -103,6 +103,7 @@ if SCRIPT_DIR not in sys.path:
 
 import check_inp_syntax as cis
 import symmetry_utils
+import remove_errors
 from expand_inp_macros import parse_call_args
 
 
@@ -474,6 +475,14 @@ def expand_site_orbit(point, symops, tol=1e-4):
 def gather_atoms(inp_path, phase_index, warnings):
     with open(inp_path, encoding="utf-8") as f:
         raw = f.read()
+    # Strip refined-value error suffixes (`48.06`_1.21` -> `48.06`) before
+    # parsing. A converged refinement run with do_errors carries one on every
+    # refined value, including lattice macro arguments like
+    # `Cubic(@ 10.598140`_0.000037)`, which otherwise fail to parse as a
+    # number -- i.e. this used to break on exactly the files you most want a
+    # 3D view of. Uses the same regex as remove_errors.py; the original file
+    # on disk is untouched, only this in-memory copy is cleaned.
+    raw = remove_errors.ERROR_SUFFIX_RE.sub("", raw)
     clean_text = cis.strip_comments_and_strings(raw)
     values_text = cis.strip_comments_only(raw)
 
