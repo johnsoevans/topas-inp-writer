@@ -1,7 +1,11 @@
 # Changelog
 
+## 1.0.23 - 2026-08-05
+- add the double voigt skill and examples
+- added a spherical harmonic plotter
+
 ## 1.0.22 - 2026-08-05
-- changes to skill and some py scripts
+- update skills
 
 ## 1.0.21 - 2026-08-04
 - dummy update to check installation

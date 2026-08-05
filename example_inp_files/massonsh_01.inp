@@ -1,0 +1,56 @@
+' This example is from https://topas.webspace.durham.ac.uk/tutorial_ceo2_sizestrain/
+' It fits sharp data for CeO2 to provide an instrument resolution function (IRF)
+' Data were recorded on BM16 at the ESRF
+' This IRF is then used when fitting the sample-broadened data in massonbr_01.inp
+' It uses the double Voigt approach which is entirely empirical
+' Methods like fundamental parameters describe the instrumental contribution to the peak shape from first principles
+' The data are from the Balzar et al. 2004 IUCr size-strain round-robin: https://onlinelibrary.wiley.com/iucr/doi/10.1107/S0021889804022551
+' Other approaches and the limitations of the double Voigt method are described in https://topas.webspace.durham.ac.uk/tutorial-wppm/
+' This example uses a structural Rietveld fit. As the peak shape is the only quantity of interest a Pawley/Le Bail fit could be used instead
+
+randomize_on_errors 
+continue_after_convergence 
+seed
+'do_errors 
+ 
+r_exp  10.5933923 r_exp_dash  10.9969252 r_wp  7.08880665 r_wp_dash  7.35883981 r_p  7.41694415 r_p_dash  9.25183579 weighted_Durbin_Watson  1.01085649 gof  0.669172487
+iters 1000  
+ 
+' Information about data file, diffractometer, background, wavelength, etc 
+xdd massonsh.xye 
+	x_calculation_step = Yobs_dx_at(Xo); convolution_step 4
+	'Synchrotron source description
+	'lh is set to an infinitely sharp value of 0.001 so source emission profile is delta-function like
+	lam ymin_on_ymax 0.0001 la 1.0 lo 0.399826 lh 0.000001
+	LP_Factor(90)
+	Specimen_Displacement(height, -0.00187091424`)  
+	bkg @  4.04905295`  0.00517976184` -0.364966255`  0.042412015` -0.127359031` -0.0261531656`
+	' This is a simple asymmetry description and is refined for the instrument resolution standard
+	' It should then be fixed for the line-broadened sample and a note left like "axial asymmetry parameter derived from fitting massonsh.xye in massonsh_01.inp dd/mm/yy"
+	Simple_Axial_Model(axial, 1.13206498`)	
+ 
+	' Structural information for CeO2 Kuemmerle, E.A.;Heger, G. 1999 
+	str  
+		phase_name CeO2 
+		space_group Fm-3m
+		Cubic(lpa  5.411182`) 
+		site Ce1 x 0.00 y 0.00 z 0.00  occ Ce 1 beq bvalue_ce   0.28739`
+		site O1  x 0.25 y 0.25 z 0.25  occ O  1 beq bvalue_o    0.23857`
+		scale scal_CeO2  1.24674963e-06`
+		r_bragg  1.98022136
+		Phase_Density_g_on_cm3( 7.21524701`)
+
+		' Refine sample size/microstrain contributions here for a broadened sample...
+		' ...with the TCHZ values fixed to desecribe Instrumental Resolution Function
+		' See the TOPAS manual for information on what the macros mean
+		'LVol_FWHM_CS_G_L(1, 4489.06119, 0.89, 5424.36495, !csgc1, 9999, !cslc1, 9999)
+		'e0_from_Strain( 3.57919248e-07, !sgc1, 0.0001, !slc1, 0.0001)
+
+	for strs {
+		' This peak shape gets applied to all strs; in this example there is only one str
+		' When analysing a line-broadened  sample the peak shape parameters should be fixed
+		' Always leave a note like "TCHZ parameters described from fitting massonsh.xye in massonsh_01.inp dd/mm/yy"
+		TCHZ_Peak_Type(pku,  0.000583803234`,pkv,-0.000181698976`,pkw,  3.08947187e-05`,!pkz, 0,pkx, 0.00297938029`,pky, 0.00311873483`)		 
+	}
+	 
+	 

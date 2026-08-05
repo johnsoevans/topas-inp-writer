@@ -2,7 +2,7 @@
 
 Real, working `.inp` files bundled directly in this folder (no `TOPAS_DIR` needed, unlike the larger ~280-file corpus in `references/examples-index.md`). Prefer one of these as a starting point — copy its structure and adapt names/values.
 
-Each file documents itself (`/* ... */` or `'`-comments); templates also carry a "WHAT TO CHANGE" checklist. Read that header first — this README just indexes it.
+Each file documents itself (`/* ... */` or `'`-comments); templates also carry a "WHAT TO CHANGE" checklist. Read that header first — this index just points at it.
 
 **Adding a new example**: add one row below (type + one distinctive line from its header) and, if it pairs with another file here, a Relationships line.
 
@@ -20,8 +20,13 @@ Each file documents itself (`/* ... */` or `'`-comments); templates also carry a
 | `d8_00796_riet_01.inp` | Rietveld (restraint-based organic) | Only restraint-based (non-rigid-body) organic refinement: `Distance_Restrain`/`Angle_Restrain`/`Flatten` keep two benzene rings planar/regular; every coordinate independently `@`-refined (`Pna21`). Compare with `glycine_cuka1_01_fit_01.inp` for restraints-vs-rigid-bodies. |
 | `tio2_lab_bragg_brentano_rietveld.inp` | Rietveld (real fit) | Default menu-driven TiO2 (rutile) lab fit (Durham `vscode_riet_pawley` tutorial). `CuKa2_analyt` + graphite-mono `LP_Factor`, `Simple_Axial_Model`, `Specimen_Displacement`, `TCHZ_Peak_Type` in a `for strs {}` loop, `do_errors`, full `C_matrix_normalized`. Deliberately low-quality data (Rwp ~13.7) — a plain "default fit" reference. |
 | `tio2_lab_bragg_brentano_pawley.inp` | Pawley | Matched Pawley counterpart to the file above — same data/instrument/peak-shape macros, `hkl_Is` instead of `str`/sites. |
+| `massonsh_01.inp` | Instrument resolution function (step 1 of 2) | Sharp CeO2 (ESRF BM16, Balzar size-strain round robin). Refines `TCHZ_Peak_Type(pku,pkv,pkw,!pkz,pkx,pky)` + `Simple_Axial_Model` against a broadening-free standard to define the IRF; size/strain macros commented out. Synchrotron source described with a delta-function emission profile (`lam ... lh 0.000001`). |
+| `massonbr_01.inp` | Double-Voigt size/strain (step 2 of 2) | Line-broadened CeO2, same instrument. IRF parameters from `massonsh_01.inp` pasted in and **fixed** (`!ku`/`!pkv`/…, `!axial`); the sample contribution is then refined as `LVol_FWHM_CS_G_L` (crystallite size) + `e0_from_Strain` (microstrain). `do_errors` + full `C_matrix_normalized` shows the strong size↔strain correlations. |
+
+**Instrument-resolution-function → double-Voigt workflow** (`massonsh_01.inp` → `massonbr_01.inp`): fit a standard with negligible sample broadening first, then transfer its peak-shape parameters, fixed, to the broadened sample so everything left over is sample size/strain. Double Voigt is empirical — a fundamental-parameters instrument description (`bragg_brentano_fundamental_parameters.inp`) derives the same instrumental contribution from first principles instead. Both files carry the convention of noting in a comment which file/date each transferred parameter came from.
 
 **Relationships:**
 - `tio2_peak_fit_01.inp` → `tio2_index.inp`: peak-fit-then-index pipeline, same TiO2 pattern.
 - `y2o3_demo_stage3.inp` → `bragg_brentano_template.inp`: template is the stripped-down version of this fit's instrument block.
 - `tio2_lab_bragg_brentano_rietveld.inp` ↔ `tio2_lab_bragg_brentano_pawley.inp`: matched pair, same data/instrument — use for Rietveld-vs-Pawley model-quality comparison.
+- `massonsh_01.inp` → `massonbr_01.inp`: IRF-then-size/strain pipeline, same CeO2 sample/instrument (see workflow note above).

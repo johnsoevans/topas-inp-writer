@@ -1,0 +1,73 @@
+' This example is from https://topas.webspace.durham.ac.uk/tutorial_ceo2_sizestrain/
+' It fits line-broadened data for CeO2 using an instrument resolution function (IRF) derived in massonsh_01.inp
+' Data were recorded on BM16 at the ESRF
+' It uses the double Voigt approach which is entirely empirical
+' Methods like fundamental parameters describe the instrumental contribution to the peak shape from first principles
+' The data are from the Balzar et al. 2004 IUCr size-strain round-robin: https://onlinelibrary.wiley.com/iucr/doi/10.1107/S0021889804022551
+' Other approaches and the limitations of the double Voigt method are described in https://topas.webspace.durham.ac.uk/tutorial-wppm/
+' This example uses a structural Rietveld fit. As the peak shape is the only quantity of interest a Pawley/Le Bail fit could be used instead
+
+'randomize_on_errors 
+'continue_after_convergence 
+'seed
+do_errors 
+ 
+r_exp  2.17670679 r_exp_dash  2.53214178 r_wp  3.738366 r_wp_dash  4.34880471 r_p  2.75899832 r_p_dash  3.43251234 weighted_Durbin_Watson  0.588251136 gof  1.71744124
+iters 1000  
+ 
+' Information about data file, diffractometer, background, wavelength, etc 
+xdd massonbr.xye 
+	x_calculation_step = Yobs_dx_at(Xo); convolution_step 4
+	'Synchrotron source description
+	'lh is set to an infinitely sharp value of 0.001 so source emission profile is delta-function like
+	lam ymin_on_ymax 0.0001 la 1.0 lo 0.399826 lh 0.000001
+	LP_Factor(90)
+	ymin_on_ymax 0.0001 
+	Specimen_Displacement(height,  9.97612392e-05`_9.97612829e-05)  
+	bkg @  30.5703554`_0.0607266285 -2.06459965`_0.103555927  0.669713608`_0.0899758518 -1.5296693`_0.0904313804  0.459782456`_0.0747711885 -0.268063858`_0.0725282484
+	' This is a simple asymmetry description and is refined for the instrument resolution standard
+	' It should then be fixed for the line-broadened sample and a note left like "axial asymmetry parameter derived from fitting massonsh.xye in massonsh_01.inp 05/08/26"
+	Simple_Axial_Model(!axial, 1.13206498)	
+ 
+	' Structural information for CeO2 Kuemmerle, E.A.;Heger, G. 1999 
+	str  
+		phase_name CeO2 
+		space_group Fm-3m
+		Cubic(lpa  5.411599`_0.000021) 
+		site Ce1 x 0.00 y 0.00 z 0.00  occ Ce 1 beq bvalue_ce   0.35204`_0.00314
+		site O1  x 0.25 y 0.25 z 0.25  occ O  1 beq bvalue_o    0.27690`_0.01530
+		scale scal_CeO2  1.15382909e-05`_1.105e-08
+		r_bragg  1.58756939
+		Phase_Density_g_on_cm3( 7.21357865`_8.52982473e-05)
+
+		' Refine sample size/microstrain contributions here for a broadened sample...
+		' ...with the TCHZ values fixed to desecribe Instrumental Resolution Function
+		' See the TOPAS manual for information on what the macros mean
+		LVol_FWHM_CS_G_L(1, 22.4759173`_0.0489441359, 0.89, 27.2651951`_0.0510217043, csgc1, 50.9494803`_0.237071711, cslc1, 49.4152097`_0.265016303)
+		e0_from_Strain( 2.30370117e-05`_0.000554611824, sgc1, 0.000101248803`_3.60751469_LIMIT_MIN_0.0001, slc1, 0.0105710477`_0.00187915752)
+
+	for strs {
+		' This peak shape gets applied to all strs; in this example there is only one str
+		' When analysing a line-broadened sample the peak shape parameters should be fixed
+		' Always leave a note like "TCHZ parameters described from fitting massonsh.xye in massonsh_01.inp 05/08/26"
+		TCHZ_Peak_Type(!ku,  0.000583803234,!pkv,-0.000181698976,!pkw,  3.08947187e-05,!pkz, 0, !pkx, 0.00297938029, !pky, 0.00311873483)		 
+	}
+C_matrix_normalized
+{
+                             1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+height                 1:  100  -0  -0  -0  -0  -0  -1   0   0  -0 -92   0  -0   3  -0
+bkg_rec1F1EC3815B0_    2:   -0 100 -24  54 -19  31 -11  -1  18   2   0  -7  -4  10 -17
+bkg_rec1F1EC381658_    3:   -0 -24 100 -29  51 -16  31  13  22   3   0   9 -19  15 -23
+bkg_rec1F1EC3817A8_    4:   -0  54 -29 100 -35  55 -16  14  10  -1   0  10 -13   4  -8
+bkg_rec1F1EC381850_    5:   -0 -19  51 -35 100 -36  56 -15 -16  -8   0 -16  25 -17  24
+bkg_rec1F1EC3818F8_    6:   -0  31 -16  55 -36 100 -29   7   6  -1   0  10 -14   9 -11
+bkg_rec1F1EC3819A0_    7:   -1 -11  31 -16  56 -29 100  -8 -10  -5   1  -6  11  -7  11
+scal_CeO2              8:    0  -1  13  14 -15   7  -8 100  78  18  -0  17 -26  15 -22
+bvalue_ce              9:    0  18  22  10 -16   6 -10  78 100  19   0  15 -32  25 -38
+bvalue_o              10:   -0   2   3  -1  -8  -1  -5  18  19 100   1   4  -9   8 -11
+lpa                   11:  -92   0   0   0   0   0   1  -0   0   1 100  -0   0  -3   0
+csgc1                 12:    0  -7   9  10 -16  10  -6  17  15   4  -0 100 -72  77 -56
+cslc1                 13:   -0  -4 -19 -13  25 -14  11 -26 -32  -9   0 -72 100 -73  92
+sgc1                  14:    3  10  15   4 -17   9  -7  15  25   8  -3  77 -73 100 -78
+slc1                  15:   -0 -17 -23  -8  24 -11  11 -22 -38 -11   0 -56  92 -78 100
+}
