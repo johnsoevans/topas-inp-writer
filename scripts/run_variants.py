@@ -29,7 +29,7 @@ Reported per variant:
 
 Npar sits next to dRwp so the cost of a variant is visible alongside its gain;
 `limits` flags a variant whose improvement rests on a saturated parameter
-(see R26/R27/R60 in references/27-rietveld-workflow-conventions.md).
+(see R35/R36/R37 in references/27-rietveld-workflow-conventions.md).
 
 Usage as a library (the normal case -- transforms are problem-specific):
 

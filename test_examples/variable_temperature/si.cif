@@ -1,0 +1,264 @@
+###############################################################################
+# Debye, P.;Scherrer, P. (1916)
+# Physikalische Zeitschrift 17, 277-283
+# Interferenzen an regellos orientierten Teilchen im Roentgenlicht
+# 
+# CIF by ICSD-for-WWW,  Copyright 2003 FIZ-Karlsruhe & A.W.Hewat (hewat@ill.fr)
+# NOT TO BE PUBLISHED IN ANY FORM. See http://icsd.ill.fr/icsd/conditions.html
+###############################################################################
+
+data_53782-ICSD
+_database_code_ICSD                53782
+_audit_creation_date               2003-04-01
+_chemical_name_systematic
+'Silicon'
+_chemical_formula_structural       
+'Si'
+_chemical_formula_sum              
+'Si1'
+_publ_section_title                
+'Si1'
+loop_
+_citation_id
+_citation_journal_abbrev
+_citation_year
+_citation_journal_volume
+_citation_page_first
+_citation_page_last
+_citation_journal_id_ASTM
+primary 'Physikalische Zeitschrift' 1916 17 277 283 PHZTAO
+loop_
+_publ_author_name
+Debye, P.;Scherrer, P.
+_cell_length_a                     5.43
+_cell_length_b                     5.43
+_cell_length_c                     5.43
+_cell_angle_alpha                  90.
+_cell_angle_beta                   90.
+_cell_angle_gamma                  90.
+_cell_volume                       160.10
+_cell_formula_units_Z              8
+_symmetry_space_group_name_H-M     'F d -3 m S'
+_symmetry_Int_Tables_number        227
+_refine_ls_R_factor_all            
+loop_
+_symmetry_equiv_pos_site_id
+_symmetry_equiv_pos_as_xyz
+ 1 'x,y,z'
+ 2 'x,1/2+y,1/2+z'
+ 3 '1/2+x,y,1/2+z'
+ 4 '1/2+x,1/2+y,z'
+ 5 '1/4-z,1/4-y,1/4-x'
+ 6 '1/4-z,3/4-y,3/4-x'
+ 7 '3/4-z,1/4-y,3/4-x'
+ 8 '3/4-z,3/4-y,1/4-x'
+ 9 'z,-y,-x'
+ 10 'z,1/2-y,1/2-x'
+ 11 '1/2+z,-y,1/2-x'
+ 12 '1/2+z,1/2-y,-x'
+ 13 '1/4-x,1/4-y,1/4-z'
+ 14 '1/4-x,3/4-y,3/4-z'
+ 15 '3/4-x,1/4-y,3/4-z'
+ 16 '3/4-x,3/4-y,1/4-z'
+ 17 '-x,-y,z'
+ 18 '-x,1/2-y,1/2+z'
+ 19 '1/2-x,-y,1/2+z'
+ 20 '1/2-x,1/2-y,z'
+ 21 'x,-y,-z'
+ 22 'x,1/2-y,1/2-z'
+ 23 '1/2+x,-y,1/2-z'
+ 24 '1/2+x,1/2-y,-z'
+ 25 '1/4+x,1/4-y,1/4+z'
+ 26 '1/4+x,3/4-y,3/4+z'
+ 27 '3/4+x,1/4-y,3/4+z'
+ 28 '3/4+x,3/4-y,1/4+z'
+ 29 '-z,-y,x'
+ 30 '-z,1/2-y,1/2+x'
+ 31 '1/2-z,-y,1/2+x'
+ 32 '1/2-z,1/2-y,x'
+ 33 '1/4+z,1/4-y,1/4+x'
+ 34 '1/4+z,3/4-y,3/4+x'
+ 35 '3/4+z,1/4-y,3/4+x'
+ 36 '3/4+z,3/4-y,1/4+x'
+ 37 '1/4-y,1/4-z,1/4-x'
+ 38 '1/4-y,3/4-z,3/4-x'
+ 39 '3/4-y,1/4-z,3/4-x'
+ 40 '3/4-y,3/4-z,1/4-x'
+ 41 '-y,z,-x'
+ 42 '-y,1/2+z,1/2-x'
+ 43 '1/2-y,z,1/2-x'
+ 44 '1/2-y,1/2+z,-x'
+ 45 '1/4-y,1/4-x,1/4-z'
+ 46 '1/4-y,3/4-x,3/4-z'
+ 47 '3/4-y,1/4-x,3/4-z'
+ 48 '3/4-y,3/4-x,1/4-z'
+ 49 '-y,-x,z'
+ 50 '-y,1/2-x,1/2+z'
+ 51 '1/2-y,-x,1/2+z'
+ 52 '1/2-y,1/2-x,z'
+ 53 '-y,x,-z'
+ 54 '-y,1/2+x,1/2-z'
+ 55 '1/2-y,x,1/2-z'
+ 56 '1/2-y,1/2+x,-z'
+ 57 '1/4-y,1/4+x,1/4+z'
+ 58 '1/4-y,3/4+x,3/4+z'
+ 59 '3/4-y,1/4+x,3/4+z'
+ 60 '3/4-y,3/4+x,1/4+z'
+ 61 '-y,-z,x'
+ 62 '-y,1/2-z,1/2+x'
+ 63 '1/2-y,-z,1/2+x'
+ 64 '1/2-y,1/2-z,x'
+ 65 '1/4-y,1/4+z,1/4+x'
+ 66 '1/4-y,3/4+z,3/4+x'
+ 67 '3/4-y,1/4+z,3/4+x'
+ 68 '3/4-y,3/4+z,1/4+x'
+ 69 '1/4-z,1/4-x,1/4-y'
+ 70 '1/4-z,3/4-x,3/4-y'
+ 71 '3/4-z,1/4-x,3/4-y'
+ 72 '3/4-z,3/4-x,1/4-y'
+ 73 '-z,-x,y'
+ 74 '-z,1/2-x,1/2+y'
+ 75 '1/2-z,-x,1/2+y'
+ 76 '1/2-z,1/2-x,y'
+ 77 'z,-x,-y'
+ 78 'z,1/2-x,1/2-y'
+ 79 '1/2+z,-x,1/2-y'
+ 80 '1/2+z,1/2-x,-y'
+ 81 '1/4+z,1/4-x,1/4+y'
+ 82 '1/4+z,3/4-x,3/4+y'
+ 83 '3/4+z,1/4-x,3/4+y'
+ 84 '3/4+z,3/4-x,1/4+y'
+ 85 '1/4-x,1/4-z,1/4-y'
+ 86 '1/4-x,3/4-z,3/4-y'
+ 87 '3/4-x,1/4-z,3/4-y'
+ 88 '3/4-x,3/4-z,1/4-y'
+ 89 '-x,-z,y'
+ 90 '-x,1/2-z,1/2+y'
+ 91 '1/2-x,-z,1/2+y'
+ 92 '1/2-x,1/2-z,y'
+ 93 '-x,z,-y'
+ 94 '-x,1/2+z,1/2-y'
+ 95 '1/2-x,z,1/2-y'
+ 96 '1/2-x,1/2+z,-y'
+ 97 '1/4-x,1/4+z,1/4+y'
+ 98 '1/4-x,3/4+z,3/4+y'
+ 99 '3/4-x,1/4+z,3/4+y'
+ 100 '3/4-x,3/4+z,1/4+y'
+ 101 'x,-z,-y'
+ 102 'x,1/2-z,1/2-y'
+ 103 '1/2+x,-z,1/2-y'
+ 104 '1/2+x,1/2-z,-y'
+ 105 '1/4+x,1/4-z,1/4+y'
+ 106 '1/4+x,3/4-z,3/4+y'
+ 107 '3/4+x,1/4-z,3/4+y'
+ 108 '3/4+x,3/4-z,1/4+y'
+ 109 '1/4+x,1/4+z,1/4-y'
+ 110 '1/4+x,3/4+z,3/4-y'
+ 111 '3/4+x,1/4+z,3/4-y'
+ 112 '3/4+x,3/4+z,1/4-y'
+ 113 'x,z,y'
+ 114 'x,1/2+z,1/2+y'
+ 115 '1/2+x,z,1/2+y'
+ 116 '1/2+x,1/2+z,y'
+ 117 '-z,x,-y'
+ 118 '-z,1/2+x,1/2-y'
+ 119 '1/2-z,x,1/2-y'
+ 120 '1/2-z,1/2+x,-y'
+ 121 '1/4-z,1/4+x,1/4+y'
+ 122 '1/4-z,3/4+x,3/4+y'
+ 123 '3/4-z,1/4+x,3/4+y'
+ 124 '3/4-z,3/4+x,1/4+y'
+ 125 '1/4+z,1/4+x,1/4-y'
+ 126 '1/4+z,3/4+x,3/4-y'
+ 127 '3/4+z,1/4+x,3/4-y'
+ 128 '3/4+z,3/4+x,1/4-y'
+ 129 'z,x,y'
+ 130 'z,1/2+x,1/2+y'
+ 131 '1/2+z,x,1/2+y'
+ 132 '1/2+z,1/2+x,y'
+ 133 'y,-z,-x'
+ 134 'y,1/2-z,1/2-x'
+ 135 '1/2+y,-z,1/2-x'
+ 136 '1/2+y,1/2-z,-x'
+ 137 '1/4+y,1/4+z,1/4-x'
+ 138 '1/4+y,3/4+z,3/4-x'
+ 139 '3/4+y,1/4+z,3/4-x'
+ 140 '3/4+y,3/4+z,1/4-x'
+ 141 'y,-x,-z'
+ 142 'y,1/2-x,1/2-z'
+ 143 '1/2+y,-x,1/2-z'
+ 144 '1/2+y,1/2-x,-z'
+ 145 '1/4+y,1/4-x,1/4+z'
+ 146 '1/4+y,3/4-x,3/4+z'
+ 147 '3/4+y,1/4-x,3/4+z'
+ 148 '3/4+y,3/4-x,1/4+z'
+ 149 '1/4+y,1/4+x,1/4-z'
+ 150 '1/4+y,3/4+x,3/4-z'
+ 151 '3/4+y,1/4+x,3/4-z'
+ 152 '3/4+y,3/4+x,1/4-z'
+ 153 'y,x,z'
+ 154 'y,1/2+x,1/2+z'
+ 155 '1/2+y,x,1/2+z'
+ 156 '1/2+y,1/2+x,z'
+ 157 '1/4+y,1/4-z,1/4+x'
+ 158 '1/4+y,3/4-z,3/4+x'
+ 159 '3/4+y,1/4-z,3/4+x'
+ 160 '3/4+y,3/4-z,1/4+x'
+ 161 'y,z,x'
+ 162 'y,1/2+z,1/2+x'
+ 163 '1/2+y,z,1/2+x'
+ 164 '1/2+y,1/2+z,x'
+ 165 '-z,y,-x'
+ 166 '-z,1/2+y,1/2-x'
+ 167 '1/2-z,y,1/2-x'
+ 168 '1/2-z,1/2+y,-x'
+ 169 '1/4+z,1/4+y,1/4-x'
+ 170 '1/4+z,3/4+y,3/4-x'
+ 171 '3/4+z,1/4+y,3/4-x'
+ 172 '3/4+z,3/4+y,1/4-x'
+ 173 '-x,y,-z'
+ 174 '-x,1/2+y,1/2-z'
+ 175 '1/2-x,y,1/2-z'
+ 176 '1/2-x,1/2+y,-z'
+ 177 '1/4-x,1/4+y,1/4+z'
+ 178 '1/4-x,3/4+y,3/4+z'
+ 179 '3/4-x,1/4+y,3/4+z'
+ 180 '3/4-x,3/4+y,1/4+z'
+ 181 '1/4+x,1/4+y,1/4-z'
+ 182 '1/4+x,3/4+y,3/4-z'
+ 183 '3/4+x,1/4+y,3/4-z'
+ 184 '3/4+x,3/4+y,1/4-z'
+ 185 '1/4-z,1/4+y,1/4+x'
+ 186 '1/4-z,3/4+y,3/4+x'
+ 187 '3/4-z,1/4+y,3/4+x'
+ 188 '3/4-z,3/4+y,1/4+x'
+ 189 'z,y,x'
+ 190 'z,1/2+y,1/2+x'
+ 191 '1/2+z,y,1/2+x'
+ 192 '1/2+z,1/2+y,x'
+loop_
+_atom_type_symbol
+_atom_type_oxidation_number
+Si0+     0.
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_symmetry_multiplicity
+_atom_site_Wyckoff_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_B_iso_or_equiv
+_atom_site_occupancy
+Si1 Si   8 a 0 0 0 0. 1.
+loop_
+_atom_site_aniso_label
+_atom_site_aniso_type_symbol
+_atom_site_aniso_U_11
+_atom_site_aniso_U_22
+_atom_site_aniso_U_33
+_atom_site_aniso_U_12
+_atom_site_aniso_U_13
+_atom_site_aniso_U_23
+Si1 Si   . . . . . .
+#End of data_53782-ICSD

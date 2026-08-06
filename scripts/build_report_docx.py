@@ -53,6 +53,7 @@ reports bundled with this skill's test examples):
 
 import argparse
 import os
+import re
 
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -62,8 +63,23 @@ from docx.shared import RGBColor, Inches
 
 DEFAULT_TEMPLATE = os.path.join(os.path.dirname(__file__), "..", "templates",
                                  "refinement_report_template.docx")
+VERSION_FILE = os.path.join(os.path.dirname(__file__), "..", "version.txt")
 TABLE_HEADER_FILL = "D9E2F3"
 HYPERLINK_COLOR = RGBColor(0x05, 0x63, 0xC1)
+
+
+def _topilot_version():
+    """First line of version.txt looks like "v1.0.20 from GitHub" -- return "1.0.20".
+    version.txt ships with every install, in this format, so no fallback is needed."""
+    with open(VERSION_FILE, "r", encoding="utf-8") as f:
+        first_line = f.readline().strip()
+    return re.match(r"v?(\d+(?:\.\d+)*)", first_line).group(1)
+
+
+DEFAULT_DISCLAIMER = (
+    f"This refinement was performed with TOPilot ({_topilot_version()}), it is the "
+    "user's responsibility to judge its scientific content."
+)
 
 
 def _set_cell_shading(cell, hex_color):
@@ -118,8 +134,7 @@ def _add_table(doc, header, rows):
 
 
 def build_report(title, date, sections, out_path, images=None, plots=None, files=None,
-                  disclaimer="This refinement was performed with TOPilot, it is the "
-                             "user's responsibility to judge its scientific content.",
+                  disclaimer=DEFAULT_DISCLAIMER,
                   template_path=DEFAULT_TEMPLATE):
     """
     sections: ordered list of dicts, each either:

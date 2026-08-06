@@ -22,6 +22,7 @@
 '
 'The inp file should execute the command "python .\to_Reel_v1.py .\results\" to produce .xyy files automatically
 'This needs you to have to_Reel_v1.py in the same directory as the INP file
+'If you use the TOPilot skills then the file will be copied for you
 'If this fails then run the same command from a dos prompt  
 'Note that the final .xyd file may not be processed in topas v7, if this happens run the to_Reel_v1.py command from a dos prompt
 '

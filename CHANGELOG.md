@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.24 - 2026-08-06
+- updates to rietveld strategy and skill
+- new examples
+- checked synch between skill and maste
+
 ## 1.0.23 - 2026-08-05
 - add the double voigt skill and examples
 - added a spherical harmonic plotter
