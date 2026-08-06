@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.24 - 2026-08-06
+## 1.0.25 - 2026-08-06
 - updates to rietveld strategy and skill
 - new examples
 - checked synch between skill and maste
