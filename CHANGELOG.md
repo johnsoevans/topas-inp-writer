@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.0 - 2026-08-07
+- First public release
+
 ## 1.0.27 - 2026-08-07
 - last changes before full release (as 1.1.0)
 - changes to 27-rietveld-workflow-conventions.md for quant
