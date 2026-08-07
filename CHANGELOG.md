@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.26 - 2026-08-07
+- last changes before full release (as 1.1.0)
+- changes to 27-rietveld-workflow-conventions.md for quant
+- changes to skill.md how to find python to make universal
+- moved how to update to maintenance
+- checked all for consistency and errors
+- moved prewritten topas-editor prompts to the skill so they can be updated
+
 ## 1.0.25 - 2026-08-06
 - updates to rietveld strategy and skill
 - new examples

@@ -105,11 +105,12 @@ Known limitations, stated plainly rather than overclaimed:
     deliberately left unimplemented rather than guessed at.
     ONCE TOPAS HAS RUN, though, it writes the coefficients back out in
     full as `load sh_Cij_prm { k00 !sh_c00 1.0  k41 sh_c41 -0.129 ... }`,
-    each with its own name and '!' flag. Since R46 mandates copying the
-    .out back over the .inp after every run, that explicit form is the
-    normal state of a working refinement file, and its non-'!' rows ARE
-    now counted (point 5 below) -- exactly, not by guesswork. So the gap
-    above applies only to a fresh, never-yet-refined file.
+    each with its own name and '!' flag. Since the skill's Rietveld
+    workflow conventions require copying the .out back over the .inp
+    after every run, that explicit form is the normal state of a working
+    refinement file, and its non-'!' rows ARE now counted (point 5
+    below) -- exactly, not by guesswork. So the gap above applies only
+    to a fresh, never-yet-refined file.
   - The `load hkl_m_d_th2 I { ... }` parser (point 3) treats any
     non-'!' intensity as independent, matching the manual's documented
     default ("intensity parameters are given the code of @"). This is
@@ -495,10 +496,11 @@ def parse_sh_cij_load_blocks(clean_text, exclude_spans):
     -- no static text reveals it, and that case is still not counted.
 
     But once TOPAS has run, it writes the coefficients back out in full,
-    each with its own name and '!' flag. R46 mandates copying the .out
-    back over the .inp after every run, so this explicit form is the
-    NORMAL state of a working refinement file, and counting the non-'!'
-    rows in it is exact rather than a guess.
+    each with its own name and '!' flag. The skill's Rietveld workflow
+    conventions require copying the .out back over the .inp after every
+    run, so this explicit form is the NORMAL state of a working
+    refinement file, and counting the non-'!' rows in it is exact rather
+    than a guess.
 
     Rows are LABEL NAME VALUE triples (label = k00/k41/k61/..., the
     harmonic's own tag; name = the refinable parameter). Named by

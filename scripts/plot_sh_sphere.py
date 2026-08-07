@@ -30,7 +30,8 @@ artifact; sampling density is warned on above ~12 deg separation.
 Page toggles: radius proportional to value (on), dots, surface,
 iso-contours, reciprocal triad (on), unit cell + direct triad (off). Both
 triads differ for non-cubic cells. The cell aids reading a texture
-direction (R43); the plot is directions, not positions.
+direction, as per the skill's Rietveld workflow conventions; the plot is
+directions, not positions.
 
 Usage:
     python3 plot_sh_sphere.py file.inp
