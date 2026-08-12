@@ -151,10 +151,19 @@ def get_topas_dir():
     literal text in topas.inc (it's a runtime substitution, not a
     #define/macro), so this needs its own accessor rather than reusing
     the harvested macro tables.
+
+    Deliberately does NOT go through _get_cache(): the root is just the
+    environment variable, so walking the whole install to build the file
+    index before handing it back would be pure waste. The check here is
+    identical to the one _get_cache() applies (set, and a real directory),
+    so the answer is the same either way. This matters because it is the
+    most-travelled entry point in the script set -- symmetry_utils.py
+    calls it, and that is imported by check_inp_syntax.py, cif_to_str.py,
+    plot_str_3d.py, insert_adps.py and symmetrize_str.py.
     """
-    cache = _get_cache()
-    if cache["topas_dir"]:
-        return cache["topas_dir"], True
+    topas_dir = os.environ.get("TOPAS_DIR", "").strip()
+    if topas_dir and os.path.isdir(topas_dir):
+        return topas_dir, True
     return "", False
 
 

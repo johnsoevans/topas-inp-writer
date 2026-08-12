@@ -1,5 +1,8 @@
 # Changelog
 
+# 1.1.1 - 2026-08-12
+- specific rules for handling mixed sites and split sites and prompting user
+
 ## 1.1.0 - 2026-08-07
 - First public release
 
