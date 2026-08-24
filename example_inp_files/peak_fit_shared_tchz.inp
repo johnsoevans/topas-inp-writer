@@ -1,0 +1,34 @@
+' peak_fit_shared_tchz.inp -- Stage 1 of the indexing peak-fit pipeline.
+' One shared TCHZ shape over every peak; only position and area vary per peak.
+' This is the STABLE backbone: the shape is fixed by the strong resolved peaks
+' and imposed on the weak ones, so each weak peak carries two near-linear
+' parameters instead of three correlated ones.
+'
+' Substitute: DATAFILE, the wavelength/emission block, start_X/finish_X, and the
+' load block (position + area from peak_search.py; area, never height).
+' Lab Cu Ka1/Ka2 shown; for a single wavelength use e.g.
+'    lam ymin_on_ymax 0.0001 la 1 lo 0.8257653
+
+r_wp 0 r_exp 0 r_p 0 weighted_Durbin_Watson 0 gof 0 r_wp_dash 0 r_p_dash 0
+
+iters 100000
+chi2_convergence_criteria 0.001
+
+xdd "DATAFILE.raw"
+   x_calculation_step = Yobs_dx_at(Xo);
+   start_X  25
+   finish_X 92
+   CuKa2_analyt(0.0001)
+   ' No LP_Factor on xo_Is -- it belongs on structure-factor intensities only.
+   Simple_Axial_Model(axial, 6)
+   bkg @ 0 0 0 0 0 0
+
+   Out_X_Ycalc("stage1_ycalc.xy")
+
+   xo_Is
+      TCHZ_Peak_Type(pku, 0.001, pkv, -0.001, pkw, 0.005, !pkz, 0, pkx, 0.05, !pky, 0)
+      load xo I {
+         @  27.4600`  @   907.785`
+         @  36.1200`  @   363.555`
+         @  41.2800`  @   176.703`
+      }

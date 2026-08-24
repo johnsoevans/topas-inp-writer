@@ -1,0 +1,106 @@
+# instrument_descriptions.toml -- one entry per diffractometer.
+#
+# These describe INSTRUMENTS, not peak profiles. Each entry carries its own LP
+# factor and emission line, so choosing an instrument chooses the radiation too.
+#
+# {wavelength} in an emission string is substituted from the form's wavelength
+# box, which the wizard enables only when needs_wavelength = true.
+#
+# fp_block is OPTIONAL raw TOPAS source, pasted verbatim into the .inp at xdd
+# level. There is no fixed set of FP parameters -- reflection geometry wants
+# Radius/Divergence/axial_conv/Slit_Width, a capillary instrument wants other
+# terms entirely -- so this is free text, not a table of named numbers. An
+# instrument without one simply opens the wizard's FP box empty.
+#
+# To add an instrument: copy an entry, edit it. To give an instrument an FP
+# block: paste its geometry into the wizard once, then copy the text here.
+#
+# NEVER refine FP geometry terms against an unknown sample. They correlate
+# strongly with crystallite size and microstrain, so an unconstrained geometry
+# refinement launders instrument error into fake sample physics. Fix them at
+# their measured values and let the sample terms take the residual.
+
+[[instrument]]
+name              = "BB_CuKa1_Ge111_PSD Durham d8"
+geometry          = "bragg_brentano"
+lp_factor         = 27.26            # Ge(111) monochromator 2-theta for Cu Ka
+emission          = "CuKa1(0.0001)"
+needs_wavelength  = false
+offset_correction = "height"
+# From example_inp_files/bragg_brentano_fundamental_parameters.inp, whose inline
+# comments explain each term. Real values for this exact instrument.
+fp_block = """
+Radius(217)
+Divergence(1)
+axial_conv
+  filament_length         12
+  sample_length           15
+  receiving_slit_length   12
+  primary_soller_angle    5
+  secondary_soller_angle  5
+Slit_Width(0.1)
+"""
+
+[[instrument]]
+name              = "BB_CuKa2_graphite_scint Durham d5000"
+geometry          = "bragg_brentano"
+lp_factor         = 26.6
+emission          = "CuKa2_analyt(0.0001)"
+needs_wavelength  = false
+offset_correction = "height"
+# no fp_block yet -- selecting FP opens an empty paste box
+
+[[instrument]]
+name              = "BB_CuKa2_PSD Durham d7/d9"
+geometry          = "bragg_brentano"
+lp_factor         = 0
+emission          = "CuKa2_analyt(0.0001)"
+needs_wavelength  = false
+offset_correction = "height"
+# no fp_block yet -- selecting FP opens an empty paste box
+
+[[instrument]]
+name              = "Trans_MoKa1_PSD Durham d6"
+geometry          = "transmission"
+lp_factor         = 12.46
+emission          = "la 1.0 lo 0.70930 lh 0.2695"
+needs_wavelength  = false
+offset_correction = "zero"
+# no fp_block yet -- selecting FP opens an empty paste box
+
+[[instrument]]
+name              = "Synchrotron"
+geometry          = "synchrotron"
+lp_factor         = 90
+emission          = "lam ymin_on_ymax 0.0001 la 1.0 lo {wavelength} lh 0.000001"
+needs_wavelength  = true
+offset_correction = "zero"
+# no fp_block -- FP is not the usual model here
+
+[[instrument]]
+name              = "Neutron CW"
+geometry          = "neutron_cw"
+lp_factor         = 90
+emission          = "lam ymin_on_ymax 0.0001 la 1.0 lo {wavelength} lh 0.001"
+needs_wavelength  = true
+offset_correction = "zero"
+extra_lines       = ["neutron_data"]
+# no fp_block -- FP is not the usual model here
+
+[[instrument]]
+name                  = "Neutron ToF (name below)"
+geometry              = "neutron_tof"
+radiation_kind        = "tof"
+needs_wavelength      = false
+needs_instrument_name = true
+extra_lines           = ["neutron_data"]
+# No lp_factor and no emission ON PURPOSE. Both are continuous-wave concepts:
+# LP_Factor is a CW Lorentz-polarisation correction, and a time-of-flight
+# source is a white beam with no single emission line. Filling either in with
+# a plausible-looking number would be a lie that the .inp then inherits.
+#
+# radiation_kind gates six controls in the wizard -- wavelength becomes the
+# instrument name, and variable slits, axial model, 2-theta offset and the CW
+# peak shapes all drop out. An entry with no radiation_kind is treated as "cw",
+# so the entries above keep working unchanged.
+# no fp_block -- ToF profiles are back-to-back exponentials, not FP geometry

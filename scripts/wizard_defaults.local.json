@@ -1,0 +1,21 @@
+{
+  "last_job_path": "C:\\data_local\\TOPilot_ai_test\\peak_fitting_indexing\\three_phase_example\\d5_05268_index_01_job.json",
+  "general": {
+    "last_dir": "C:\\data_local\\TOPilot_ai_test\\peak_fitting_indexing\\three_phase_example",
+    "out_dir": "C:\\data_local\\TOPilot_ai_test\\peak_fitting_indexing\\three_phase_example",
+    "mode": "create_and_run"
+  },
+  "rietveld": {
+    "rules": "rietveld"
+  },
+  "measurement": {
+    "variable_slits": "fixed"
+  },
+  "corrections": {
+    "two_theta_max": 70
+  },
+  "peak_shape": {
+    "model": "tchz",
+    "sample_size_strain": false
+  }
+}

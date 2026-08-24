@@ -1,0 +1,84 @@
+# wizard_defaults.toml -- opening state of every field. Edit freely.
+# Anything missing or mistyped falls back to the built-in default with a warning,
+# so a broken or deleted file is a non-event.
+#
+# ---------------------------------------------------------------------------
+# TWO KINDS OF VALUE, and the difference matters
+#
+#   Values-when-enabled    what a control shows once it is switched on.
+#                          Active below. Setting axial_length = 10 does not
+#                          claim you want an axial model; it says "10 if you do".
+#
+#   Assertions             a claim about THIS refinement. Shipped COMMENTED OUT,
+#                          because the shipped file must not answer questions on
+#                          your behalf -- an unset optional field means "Claude
+#                          decides", and a shipped value would silently convert
+#                          that into a decision nobody made.
+#
+# Uncomment an assertion to pin it. Anything you write here IS binding: it
+# pre-selects the control on every launch and is used exactly as if you had
+# clicked it. That is the point of the file -- it just has to be your choice,
+# not one made for you.
+# ---------------------------------------------------------------------------
+#
+# Tables mirror the form's three blocks. [general] and [measurement] are shared
+# by every workflow; everything below them belongs to the Rietveld/Quant tab.
+# Keep that boundary when adding keys, so a later per-workflow split stays purely
+# additive and no shared key has to move.
+
+# --- shared: the job -------------------------------------------------------
+[general]
+mode = "create_and_run"        # create_and_run | create_only | continue
+
+# --- shared: the measurement ----------------------------------------------
+[measurement]
+# ASSERTION. Slit mode is invisible when wrong -- the fit still converges and the
+# distortion lands in ADPs and occupancies -- so it is never guessed for you.
+# Uncomment if your instrument is always run one way.
+# variable_slits = "variable"   # fixed | variable
+
+# --- Rietveld/Quant tab ----------------------------------------------------
+[rietveld]
+rules = "rietveld"             # rietveld | quantitative
+
+[corrections]
+# ASSERTION. "from_geometry" takes the instrument's own offset_correction.
+# offset_correction = "from_geometry"   # from_geometry | height | zero | none
+
+[peak_shape]
+# ASSERTION -- which peak-shape family to use.
+# model = "tchz"               # tchz | fp
+
+# Sample size/strain: LVol_FWHM_CS_G_L + e0_from_Strain. OFF by default, because
+# ticking it FIXES the TCHZ terms -- which only makes sense with a measured
+# instrument resolution function. Without one, the fixed TCHZ carries another
+# sample's broadening, peaks come out too broad, and size/strain pin at their
+# limits trying to remove width. Turn it on once you have a LaB6/Si standard.
+sample_size_strain = false
+
+# Empirical, not an instrument constant: it absorbs sample-dependent effects and
+# refines to very different values on the same diffractometer (9.2 on one sample,
+# 3.7 on another). So it starts mid-range and REFINES by default -- every worked
+# example in the skill refines it, fixing it only where the value came from a
+# measured standard. Leaving it fixed at a guess adds peak width nothing can
+# remove, which is subtle and expensive to diagnose.
+axial_length = 6               # value-when-enabled
+refine_axial = true
+
+[refinement]
+background_order  = 6          # value-when-enabled
+# One count for both modes. A create-only .inp exists so it CAN be run later, so
+# writing iters 0 into it just means the first run does nothing.
+iters_run         = 1000
+
+# ASSERTIONS.
+# do_errors = false
+# continue_after_convergence = false
+# first_cycle = ["scale_background"]
+
+[phases]
+confidence  = "definite"
+refine_cell = true
+po          = "none"           # none | march_dollase | spherical_harmonics
+po_order    = 4                # start low; order 8 can mean a lot of parameters
+beq_by_type = false

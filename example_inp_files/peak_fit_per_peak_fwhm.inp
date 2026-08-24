@@ -1,0 +1,51 @@
+' peak_fit_per_peak_fwhm.inp -- free per-peak FWHM diagnostic (Stage 3).
+'
+' *** The obvious form does NOT work. ***
+'   xo_Is
+'      load xo I pv_fwhm { 24.83 @ 128.4 @ 0.05 min 0.006 max 5 }
+' parses without error and TOPAS then SILENTLY IGNORES the '@' on the width:
+' every peak keeps its starting value and the .out shows no ` error suffix.
+' xo_Is carries only [xo E I E], so peak shape is a property of the BLOCK, not
+' of the row.  A free width therefore needs ONE xo_Is BLOCK PER PEAK, below.
+'
+' pv_lor is shared via one global prm: refining mixing and width together per
+' peak saturates pv_lor at its limit on most peaks.
+'
+' Refine in two stages (generate both files programmatically):
+'   A: positions and areas fixed, widths fixed (!fwNNN) -- converge bkg/axial/plor.
+'   B: seed plor from A, then release areas and widths as shown here.
+'
+' FWHM min = Max(0.005, 2 * data step) in degrees; max a few degrees.  The floor
+' stops collapse onto a noise spike -- it must NOT be the main-phase width, since
+' an impurity can be sharper than the main phase (crystalline Si in a silicate).
+
+r_wp 0 r_exp 0 r_p 0 weighted_Durbin_Watson 0 gof 0 r_wp_dash 0 r_p_dash 0
+
+iters 100000
+chi2_convergence_criteria 0.001
+
+prm plor 0.5 min 0.001 max 1
+
+xdd "DATAFILE.xye"
+   x_calculation_step = Yobs_dx_at(Xo);
+   start_X  12
+   finish_X 70
+   lam ymin_on_ymax 0.0001 la 1 lo 0.8257653
+   Simple_Axial_Model(axial, 6)
+   bkg @ 0 0 0 0 0 0
+
+   Out_X_Ycalc("perpeak_ycalc.xy")
+
+   xo_Is
+      peak_type pv
+      pv_lor = plor;
+      pv_fwhm fw000 0.05 min 0.006 max 5
+      load xo I { 15.13264  @ 176.48 }
+
+   xo_Is
+      peak_type pv
+      pv_lor = plor;
+      pv_fwhm fw001 0.05 min 0.006 max 5
+      load xo I { 24.83374  @ 128.38 }
+
+   ' ... one such block per peak ...
