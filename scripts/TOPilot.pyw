@@ -1,6 +1,6 @@
 """TOPilot wizard — double-clickable launcher.
 
-Runs the same dialog as topilot_wizard.py, but standalone: on OK it opens a
+Runs the same dialog as topilot_wizard.py, but standalone: on Go it opens a
 Claude CLI session on the job file it just wrote, instead of printing the job
 to stdout for a waiting Claude Code call.
 

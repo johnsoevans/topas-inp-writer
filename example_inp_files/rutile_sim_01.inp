@@ -12,7 +12,7 @@
 iters 0
 yobs_eqn !dummy.xy=1;
 min 0 max 150 del 0.01
-xdd_out d:\data\topas_workshop\tio2_rietveld\rutile.cif_sim_01.xy load out_record out_fmt out_eqn { " %11.5f  " = X; " %11.5f\n" = Ycalc; }
+xdd_out rutile.cif_sim_01.xy load out_record out_fmt out_eqn { " %11.5f  " = X; " %11.5f\n" = Ycalc; }
 LP_Factor(!th2_monochromator,0)
 CuKa2(0.0001)
 bkg 100

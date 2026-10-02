@@ -5,7 +5,7 @@ them to a JSON job file.
 
 This dialog holds NO TOPAS knowledge and no Claude coupling. It is a form that
 writes JSON. All refinement knowledge lives in the topas-inp-writer skill and
-in the /topas-wizard slash command.
+in the /topilot-wizard slash command.
 
     python topilot_wizard.py [--out <path to job file>] [--workflow rietveld]
 
@@ -313,7 +313,7 @@ def load_hovertext() -> dict[str, str]:
 
 class Scrollable(ttk.Frame):
     """Vertically scrolling frame (ttk has none). Tab content only -- the
-    shared blocks stay outside so OK can never scroll off screen."""
+    shared blocks stay outside so the Go button can never scroll off screen."""
 
     def __init__(self, parent, **kw):
         super().__init__(parent, **kw)
@@ -451,7 +451,7 @@ def wrap_to_width(label: ttk.Label, margin: int = 28) -> None:
 def bind_text_revalidate(widget: tk.Text, validate) -> None:
     """tk.Text has no textvariable to trace, unlike every Entry in this form,
     so nothing calls validate() as the user types or pastes into one -- the
-    status line and OK button then go stale until some unrelated control
+    status line and the Go button then go stale until some unrelated control
     happens to touch the form. <<Paste>> is also bound because a mouse-menu
     paste fires no key event; the 1 ms defer lets the pasted text land first,
     since <<Paste>> fires before the widget's own insert on some Tk builds."""
@@ -817,7 +817,7 @@ class PhaseRow(ttk.Frame):
                 and not self.name_var.get().strip())
 
     def problems(self) -> list[str]:
-        """Reasons OK stays disabled; also drives the Options button label.
+        """Reasons the Go button stays disabled; also drives the Options button label.
         Paths and required Pawley fields only -- no physics validation."""
         out = []
         name = self.name_var.get().strip() or "(unnamed phase)"
@@ -909,8 +909,8 @@ class Wizard(tk.Tk):
         self.space_groups = load_space_groups(self.warnings)
         self.hovertext = load_hovertext()
 
-        self.title("TOPilot wizard  "
-                   "[enter compulsory items; non-compulsory can be left to TOPilot]")
+        self.title("TOPilot wizard test version "
+                   "[enter compulsory starred items; non-compulsory can be left to TOPilot]")
         self._style()
         self._build()
         # --workflow picks the opening analysis instead of the opening tab.
@@ -1054,7 +1054,7 @@ class Wizard(tk.Tk):
         alone.
 
         Rows 0-5 sit inside ONE outer scroller and the button bar stays outside
-        it, so OK can never scroll away. Do not nest another scroller inside
+        it, so the Go button can never scroll away. Do not nest another scroller inside
         it -- that clips content instead of scrolling it.
 
         Row 4 carries the weight so the notebook takes any SPARE height on a
@@ -1863,7 +1863,7 @@ class Wizard(tk.Tk):
 
     def _build_job(self):
         """Mode and output. Parented to root so expanding an optional group
-        cannot push OK off-screen."""
+        cannot push the Go button off-screen."""
         f = ttk.LabelFrame(self._host, text=" 4 · What to do with the .inp file ",
                            style="Section.TLabelframe", padding=(10, 6))
         f.grid(row=3, column=0, sticky="ew", padx=12, pady=(2, 4))
@@ -1897,7 +1897,9 @@ class Wizard(tk.Tk):
                                           sticky="w", padx=6)
 
     def _build_buttons(self):
-        # Outside the scroller on purpose: OK must never scroll off screen.
+        # Outside the scroller on purpose: the Go button must never scroll off
+        # screen. (Its widget and handler keep their older names, ok_btn and
+        # on_ok, from when the button was labelled OK.)
         bar = ttk.Frame(self, padding=(12, 6))
         bar.grid(row=1, column=0, sticky="ew")
         self._btn_bar = bar
@@ -1907,7 +1909,7 @@ class Wizard(tk.Tk):
         ttk.Label(legend, text=" required", foreground="grey").pack(side="left")
         self.status = ttk.Label(bar, text="", foreground="#a05000")
         self.status.pack(side="left")
-        self.ok_btn = ttk.Button(bar, text="OK", command=self.on_ok, default="active")
+        self.ok_btn = ttk.Button(bar, text="Go", command=self.on_ok, default="active")
         self.ok_btn.pack(side="right")
         ttk.Button(bar, text="Cancel", command=self.on_cancel).pack(side="right", padx=(0, 6))
         ttk.Button(bar, text="Save as defaults", command=self.on_save_defaults).pack(
@@ -3038,7 +3040,7 @@ def main(argv: list[str] | None = None, from_claude: bool | None = None) -> int:
                     help="never start a CLI session, even standalone (testing)")
     args = ap.parse_args(argv)
 
-    # Which of the two hand-offs OK performs -- is Claude Code DRIVING this
+    # Which of the two hand-offs the Go button performs -- is Claude Code DRIVING this
     # process?
     #   driven     -> write the job file, print it, exit 0; Claude reads stdout.
     #   standalone -> write the job file, open a Claude CLI session on it.

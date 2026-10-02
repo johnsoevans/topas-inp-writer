@@ -80,9 +80,8 @@ limitations, stated up front rather than silently guessed around:
     rules) -- this tool favors a clean, readable expansion over
     line-for-line fidelity with tc.log.
   - #external_INP is intentionally NOT textually merged into its
-    referencing file's own expansion -- confirmed via a real bundled
-    before/after pair (references/examples/external_inp/ext_inp.inp and
-    its own .out result) that TOPAS keeps each #external_INP target as
+    referencing file's own expansion -- confirmed via the installation's
+    example external_inp/ext_inp.inp and its .out result that TOPAS keeps each #external_INP target as
     its own separately loaded/saved file rather than inlining it. The
     directive line is left as-is in the parent's expansion, and each
     target's own expansion is appended afterward as a clearly labeled,
@@ -338,10 +337,9 @@ INCLUDE_RE = re.compile(r'#include\s+(?:"([^"]+)"|([^\s"(#]+))', re.IGNORECASE)
 #                          directory rather than the system .inc
 #                          library, and nestable (an ingested file can
 #                          itself #ingest another).
-#   #external_INP $file -- the opposite: confirmed via a real bundled
-#                          before/after pair (references/examples/
-#                          external_inp/ext_inp.inp + its .out result)
-#                          that TOPAS does NOT merge this into the
+#   #external_INP $file -- the opposite: confirmed via the installation's
+#                          example external_inp/ext_inp.inp and its
+#                          .out result that TOPAS does NOT merge this into the
 #                          parent's own output -- the directive line
 #                          itself survives verbatim even after a real
 #                          refinement run. This matches the documented
@@ -1100,8 +1098,8 @@ def expand_file(path, run_number=0, _already_external=None):
     """
     Full expansion of `path`, including locating (and separately
     expanding) any #external_INP targets it references. Per confirmed
-    real behavior (references/examples/external_inp/ext_inp.inp vs. its
-    own .out result), #external_INP targets are NOT merged into the
+    real behavior (the installation's example external_inp/ext_inp.inp
+    and its .out result), #external_INP targets are NOT merged into the
     parent's token stream by TOPAS -- each stays its own independently
     loaded/saved file. To respect that while still giving visibility
     into what those files contain, the parent's own #external_INP

@@ -106,7 +106,7 @@ serine file this script was built for), color-coded by kind
 (independent/dependent/fixed), plus a live search box that auto-expands
 every ancestor of a match. Self-contained, no CDN dependencies, dark/
 light via `prefers-color-scheme` -- matching this skill's established
-visualization pattern (see `topas_keyword_tree.py`/`plot_xy.py`). Opens
+visualization pattern (see `plot_xy.py`). Opens
 in the default web browser afterward, NOT VS Code -- this script is the
 one place in the skill that can emit either a text report or an HTML
 page from the same `-o` flag, so the open-target follows the actual
@@ -1126,7 +1126,7 @@ def main():
             # HTML output opens in the default browser -- unlike the
             # plain-text report below, which opens in VS Code. Matches
             # this skill's own established convention (see
-            # topas_keyword_tree.py/plot_xy.py): text reports -> VS Code,
+            # plot_xy.py): text reports -> VS Code,
             # HTML visualizations -> browser.
             abs_path = os.path.abspath(args.output)
             if os.name == "nt":
@@ -1169,13 +1169,14 @@ def main():
             f.write(report)
         print(f"Written to {args.output}", file=sys.stderr)
         if not args.no_open:
-            # Matches format_inp_hierarchy.py's own established convention
-            # (see module docstring): shutil.which() resolves "code.cmd" on
-            # Windows the way a real shell would, which a bare
-            # subprocess.run(["code", ...]) does not find on its own.
+            # Matches format_inp_hierarchy.py: which() resolves "code.cmd" on
+            # Windows, which a bare subprocess.run(["code", ...]) does not
+            # find. Popen + DEVNULL because the launcher takes ~1.3 s to exit
+            # and would hold our stdout/stderr open for a capturing caller.
             code_path = shutil.which("code") or shutil.which("code.cmd")
             if code_path:
-                subprocess.run([code_path, args.output], check=False)
+                subprocess.Popen([code_path, args.output],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
                 print("Note: 'code' CLI not found on PATH -- couldn't open the report in VS Code.", file=sys.stderr)
     else:

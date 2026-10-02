@@ -102,13 +102,26 @@ More general again is the use of the Get function as used in the Cubic macro:
 
 Here the constraints are formulated without the need for a parameter name.
 
-## Get() path resolution: arrays and missing objects
-
-**Arrays.** The walk is not always a single unambiguous chain. Where a path passes through a member that is a genuine array — several same-named items under one parent, such as many `site`s in a `str` or many `str`s in an `xdd` — `Get()` always resolves to the **first** item, with no way to express which one was meant. TOPAS issues a warning naming the ambiguity when this happens. Treat that warning as a signal that the equation needs rewriting to reach the intended object explicitly, not as noise.
+## Get() path resolution: where it is written, and missing objects
 
 **Missing objects are created, not reported.** If a name on the path does not exist, `Get()` creates it — and creates every missing object along the path, each at the position the path defines for it. `Get(a, b, c)` with none of the three present builds all three. This makes `Get()` unusable as a test for whether something exists: it does not report absence, it ends it. It also means a mistyped name inside `Get()` fails silently rather than raising an error, leaving structure in the refinement that was never written by hand.
 
-Both rules above describe the behaviour at the level a user needs. A few items are handled differently internally, so treat this as a working model rather than an exact account of the kernel, and check against a real run before relying on either rule in an unusual case.
+**Where `Get()` is written decides what it finds.** `Get(name)` looks in the object it is written in and the objects enclosing it. It does not search down into the `site`s of a `str` or the `str`s of an `xdd`. Anything written after a `site` belongs to that site until the next one starts, and the same holds for a `str`. A `Get()` that finds nothing creates the object instead (above), without any message.
+
+For a `str` holding two sites, `Al` (`z 0.35218`) and then `O` (`z 0.25`), inside an `xdd` holding two `str`s:
+
+| written | equation | result |
+|---|---|---|
+| in the `str`, above the sites | `Get(z)` | 0, a new empty `z` on the `str`, not either site's |
+| in the `str`, above the sites | `Get(site, z)` | 0, a new empty site |
+| in the `str`, above the sites | `scale = 0.001 Get(z);` | scale 0, so an empty calculated pattern |
+| in the `xdd`, above the `str`s | `Get(str, scale)` | a new empty `str`; the run stops with `Structure has no sites` |
+| after the `O` site | `Get(z)` | 0.25, the `z` of `O` |
+| in a `site` | `beq = Get(b1);`, `b1` a `prm` | `Cannot locate b1 from beq in data structures`; write `beq = b1;` |
+
+Write the `Get` inside the object you mean, or give the value a parameter name (`z zO 0.25`) and use the name (`= zO;`). A value of 0, an empty pattern, or `Structure has no sites` appearing after a `Get()` was added usually means it created an object instead of finding one.
+
+These rules describe the behaviour at the level a user needs. A few items are handled differently internally, so treat this as a working model rather than an exact account of the kernel, and check against a real run before relying on it in an unusual case.
 
 ## Try and use parameter attributes
 

@@ -1,13 +1,13 @@
 # Changelog
-# 1.1.2 - 2026-?-?
+## 1.1.2 - 2026-10-02
 - sped up file open in several py routines (no wait for complete)
 - updated find_example.py so doesn't rely on old prewritten list 
 - added Cu Kbeta and W Lalpha to indexing knowledge
-- added 29-indexing-workflow-conventions.md for peak seaching, fitting and indexing
-- added TOPilot-wizard.py and TOPilot.pyw launcher for CLI
+- added draft 29-indexing-workflow-conventions.md for peak searching, fitting and indexing
+- added topilot_wizard.py and TOPilot.pyw launcher for CLI
+- new references for modulated structures and electron diffraction in v9
 
-
-# 1.1.1 - 2026-08-12
+## 1.1.1 - 2026-08-12
 - specific rules for handling mixed sites and split sites and prompting user
 
 ## 1.1.0 - 2026-08-07

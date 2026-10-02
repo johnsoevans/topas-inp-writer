@@ -1,10 +1,12 @@
 # Worked-Example Index
 
-This indexes real TOPAS `.inp` example files bundled under `references/examples/`. These are complete, working refinement scripts (not manual excerpts) covering many refinement types. Before writing a new INP file from scratch, grep this folder or check the table below for an existing example close to the task at hand, and adapt its structure/macros rather than inventing syntax.
+This indexes the real `.inp` example files that ship with a TOPAS installation; they are not bundled with this skill. Resolve one on disk with `python scripts/topas_install.py --example <path>`, using the path as written in the table. These are complete, working refinement scripts (not manual excerpts) covering many refinement types. Before writing a new INP file from scratch, check the table below for an existing example close to the task at hand, and adapt its structure/macros rather than inventing syntax.
 
-Detected topics are heuristic (regex-based keyword detection on the first ~20KB of each file) and may be incomplete or miss secondary topics in a file — treat them as a starting hint, not a definitive label. When unsure, open the file directly or grep for the exact keyword you need across the whole `examples/` folder.
+Detected topics are heuristic (regex-based keyword detection on the first ~20KB of each file) and may be incomplete or miss secondary topics in a file — treat them as a starting hint, not a definitive label. When unsure, open the file directly or grep the installation's example files for the exact keyword you need.
 
-**A note on pruned examples.** Three example files were removed after review because they were near-duplicates that added no new syntax/technique beyond a smaller sibling already in the corpus, saving about 8.3 MB with no loss of documented technique: `sp2/cholestane/cif2ta.inp` (identical `SHELX_HKL4`/restraint-list technique to `sp2/alanine/cif2ta.inp`, just ~10x more repetitive restraint lines for a bigger molecule), `pdf-generate/Silicon/decon.inp` (the same 3-operation `Include_PDF_Generate` pipeline already demonstrated by `LiFePO4/decon.inp`, `Fullerene/decon.inp`, and `Tungsten/decon.inp`, none of which are specifically discussed by name for Silicon in `references/08-pdf-generation.md`), and `sp/serine_i_evans_n_ta_bang_rot-z.inp` (identical to `sp/serine_i_evans_n_ta_bang_rot.inp` apart from one `#define USE_Z_MATRIX` flag — the z-matrix/rigid-body technique it toggles is already covered by the dedicated `rigid/` folder). Four `.out` files that were byte-identical to their own `.inp` (meaning the run changed nothing) were also removed as pure duplicates: `external_inp/instrument.out`, `PDF-adps/approx-1.out`, `xrd-ct/xrd-ct-1.out`, `grs-alvo4/solve-1.out` — their `.inp` counterparts remain and are identical in content. Genuinely-varied examples that merely look similar at a glance (e.g. the 18 `cf-protein/*/Solve.inp` charge-flipping recipes across different space groups, or `single-crystal/ae1-*.inp`'s different techniques applied to the same compound) were deliberately kept, since each demonstrates different tuning choices or a different keyword/technique, not the same lesson repeated.
+**Which examples a user has depends on their TOPAS version.** The table covers Versions 7, 8 and 9; a row marked "(Version 9)" or "Versions 8 and 9" is not in earlier installations, and the full `cf-protein/` set ships with Versions 7 and 8 while Version 9 carries only some of it. If a listed file does not resolve in the user's installation, say so plainly and use a close alternative from the table.
+
+**Left out on purpose.** Three files in the installation are not indexed because each repeats a smaller example already listed: `sp2/cholestane/cif2ta.inp` (the `SHELX_HKL4`/restraint-list technique of `sp2/alanine/cif2ta.inp`, with ~10x more restraint lines for a bigger molecule), `pdf-generate/Silicon/decon.inp` (the 3-operation `Include_PDF_Generate` pipeline of `LiFePO4/decon.inp`, `Fullerene/decon.inp` and `Tungsten/decon.inp`), and `sp/serine_i_evans_n_ta_bang_rot-z.inp` (`sp/serine_i_evans_n_ta_bang_rot.inp` with one `#define USE_Z_MATRIX` flag; z-matrix rigid bodies are covered by the `rigid/` folder). Examples that only look alike (e.g. the `cf-protein/*/Solve.inp` charge-flipping recipes across different space groups, or `single-crystal/ae1-*.inp`'s different techniques on one compound) are all indexed, since each shows different tuning choices or a different keyword.
 
 ## (root)/
 
@@ -44,6 +46,7 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | `fourier-map-cime.inp` | 2.4 KB | Rietveld/structure |  |
 | `hash_prm.inp` | 2.0 KB | (unclassified — open to inspect) |  |
 | `include-io.inp` | 0.1 KB | (unclassified — open to inspect) |  |
+| `inp_from_cif.inp` | 0.2 KB | Rietveld/structure | (Version 9) `#inp_from_cif ceo2.cif` reads the structure from a CIF |
 | `lab61.inp` | 1.0 KB | Rietveld/structure |  |
 | `li025.inp` | 2.7 KB | Rietveld/structure, Quantitative analysis |  |
 | `li250.inp` | 2.2 KB | Rietveld/structure, Quantitative analysis |  |
@@ -194,6 +197,15 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | --- | --- | --- | --- |
 | `dispersion/disp.inp` | 1.1 KB | (unclassified — open to inspect) |  |
 
+## ed/ (Version 9)
+
+| File | Size | Detected topics | Notes |
+| --- | --- | --- | --- |
+| `ed/quartz/topas/qtz-dyn-0.inp` | 2.0 KB | Electron diffraction, dynamical, absolute structure | 99 frames; data from Zenodo 10.5281/zenodo.7185657, not installed |
+| `ed/glycine/topas/gly-dyn-0.inp` | 2.7 KB | Electron diffraction, dynamical | first calculation, `iters 0` |
+| `ed/glycine/topas/gly-dyn-1.inp` | 23.3 KB | Electron diffraction, dynamical | expanded form of gly-dyn-0 without frames 75 and 76 |
+| `ed/test-0.inp` | 3.2 KB | Electron diffraction, dynamical, frame orientation | synthetic data in `ed/test-0.cif_pets`; the frame rotations are refined back to zero |
+
 ## external_inp/
 
 | File | Size | Detected topics | Notes |
@@ -269,6 +281,12 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | `indexing/ex9.inp` | 0.6 KB | (unclassified — open to inspect) |  |
 | `indexing/template.inp` | 0.8 KB | (unclassified — open to inspect) | All crystal systems |
 
+## je-para/ (Versions 8 and 9)
+
+| File | Size | Detected topics | Notes |
+| --- | --- | --- | --- |
+| `je-para/d8_02999_35_annotate_04.inp` | 194.7 KB | Rietveld/structure, Parametric refinement | annotated parametric Rietveld file, after Stinton & Evans, J. Appl. Cryst. 2006 |
+
 ## k-factor/
 
 | File | Size | Detected topics | Notes |
@@ -309,6 +327,28 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | `mag/mag.inp` | 1.8 KB | Rietveld/structure, Magnetic | #define CREATE_ |
 | `mag/maglamno3_magnetic.inp` | 2.1 KB | Rietveld/structure, Magnetic | continue_after_convergence randomize_on_errors |
 | `mag/occ-merge.inp` | 1.8 KB | Rietveld/structure, Magnetic | #define CREATE_ |
+
+## mod/ (Version 9)
+
+Most `mod` powder examples are self tests: run once with `#define CREATE__` to simulate the data, then without it to refine.
+
+| File | Size | Detected topics | Notes |
+| --- | --- | --- | --- |
+| `mod/org/mod.inp` | 73.5 KB | Modulated structures, single crystal | published model and data, COD 2104352; five refined parameters, R(F) 3.69 % |
+| `mod/ce2o2mnse2/mod.inp` | 2.2 KB | Modulated structures, single crystal, twin, crenel, Legendre, extinction | Ce2O2MnSe2, `apply_rotation_matrix`, `mod_tau_from_cif`, orders to 4 |
+| `mod/ce2o2mnse2/manual-twin.inp` | 3.4 KB | Modulated structures, twin | the same twin written by hand |
+| `mod/3-arm-cren.inp` | 1.5 KB | Modulated structures, powder | three modulation vectors, two crenels with sawtooths |
+| `mod/mscif-out.inp` | 2.2 KB | Modulated structures, msCIF output | `Out_msCIF` |
+| `mod/occ-merge.inp` | 1.6 KB | Modulated structures, occ_merge, neutron | |
+| `mod/rigid-lp-mod_x.inp` | 4.0 KB | Modulated structures, rigid bodies, neutron | rigid body in the m = 0 str, `Get_modulated_sites` |
+| `mod/example-1.inp` | 1.1 KB | Modulated structures, magnetic, crenel | moment modulation with a crenel |
+| `mod/refine-all.inp` | 1.4 KB | Modulated structures, magnetic | 30 parameters of many kinds |
+| `mod/mlx-mod_occ-crenel.inp` | 1.1 KB | Modulated structures, magnetic | |
+| `mod/mlx-mod_x-mod_mly.inp` | 1.0 KB | Modulated structures, magnetic | |
+| `mod/mlx-mod_x-mod_mly-crenel.inp` | 1.6 KB | Modulated structures, magnetic, crenel | |
+| `mod/crenel-legendre.inp` | 2.8 KB | Modulated structures, crenel, Legendre | sawtooth and Legendre order 1 give the same pattern |
+| `mod/mod-mlx-constraints.inp` | 1.9 KB | Modulated structures, add_constraints, magnetic | |
+| `mod/tof-mod-1.inp` | 2.5 KB | Modulated structures, TOF | satellites on a time of flight axis |
 
 ## pdf/
 
@@ -391,6 +431,7 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | File | Size | Detected topics | Notes |
 | --- | --- | --- | --- |
 | `rigid/adn_glass-84k_vct#2_p1a1_ref.inp` | 5.6 KB | Rietveld/structure, Quantitative analysis, Rigid bodies | Auto_T(10) |
+| `rigid/ae14.inp` | 3.8 KB | Rietveld/structure, Single crystal | `SHELX_HKL4`, `approximate_A`, choice of LU or conjugate gradient, `conserve_memory` |
 | `rigid/rigida-1.inp` | 1.4 KB | Rietveld/structure, Rigid bodies | #define CREATE_ |
 | `rigid/rigida-2.inp` | 1.8 KB | Rietveld/structure, Rigid bodies | #define CREATE_ |
 | `rigid/rigida-3.inp` | 0.8 KB | Rietveld/structure, Rigid bodies | #define CREATE_ |
@@ -401,6 +442,7 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | File | Size | Detected topics | Notes |
 | --- | --- | --- | --- |
 | `rigid-errors/aniline_i_100k_x.inp` | 106.7 KB | Rietveld/structure, Quantitative analysis, Rigid bodies |  |
+| `rigid-errors/aniline_i_8kbar_n.inp` | 76.7 KB | Rietveld/structure, Rigid bodies, Restraints/penalties | neutron; directly coded Z-matrix, restraints from a DFT optimisation |
 
 ## single-crystal/
 
@@ -410,6 +452,7 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | `single-crystal/ae1-approx-a.inp` | 4.0 KB | Rietveld/structure |  |
 | `single-crystal/ae1-auto.inp` | 2.7 KB | Rietveld/structure, Single crystal, Restraints/penalties |  |
 | `single-crystal/ae1-manual.inp` | 3.6 KB | Rietveld/structure, Single crystal, Restraints/penalties |  |
+| `single-crystal/ae14-12.inp` | 3.1 KB | Single crystal, Structure solution | (Version 9) solution by simulated annealing, `Auto_T(10)`, `rand_xyz`, `phase_penalties` |
 | `single-crystal/ae14-adps.inp` | 6.3 KB | Rietveld/structure, Single crystal |  |
 | `single-crystal/ae14-approx-a.inp` | 5.8 KB | Rietveld/structure, Single crystal |  |
 | `single-crystal/ae5-auto.inp` | 2.8 KB | Rietveld/structure, Single crystal, Restraints/penalties |  |
@@ -449,6 +492,14 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | --- | --- | --- | --- |
 | `stretch-pks/stretch-1.inp` | 1.0 KB | Rietveld/structure | #define CREATE_ |
 
+## svd-errors/ (Versions 8 and 9)
+
+| File | Size | Detected topics | Notes |
+| --- | --- | --- | --- |
+| `svd-errors/y2o3a-boot.inp` | 0.6 KB | Rietveld/structure | errors by `bootstrap_errors 200` |
+| `svd-errors/y2o3a-lu.inp` | 0.5 KB | Rietveld/structure | errors by `do_errors` with `use_LU_for_errors` |
+| `svd-errors/y2o3a-svd.inp` | 0.5 KB | Rietveld/structure | errors by plain `do_errors`; compare with the two above |
+
 ## tof/
 
 | File | Size | Detected topics | Notes |
@@ -464,6 +515,14 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | File | Size | Detected topics | Notes |
 | --- | --- | --- | --- |
 | `transform_x/tpx.inp` | 3.1 KB | Rietveld/structure | #define CREATE_ |
+
+## twinning/ (Versions 8 and 9)
+
+| File | Size | Detected topics | Notes |
+| --- | --- | --- | --- |
+| `twinning/twin-1.inp` | 2.7 KB | Single crystal, Twinning | `SHELX_HKL4` with two `str`s (P21 and P212121 domains), simulated data; scales recover 0.7 / 0.3 |
+| `twinning/twin-1-high-symmetry.inp` | 1.6 KB | Single crystal | generates the P212121 domain's data for `twin-1.inp` |
+| `twinning/twin-1-low-symmetry.inp` | 1.5 KB | Single crystal | generates the P21 domain's data for `twin-1.inp` |
 
 ## user_y/
 
@@ -489,6 +548,7 @@ Detected topics are heuristic (regex-based keyword detection on the first ~20KB 
 | `wppm/cube-ln-normal-1.inp` | 3.6 KB | Pawley, Rietveld/structure | #define TEST_ |
 | `wppm/gamma-fit-obj.inp` | 1.9 KB | (unclassified — open to inspect) |  |
 | `wppm/gamma.inp` | 2.2 KB | Pawley, Rietveld/structure |  |
+| `wppm/ln-normal-1.inp` | 0.8 KB | (unclassified — open to inspect) | Versions 8 and 9; log-normal distribution fitted with `fit_obj`, mean/median/mode reported |
 | `wppm/s-sphere-1.inp` | 1.2 KB | (unclassified — open to inspect) |  |
 | `wppm/s-sphere-2.inp` | 3.1 KB | (unclassified — open to inspect) |  |
 | `wppm/sphere-fit-obj.inp` | 1.3 KB | (unclassified — open to inspect) |  |

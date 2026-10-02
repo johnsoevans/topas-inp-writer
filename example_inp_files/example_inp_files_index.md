@@ -1,6 +1,6 @@
 # Curated worked examples
 
-Real, working `.inp` files bundled directly in this folder (no `TOPAS_DIR` needed, unlike the larger ~280-file corpus in `references/examples-index.md`). Prefer one of these as a starting point — copy its structure and adapt names/values.
+Real, working `.inp` files bundled directly in this folder (no `TOPAS_DIR` needed, unlike the larger set of installation examples indexed in `references/examples-index.md`). Prefer one of these as a starting point — copy its structure and adapt names/values.
 
 Each file documents itself (`/* ... */` or `'`-comments); templates also carry a "WHAT TO CHANGE" checklist. Read that header first — this index just points at it.
 

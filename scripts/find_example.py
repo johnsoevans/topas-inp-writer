@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """
-find_example.py -- search this project's curated `tcinps-2.bat` file list
-for real, working .inp examples matching a topic query (e.g. "tof",
-"pawley", "charge flipping", "stacking faults"), so a real worked
-example can be found and read before writing a new template from
-scratch -- the same "copy a real example, adapt it" principle this
-skill already follows for example_inp_files/ and references/examples-
-index.md, just scoped to the ~197-file curated regression corpus
-(references/tcinps-2.bat parsing convention, see
-feedback_use_tcinps_for_verification.md) instead of the full 1138-file
-test_examples/ tree.
+find_example.py -- find real, working .inp examples matching a topic
+query (e.g. "tof", "pawley", "charge flipping", "stacking faults").
+
+Corpus: every .inp under the live TOPAS install (TOPAS_DIR, resolved via
+topas_install.py) plus this skill's own example_inp_files/. Matches are
+ranked in three tiers:
+
+  0. example_inp_files/
+  1. install examples listed in references/examples-index.md
+  2. everything else under TOPAS_DIR
+
+Tier breaks ties on match score; it does not override it. Scratch files
+(0-byte, temp.inp/temp8.inp, "... - Copy.inp") are dropped.
+
+--bat replaces the TOPAS_DIR walk with a tcinps-2.bat tc-list, if one is
+available. Not bundled with this skill; no default path.
 
 Trigger: **"<topic> template"** (or "<topic> example") -- run this
 whenever the user asks for a template/example/starting point for some
@@ -51,11 +57,25 @@ import sys
 import os
 import re
 import argparse
-import subprocess
-import shutil
+
+# subprocess/shutil are imported inside the --open branch: together they
+# cost ~21 ms of the ~113 ms run, and only that branch uses them.
+
+import topas_install
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_BAT = r"c:\w\tcinps-2.bat"
+SKILL_DIR = os.path.dirname(SCRIPT_DIR)
+BUNDLED_EXAMPLES_DIR = os.path.join(SKILL_DIR, "example_inp_files")
+EXAMPLES_INDEX = os.path.join(SKILL_DIR, "references", "examples-index.md")
+
+TIER_BUNDLED, TIER_INDEXED, TIER_OTHER = 0, 1, 2
+
+# Path matches at or above this count skip the content pass, which has
+# to read every file in the corpus.
+PATH_MATCH_ENOUGH = 5
+
+# Scratch files under a real install, dropped from the corpus.
+JUNK_RE = re.compile(r"(?:^|[\\/])(?:temp\d*\.inp|.+ - copy\.inp)$", re.IGNORECASE)
 
 # Trailing/filler words stripped off the raw query before matching --
 # "tof template" / "a pawley example file" both reduce to their real
@@ -122,32 +142,120 @@ def parse_tcinps(bat_path):
     return paths
 
 
+def load_index_basenames():
+    """Lowercased basenames of the .inp files listed in
+    references/examples-index.md. Empty set if it isn't readable."""
+    try:
+        with open(EXAMPLES_INDEX, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return set()
+    return {os.path.basename(p.replace("\\", "/")).lower()
+            for p in re.findall(r"`([^`\n]+\.inp)`", text)}
+
+
+def is_junk(path, size):
+    """size < 0 means unknown (a path from --bat that isn't on disk);
+    such a path is kept so main() can flag it as [FILE NOT FOUND]."""
+    return size == 0 or bool(JUNK_RE.search(path))
+
+
+def walk_inp_files(root):
+    """Yields (path, size) for every .inp under root. scandir rather
+    than os.walk + getsize: the size comes from the directory entry, so
+    no second stat call per file."""
+    stack = [root]
+    while stack:
+        try:
+            entries = list(os.scandir(stack.pop()))
+        except OSError:
+            continue
+        for entry in entries:
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    stack.append(entry.path)
+                elif entry.name.lower().endswith(".inp"):
+                    yield entry.path, entry.stat().st_size
+            except OSError:
+                continue
+
+
+def build_corpus(bat_path=None):
+    """[(path, tier)] for the whole searchable corpus, plus a list of
+    human-readable source descriptions for the not-found message."""
+    corpus = []
+    sources = []
+    seen = set()
+
+    def add(path, size, tier):
+        key = os.path.normcase(os.path.abspath(path))
+        if key in seen or is_junk(path, size):
+            return
+        seen.add(key)
+        corpus.append((path, tier))
+
+    def install_tier(path, index_names):
+        return TIER_INDEXED if os.path.basename(path).lower() in index_names else TIER_OTHER
+
+    if os.path.isdir(BUNDLED_EXAMPLES_DIR):
+        before = len(corpus)
+        for p, size in walk_inp_files(BUNDLED_EXAMPLES_DIR):
+            add(p, size, TIER_BUNDLED)
+        sources.append(f"{len(corpus) - before} in example_inp_files/")
+
+    if bat_path:
+        before = len(corpus)
+        index_names = load_index_basenames()
+        for p in parse_tcinps(bat_path):
+            try:
+                size = os.path.getsize(p)
+            except OSError:
+                size = -1
+            add(p, size, install_tier(p, index_names))
+        sources.append(f"{len(corpus) - before} from {bat_path}")
+        return corpus, sources
+
+    topas_dir, found = topas_install.get_topas_dir()
+    if found:
+        before = len(corpus)
+        index_names = load_index_basenames()
+        for p, size in walk_inp_files(topas_dir):
+            add(p, size, install_tier(p, index_names))
+        sources.append(f"{len(corpus) - before} under TOPAS_DIR ({topas_dir})")
+
+    return corpus, sources
+
+
 def query_words(query):
     words = [w for w in re.split(r"[^a-z0-9]+", query.lower()) if w]
     return [w for w in words if w not in FILLER_WORDS] or words
 
 
-def path_match(paths, words):
-    """Word-boundary match (not a bare substring check) -- a bare `in`
-    check on a short query word like "tof" false-positived on
-    'jsoe_fit_cc2c_tofullprofmono_01.inp' (a real corpus file), since
-    "tof" is a genuine substring of "tofullprofmono" despite not being
-    the same word at all. `\\b` treats `_`/digits as word characters
-    (matching Python's own `\\w`), so `\\btof\\b` still correctly matches
-    a real 'tof_bank2_1' token (bounded by `\\` and `_`) while rejecting
-    the false positive."""
-    word_res = [re.compile(r"\b" + re.escape(w) + r"\b") for w in words]
+def path_tokens(path):
+    """Path split on every non-alphanumeric character, so 'tof' is a
+    token of both 'tof\\tof_bank2_1.inp' and 'HRPD_tof_rietveld.inp' but
+    not of 'jsoe_fit_cc2c_tofullprofmono_01.inp'. A `\\b` regex can't do
+    this: `_` is a word character, so `\\btof\\b` misses 'HRPD_tof_'."""
+    return {t for t in re.split(r"[^a-z0-9]+", path.lower()) if t}
+
+
+def path_match(corpus, words, wants_template):
+    """Whole-token match against each path. A query naming a template
+    scores +1 for any path with a "template" token. Ties break by tier,
+    then path."""
     scored = []
-    for p in paths:
-        pl = p.lower()
-        score = sum(1 for wre in word_res if wre.search(pl))
+    for p, tier in corpus:
+        tokens = path_tokens(p)
+        score = sum(1 for w in words if w in tokens)
         if score:
-            scored.append((score, p))
-    scored.sort(key=lambda t: (-t[0], t[1]))
-    return [p for _, p in scored]
+            if wants_template and "template" in tokens:
+                score += 1
+            scored.append((-score, tier, p))
+    scored.sort()
+    return [p for _, _, p in scored]
 
 
-def content_match(paths, query, words):
+def content_match(corpus, query, words):
     # Build the set of literal strings to search for: the raw query
     # phrase itself, plus any TOPIC_SYNONYMS entry whose key is
     # contained in (or contains) the query.
@@ -159,9 +267,7 @@ def content_match(paths, query, words):
         return []
 
     scored = []
-    for p in paths:
-        if not os.path.exists(p):
-            continue
+    for p, tier in corpus:
         try:
             with open(p, encoding="utf-8", errors="replace") as f:
                 text = f.read().lower()
@@ -169,45 +275,64 @@ def content_match(paths, query, words):
             continue
         score = sum(text.count(n) for n in needles if n)
         if score:
-            scored.append((score, p))
-    scored.sort(key=lambda t: (-t[0], t[1]))
-    return [p for _, p in scored]
+            scored.append((-score, tier, p))
+    scored.sort()
+    return [p for _, _, p in scored]
 
 
-def find_examples(query, bat_path=DEFAULT_BAT):
-    """Returns (matches, stage) -- stage is 'path' or 'content' saying
-    which matching pass produced the result, or 'none' if nothing
-    matched either way."""
-    paths = parse_tcinps(bat_path)
+def find_examples(query, bat_path=None):
+    """Returns (matches, stage, sources). stage is 'path' or 'content'
+    for which pass produced the result, 'none' if nothing matched, or
+    'no-corpus' if there was nothing to search."""
+    corpus, sources = build_corpus(bat_path)
+    if not corpus:
+        return [], "no-corpus", sources
+
     words = query_words(query)
+    wants_template = bool(re.search(r"\btemplates?\b", query.lower()))
 
-    matches = path_match(paths, words)
+    matches = path_match(corpus, words, wants_template)
+    if len(matches) >= PATH_MATCH_ENOUGH:
+        return matches, "path", sources
+
+    # Thin path result -- supplement with a content pass, which reads
+    # every file. Path matches keep their rank above content ones.
+    seen = set(matches)
+    extra = [p for p in content_match(corpus, query, words) if p not in seen]
     if matches:
-        return matches, "path"
+        return matches + extra, ("path+content" if extra else "path"), sources
+    if extra:
+        return extra, "content", sources
 
-    matches = content_match(paths, query, words)
-    if matches:
-        return matches, "content"
-
-    return [], "none"
+    return [], "none", sources
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("query", help='topic to search for, e.g. "tof", "tof template", "charge flipping"')
     parser.add_argument("-n", "--max-results", type=int, default=8, help="max matches to show (default 8)")
-    parser.add_argument("--bat", default=DEFAULT_BAT, help="path to the curated tc-list file (default: c:\\w\\tcinps-2.bat)")
+    parser.add_argument("--bat", default=None, help="tcinps-2.bat tc-list to search instead of walking TOPAS_DIR")
     parser.add_argument("--open", action="store_true", help="also open the top match in VS Code")
     args = parser.parse_args()
 
-    matches, stage = find_examples(args.query, args.bat)
-
-    if not matches:
-        print(f"No match for {args.query!r} in {args.bat} -- try a broader term, "
-              f"or check references/examples-index.md for the full (non-curated) corpus.", file=sys.stderr)
+    if args.bat and not os.path.isfile(args.bat):
+        print(f"--bat file not found: {args.bat}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"{len(matches)} match(es) for {args.query!r} (via {stage} match):", file=sys.stderr)
+    matches, stage, sources = find_examples(args.query, args.bat)
+    searched = ", ".join(sources) if sources else "nothing"
+
+    if stage == "no-corpus":
+        print("No examples to search: TOPAS_DIR is not set to a real directory and "
+              "example_inp_files/ holds no .inp files. Set TOPAS_DIR to your TOPAS "
+              "install root, or pass --bat <tcinps-2.bat>.", file=sys.stderr)
+        sys.exit(1)
+
+    if not matches:
+        print(f"No match for {args.query!r} in {searched} -- try a broader term.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"{len(matches)} match(es) for {args.query!r} (via {stage} match; searched {searched}):", file=sys.stderr)
     shown = matches[:args.max_results]
     for p in shown:
         exists = "" if os.path.exists(p) else "  [FILE NOT FOUND]"
@@ -221,9 +346,16 @@ def main():
     if args.open:
         top = shown[0]
         if os.path.exists(top):
+            import shutil
+            import subprocess
+
+            # Popen + DEVNULL, as in format_inp_hierarchy.py: VS Code gets the
+            # file immediately, while the launcher takes ~1.3 s to exit and
+            # would hold our stdout/stderr open for a caller capturing them.
             code_path = shutil.which("code") or shutil.which("code.cmd")
             if code_path:
-                subprocess.run([code_path, top], check=False)
+                subprocess.Popen([code_path, top],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
                 print("Note: 'code' CLI not found on PATH -- couldn't open the file.", file=sys.stderr)
         else:

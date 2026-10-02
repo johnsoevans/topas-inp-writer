@@ -297,9 +297,13 @@ def main():
     print(f"Written to {out_path}", file=sys.stderr)
 
     if not args.no_open:
+        # Popen + DEVNULL, as in format_inp_hierarchy.py: VS Code gets the
+        # file immediately, while the launcher takes ~1.3 s to exit and would
+        # hold our stdout/stderr pipes open for a caller capturing them.
         code_path = shutil.which("code") or shutil.which("code.cmd")
         if code_path:
-            subprocess.run([code_path, out_path], check=False)
+            subprocess.Popen([code_path, out_path],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
             print("Note: 'code' CLI not found on PATH -- couldn't reopen the file in VS Code.", file=sys.stderr)
 

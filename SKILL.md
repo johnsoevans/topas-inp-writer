@@ -1,6 +1,6 @@
 ---
 name: topas-inp-writer
-description: Write, edit, and debug TOPAS-Academic (Bruker AXS) .inp refinement scripts for X-ray/neutron powder diffraction, PDF, indexing, charge-flipping, and stacking-fault analysis. Use this skill whenever the user mentions TOPAS, a .inp file, Rietveld/Pawley/Le Bail refinement, structure/PDF/quantitative-phase refinement scripting, or pastes TOPAS syntax (site, str, hkl_Is, xdd, prm, macro, Rwp, beq, occ, etc.) and wants it written, explained, fixed, or extended. Make sure to trigger this even if the user only pastes a fragment of TOPAS syntax or an error message without explicitly naming "TOPAS" or "INP file" — recognizable keywords or diffraction-refinement context are enough.
+description: Write, edit, and debug TOPAS-Academic (Bruker AXS) .inp refinement scripts for X-ray/neutron powder diffraction, PDF, indexing, charge-flipping, stacking-fault analysis, and (Version 9) modulated/incommensurate structures and 3D electron diffraction. Use this skill whenever the user mentions TOPAS, a .inp file, Rietveld/Pawley/Le Bail refinement, structure/PDF/quantitative-phase refinement scripting, or pastes TOPAS syntax (site, str, hkl_Is, xdd, prm, macro, Rwp, beq, occ, etc.) and wants it written, explained, fixed, or extended. Make sure to trigger this even if the user only pastes a fragment of TOPAS syntax or an error message without explicitly naming "TOPAS" or "INP file" — recognizable keywords or diffraction-refinement context are enough.
 ---
 
 # TOPAS INP Writer
@@ -14,13 +14,20 @@ This skill was distilled from a full copy of the Technical Reference; it capture
 ## How to use this skill
 
 1. **Identify what the user is actually trying to do** before writing anything — the same keyword can behave differently depending on which data structure (`str`, `hkl_Is`, `xdd_Is`, Pawley, indexing, PDF) it's used in. When starting a brand-new `.inp` from scratch (no existing file to extend) and the run type isn't already obvious from context, ask — see "Starting a new INP file from scratch" below.
-2. **Check `example_inp_files/example_inp_files_index.md` first** — hand-picked, heavily commented working `.inp` files, a better style/structure model than a bare syntax demo. If nothing fits, fall back to `references/examples-index.md` and resolve the real file via `TOPAS_DIR` (see "Locating your TOPAS installation"); the skill bundles the index, not those example files. A real worked example almost always beats writing from scratch — copy its structure, adapt names/values/macros. To read one: `python scripts/topas_install.py --example <path-from-the-index>` (e.g. `cf/alvo4a.inp`) prints its location on disk, which you open with `Read`/`Grep`. Most (198 of 280) have a matching `.out` alongside — read both to see what refining changes: placeholders become refined values, each with a trailing-backtick uncertainty (`beq @ 0.19987`_0.00463`). If `TOPAS_DIR` isn't set or the file doesn't resolve, say so plainly rather than inventing content.
+2. **Check `example_inp_files/example_inp_files_index.md` first** — hand-picked, heavily commented working `.inp` files, a better style/structure model than a bare syntax demo. If nothing fits, fall back to `references/examples-index.md` and resolve the real file via `TOPAS_DIR` (see "Locating your TOPAS installation"); the skill bundles the index, not those example files. A real worked example almost always beats writing from scratch — copy its structure, adapt names/values/macros. To read one: `python scripts/topas_install.py --example <path-from-the-index>` (e.g. `cf/alvo4a.inp`) prints its location on disk, which you open with `Read`/`Grep`. If `TOPAS_DIR` isn't set or the file doesn't resolve, say so plainly rather than inventing content.
 3. **Read the relevant manual reference file(s) for the syntax rules themselves** — don't rely on general crystallography knowledge for TOPAS-specific keyword names, attribute lists, or macro behavior. Only open the file(s) that match the task instead of reading everything.
 4. **Combine both sources**: the manual chapters explain *why* and the exact rules; the worked examples show *how it looks in a real, working file*. Cross-check a worked example against the manual when something in it looks unfamiliar.
 5. **When debugging**, check the common-errors checklist near the end of this file first, then consult `references/01-syntax-and-parameters.md` and `references/02-equation-operators-and-functions.md`, and look for a similar worked example to compare against.
 6. **State uncertainty plainly** rather than presenting a guess as documented behavior — this applies throughout (see also "When something isn't in the references").
 7. **Before handing over a finished or edited `.inp` file, run it through `scripts/check_inp_syntax.py`** — it catches unbalanced braces/parens, missing-semicolon equations, and keyword typos mechanically, cheaper and more reliable than eyeballing a long file.
 8. **When summarizing or reviewing an `.inp`/`.out` file, actively flag `CS_L`/`CS_G` (`csl`/`csg`) values larger than roughly 500** — confirmed directly by TOPAS-Academic's author: `FWHM ∝ 1/value` for both macros, so sensitivity to the true crystallite size fades rapidly past that point, often showing up as a large refined error and a strong `csl`↔`csg` anti-correlation in `C_matrix_normalized`. See `references/04-peak-generation-and-peak-type.md` § "CS_L / CS_G: FWHM is proportional to 1/value".
+
+**Version 9 features.** Modulated structures (`references/30`) and electron
+diffraction (`references/31`) exist only in TOPAS-Academic Version 9. Before
+writing any of their keywords, establish the user's version: the first console
+line of every run reads `TOPAS-64 Version 9.x ...`. If it is earlier, or unknown
+and the user cannot say, tell them these keywords need Version 9 rather than
+writing an INP file that will be refused.
 
 ## Starting a new INP file from scratch — clarifying questions
 
@@ -43,6 +50,8 @@ Use this question set whenever a person asks for a brand-new `.inp` file (no exi
 | Energy minimization / molecular dynamics | Structure optimization by potential energy, not diffraction data | `15`, `16` |
 | Protein refinement | Charge-flipping or Rietveld at protein scale | `18`, `19` |
 | Magnetic structure refinement | Magnetic scattering/ordering | `12` |
+| Modulated structure refinement (Version 9) | Satellites from an incommensurate or commensurate modulation, powder or single crystal | `30` |
+| Electron diffraction, dynamical (Version 9) | 3D ED frames from PETS2, refined with the Bloch wave theory | `31` |
 
 If the answer spans two of these (e.g. "index this pattern, then Rietveld-refine the result" or "generate a PDF then refine a structure against it"), plan for a multi-stage pipeline rather than picking one branch and dropping the rest (see the peak-search → peak-fit → indexing pipeline below, or the combined `Include_PDF_Generate` template in `08`/`09`).
 
@@ -55,12 +64,20 @@ If the answer spans two of these (e.g. "index this pattern, then Rietveld-refine
 - **Charge flipping:** Single-crystal or powder data? Space group known or being determined too? Protein-scale?
 - **Quant:** Which phases, layered onto an existing Rietveld fit or built fresh alongside it?
 - **Stacking faults:** Layer types/count; testing a specific fault probability/sequence, or searching for one?
+- **Modulated structures:** TOPAS version (9 needed)? Powder or single crystal?
+  Superspace group symbol, or a CIF from JANA or ISODISTORT with the operators?
+  How many modulation vectors, and satellites to which order? Which quantities are
+  modulated (displacement, occupancy, ADP, moment), and any crenels?
+- **Electron diffraction:** TOPAS version (9 needed)? The `.cif_pets` file(s) from
+  PETS2, and a starting model (CIF, or a JANA refinement)? Continuous rotation or
+  precession? One crystal or several? Is the structure acentric (then both hands are refined,
+  with `ed_invert_hand`)?
 
 **3. Common to nearly every branch, ask once the type is settled:** data file path/format, radiation/wavelength if not already implied, output needs (`do_errors`, CIF/pdCIF, plots).
 
 ## Locating your TOPAS installation
 
-This skill does not bundle copies of the `.inc`/`.txt` system files or the worked example `.inp`/`.out` files — those ship with every TOPAS release, and a bundled copy would go stale relative to the real install.
+This skill does not bundle copies of the `.inc`/`.txt` system files or the worked example `.inp` files — those ship with every TOPAS release, and a bundled copy would go stale relative to the real install.
 
 **Set the `TOPAS_DIR` environment variable to the root of your TOPAS installation** (wherever `tc.exe`/`TA.EXE` live, or any ancestor directory). `scripts/topas_install.py` searches under it to resolve:
 
@@ -68,9 +85,7 @@ This skill does not bundle copies of the `.inc`/`.txt` system files or the worke
 python scripts/topas_install.py --inc-dir                  # the real .inc macro library directory
 python scripts/topas_install.py --example cf/alvo4a.inp    # a specific example file's real path
 python scripts/topas_install.py --kernel-schema-html        # the pre-rendered "Show Schema" page
-python scripts/topas_install.py --macro-browser-html        # a generated macro-browser page, if one exists yet
-python scripts/topas_install.py --technical-reference-pdf   # the manual PDF (used for §21.2 macro descriptions)
-python scripts/topas_install.py --keyword-tree-html         # a generated keyword-hierarchy page, if one exists yet
+python scripts/topas_install.py --technical-reference-pdf   # the manual PDF
 ```
 
 **Running `tc.exe`:** invoke it as `<TOPAS_DIR>\tc.exe "<full path to the .inp>"` — both absolute. `tc.exe` is not on `PATH`, and it resolves a relative `.inp` (and any relative `xdd`/`#include` inside it) against the current working directory, not the file's own location.
@@ -112,12 +127,21 @@ Open only what's relevant to the current task.
 - `references/26-parametric-and-sequential-refinement.md` — analyzing a whole series of patterns (variable-temperature/pressure/time): sequential refinement (each pattern independent, previous run's values as next run's start) vs. parametric/"surface" refinement (one smooth functional form's coefficients refined jointly from every pattern). Covers `#list`/`Run_Number` mechanics, the disappearing-phase failure mode and its fixes, Table-12.1-style functional forms, the R-factor-comparison diagnostic for a bad parametric model, and refining non-crystallographic parameters no single pattern could determine alone.
 - `references/27-rietveld-workflow-conventions.md` — **read this for any Rietveld/Pawley/Quantitative session, and always before writing a final report.** Practical strategy conventions from real refinement sessions, not manual syntax: wavelength/monochromator handling, the four peak-shape families and how they pair with wavelength macros and `Simple_Axial_Model()`, 2-theta range and ADP strategy, staged-refinement sequencing, saturated peak-shape terms, a mandatory false-minimum re-check before finalizing any correlated peak shape, the Pawley-from-converged-`str` recipe, mandatory final-report formatting, and a quantitative-phase-analysis section (ADP exceptions, phase screening/elimination, `weight_percent`/`elemental_composition`, the final pie chart). **Every rule carries a stable citable tag** (`(R1)`, `(R2)`, …) in one increasing sequence, so a rule can be referenced or superseded precisely later — see that file's own intro. **Never cite a rule number outside that file** — not in `SKILL.md`, other `references/*.md`, `scripts/*.py`, `example_inp_files/` or `test_examples/` — since it renumbers independently and any number written elsewhere goes stale silently; refer to the rule by topic and look the number up there. Synchrotron and neutron (CW/TOF) headings are placeholders, not yet populated.
 - `references/29-indexing-workflow-conventions.md` — **read this for any peak-search/peak-fitting/indexing/Pawley session.** Same kind of file as `27-rietveld-workflow-conventions.md` above — practical session conventions, not manual syntax — and the same citable-tag rule applies: rules carry a stable tag in their own increasing sequence and **that tag is never cited outside this file**. That file holds two independent sequences: `(FI1)`, `(FI2)`, … for peak fitting (raw data through to a classified peak list) and `(IN1)`, `(IN2)`, … for indexing (peak list through to a reported cell).
+- `references/30-modulated-structures.md` — **Version 9 only.** Incommensurate and
+  commensurate modulated structures: modulation wave vectors, superspace symmetry
+  (`mod_tau`, symbols, CIF operators), displacive, occupancy, ADP and moment
+  modulation, crenel, sawtooth and Legendre functions, one str per satellite order,
+  single crystal reflection files, twins, extinction, msCIF output, messages.
+- `references/31-electron-diffraction.md` — **Version 9 only.** Dynamical refinement
+  of 3D ED data from PETS2 `.cif_pets` files: `#inp_from_cif_pets`, `ed_crystal` /
+  `xdd_ed`, beam selection, Bethe potentials, thickness, absorption, partial charges,
+  frame orientation, the absolute structure with `ed_invert_hand`, `r_f`, messages.
 
 **Curated worked examples (bundled directly with this skill, no `TOPAS_DIR` needed):**
 - `example_inp_files/example_inp_files_index.md` — a lookup table of the real, working `.inp` files kept in that same folder (Rietveld templates and real fits, indexing, peak-fitting, simulation, parametric/variable-temperature multi-pattern refinement, and an instrument-resolution-function → double-Voigt size/strain pair), each self-documented in its own header comment. Check this before the bundled-install examples below.
 
 **Worked examples (real, complete INP scripts — require `TOPAS_DIR`):**
-- `references/examples-index.md` — a categorized table describing all 280 example files by relative path, grouped by folder, with heuristically-detected topics per file. Start here to find a close analog, then resolve via `python scripts/topas_install.py --example <path>`. Includes dedicated `cf/` (charge-flipping), `cf-protein/`, and `indexing/` folders. Folder names are often a strong hint about the refinement type.
+- `references/examples-index.md` — a categorized table describing the example files that ship with TOPAS Versions 7, 8 and 9, by relative path, grouped by folder, with heuristically-detected topics per file. Start here to find a close analog, then resolve via `python scripts/topas_install.py --example <path>`. Includes dedicated `cf/` (charge-flipping), `cf-protein/`, and `indexing/` folders. Folder names are often a strong hint about the refinement type.
 - `references/console-output-and-errors.md` — what TOPAS actually prints during a run: startup sequence, Rietveld/Pawley/charge-flipping iteration-log columns, two real captured error messages with causes, and the difference between `num_runs` (re-running with `Run_Number` switching) and `continue_after_convergence` (restarting within the same run until `iters`/`num_cycles` — by design, not a bug, if it runs long).
 - `references/restraints-and-penalties.md` — `Distance_Restrain`/`Angle_Restrain` as the first restraint macros to reach for; how to read `append_bond_lengths`' SHELX-style bond/angle output matrix and turn it into correct `LABEL opidx offx offy offz` restraint arguments (space-separated, not colon-joined — a common silent-failure trap); **the mandatory zero-weight verification step for every `Angle_Restrain` target before refining — never hand-derive a 90°/180°-type target from the table by eye**; a distance-vs-angle restraint weighting rule of thumb; and `penalties_weighting_K1` for balancing restraints against the diffraction data as a whole.
 - `references/macro-expansion-and-log-files.md` — what `tc.log` actually is (the INP after full macro/`#include`/preprocessor expansion), how TOPAS's `at LINE N` error numbering relates to physical source lines, confirmed macro-argument substitution mechanics, and the exact expansions of common built-in macros like `STR`, `XDD`, `LP_Factor`, `PV_Peak_Type`.

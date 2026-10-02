@@ -1,6 +1,9 @@
 # Local-only notes, never published
 instructions.txt
 
+# Per-user wizard settings, written by topilot_wizard.py when a user saves defaults
+scripts/wizard_defaults.local.json
+
 # Python
 __pycache__/
 *.pyc

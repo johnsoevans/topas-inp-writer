@@ -94,7 +94,7 @@ Catches thirteen classes of mistake before you hand a file to TOPAS:
       See check_zero_arg_keywords()'s own docstring for exact scoping and
       the corpus verification behind it (including a real false-conflict
       exclusion for 'str' itself, and a real macro-argument-glossary false
-      positive shared with topas_keyword_tree.py's own bracket scanner).
+      positive).
   13. A '@' (auto-name sigil) not immediately followed by a numeric value
       or '=' -- e.g. "scale @ a2.27742249e-05" (a stray letter prepended
       to a real number, corrupting it). Found directly by the user
@@ -377,6 +377,10 @@ SUPPLEMENTAL_KEYWORDS = {
     # harvest; confirmed real (not a cif1.exe quirk) by running its raw
     # output through tc.exe directly with zero errors.
     "volume",
+    # Version 9 modulation ADP keywords: references/30-modulated-structures.md
+    # writes them as a range, '[mod_u11 ...] to [mod_u23 ...]', so the
+    # bracket harvest only ever sees the two ends of it.
+    "mod_u22", "mod_u33", "mod_u12", "mod_u13",
 }
 
 
@@ -587,11 +591,10 @@ def load_single_e_arg_keywords(references_dir):
 
 # A whole line matching '[name]: description...' (e.g. '[r]: Distance in
 # Å.', '[n1]: The closest n1 number of atoms...') is a macro-argument-
-# glossary label, not a real TOPAS keyword -- the identical, already-
-# confirmed data-quality issue topas_keyword_tree.py's own
-# GLOSSARY_LINE_RE was built for (see that module's docstring: "using
-# square brackets for macro arguments was a bad idea," confirmed
-# directly by the user, TOPAS-Academic's own author). load_zero_arg_
+# glossary label, not a real TOPAS keyword -- a known data-quality issue
+# in the manual's bracket notation ("using square brackets for macro
+# arguments was a bad idea," confirmed by TOPAS-Academic's author).
+# load_zero_arg_
 # keywords() below is uniquely exposed to this, unlike its two siblings:
 # a glossary bracket's OWN content (just the bare argument name, e.g.
 # "r") is empty in exactly the same way a genuine zero-arg keyword's
@@ -2116,6 +2119,15 @@ def _in_any_span(pos, spans):
     return any(s <= pos < e for s, e in spans)
 
 
+# One modulation amplitude: an optional @/! flag, an optional name, an
+# optional value (with an optional refined-value `_error suffix), and an
+# optional '= ...;' equation -- every combination TOPAS accepts for an E.
+_MOD_AMP = r"(?:[!@]\s*)?(?:([A-Za-z_]\w*)\s+)?(?:[-+]?[\d.][\w.+\-]*(?:`[\w.+\-]*)?\s*)?(?:=[^;]*;\s*)?"
+MOD_AMPLITUDES_RE = re.compile(
+    r"\bmod_(?:[xyz]|occ|beq|u(?:11|22|33|12|13|23)|ml[xyz])\s+\d+\s+"
+    + _MOD_AMP + _MOD_AMP.replace("([A-Za-z_]", "(?!qm\\b)([A-Za-z_]"))
+
+
 def find_defined_names(clean_text, keywords=None):
     names = set()
     tokens = list(IDENTIFIER_RE.finditer(clean_text))
@@ -2152,6 +2164,17 @@ def find_defined_names(clean_text, keywords=None):
                 names.add(tokens[j].group(0))
     for m in re.finditer(r"[@!]\s*([A-Za-z_][A-Za-z0-9_]*)", clean_text):
         names.add(m.group(1))
+    # Version 9 modulation keywords take TWO amplitudes after the harmonic
+    # number ('mod_x 1 sx1 0.01 cx1 0.01', sine then cosine), each of which
+    # can carry its own parameter name. The general one-token-after-a-keyword
+    # mechanism above only reaches the harmonic number, and the [@!] pass
+    # only names written with a flag, so a plain second name ('cx1') would
+    # otherwise be reported as a stray token. References/30-modulated-
+    # structures.md recommends exactly this named form inside 'for strs'.
+    for m in MOD_AMPLITUDES_RE.finditer(clean_text):
+        for name in (m.group(1), m.group(2)):
+            if name:
+                names.add(name)
     # Names introduced via #define NAME are user-chosen flags, not keywords.
     for m in re.finditer(r"#define\s+([A-Za-z_]\w*)", clean_text):
         names.add(m.group(1))

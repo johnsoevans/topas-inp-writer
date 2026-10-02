@@ -637,23 +637,17 @@ def main():
     print(f"Written to {out_path}", file=sys.stderr)
 
     if not args.no_open:
-        # VS Code's file-watcher normally picks up an on-disk change on its
-        # own, but only reliably if the file isn't already open with an
-        # unsaved/dirty buffer (or the watcher simply hasn't fired yet) --
-        # explicitly reopening/focusing it here forces the editor to show
-        # the freshly written content rather than leaving that to chance.
-        #
-        # subprocess.run(["code", ...]) alone fails to find it on Windows:
-        # the VS Code CLI is actually "code.cmd" on PATH there, and
-        # subprocess's own PATH search (unlike PowerShell's/cmd's, which
-        # both apply PATHEXT automatically) does not try that extension by
-        # default -- confirmed directly (bare "code" raised
-        # FileNotFoundError even though "code <file>" works fine when typed
-        # straight into PowerShell). shutil.which() resolves the same way
-        # the shell would, so ask it explicitly instead of guessing.
+        # Reopen the file so the editor shows the new content even if it's
+        # open with a dirty buffer, where the file-watcher won't fire.
+        # which(): the CLI is "code.cmd" on Windows and subprocess's PATH
+        # search doesn't apply PATHEXT. Popen: VS Code gets the file
+        # immediately, while the launcher takes ~1.3 s to exit. DEVNULL: if
+        # the launcher inherits our stdout/stderr it holds those pipes open,
+        # so a caller capturing our output waits out that 1.3 s anyway.
         code_path = shutil.which("code") or shutil.which("code.cmd")
         if code_path:
-            subprocess.run([code_path, out_path], check=False)
+            subprocess.Popen([code_path, out_path],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
             print("Note: 'code' CLI not found on PATH -- couldn't reopen the file in VS Code.", file=sys.stderr)
 

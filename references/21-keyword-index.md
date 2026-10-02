@@ -1646,3 +1646,80 @@ Observed data is created via an equation; this is useful for approximating funct
 
 | yobs_to_xo_posn_yobs = Peak_Calculation_Step; |
 | --- |
+
+## Version 9: modulated structures and electron diffraction
+
+Keywords added in TOPAS-Academic Version 9, not part of the schema above. Establish the user's version before writing any of them. The modulation keywords sit under `str`, `mod_qm` and `site`; `ed_crystal` and `#inp_from_cif_pets` sit at the top level, and the `xdd_ed` settings under `xdd_ed`. Semantics in the chapters.
+
+### Modulated structures (`30-modulated-structures.md`)
+
+```
+[str]...
+    [apply_rotation_matrix # # # # # # # # #]      ' not specific to modulation
+    [p1_hkls]                                      ' not specific to modulation
+    [mod_d_tolerance !E]
+    [mod_qm $name]...
+        [mod_qx E] [mod_qy E] [mod_qz E]
+        [mod_m #]
+        [mod_user_operators $operators]
+        [mod_tau_from_cif $file]
+        [mod_tau_symbol $symbol]                   ' synonym: space_group_ssg_name_IT
+        [mod_tau_build_all]
+        [mod_tau !E]...
+        [mod_t0 E]
+        [load_q_vector_type $type]
+    [site $name]...
+        [mod_x !E E E [qm !E]]...  [mod_y !E E E [qm !E]]...  [mod_z !E E E [qm !E]]...
+        [mod_occ !E E E [qm !E]]...
+        [mod_beq !E E E [qm !E]]...
+        [mod_u11 !E E E [qm !E]]...  to  [mod_u23 !E E E [qm !E]]...
+        [mod_mlx !E E E [qm !E]]...  [mod_mly !E E E [qm !E]]...  [mod_mlz !E E E [qm !E]]...
+        [mod_crenel_width E [qm !E]]...
+            [mod_crenel_center E]
+            [mod_saw_x E] [mod_saw_y E] [mod_saw_z E]
+            [mod_legendre_x !E E]...  [mod_legendre_y !E E]...  [mod_legendre_z !E E]...
+    [move_to_site $site]
+' On a modulation keyword, in place of its amplitudes:
+    add_constraints
+' Macros (topas.inc)
+    Get_site(m, s)            copies site s from the str in the scope of prm m
+    Get_sites(m)              copies every site from the str in the scope of prm m
+    Get_modulated_sites(m)    copies the modulated sites from the str in the scope of prm m
+    Get_mod_s(x), Get_mod_c(x)
+    Out_CIF_STR(file), Out_msCIF(file)
+' Equation functions
+    Get_mod(mod_keyword)      within a modulation equation
+    Get(mod_qms)              in an out record: the satellite orders of the current reflection
+```
+
+### Electron diffraction (`31-electron-diffraction.md`)
+
+```
+[ed_crystal $file]...                  ' one crystal: the data of one .cif_pets file
+    [ed_g_max !E]                      ' default 1.9 Å⁻¹
+    [ed_sg_max !E]                     ' default 0.05 Å⁻¹
+    [ed_sg_bethe !E]                   ' Bethe potentials; default 0.008 Å⁻¹ for frames > 80 beams, else 0
+    [ed_rsg_max !E]                    ' default 0.75
+    [ed_dsg_min !E]                    ' default 0.0015 Å⁻¹
+    [ed_num_integration_steps !E]      ' fixes the number of steps; without it the number is found
+    [ed_num_integration_steps_auto #]  ' the number of steps found, returned to the .out file
+    [ed_integration_tolerance !E]      ' default 0.2
+    [ed_num_precession_steps !E]       ' default 24
+    [ed_max_beams !E]                  ' default 400
+    [ed_orient_search !E]              ' search range in degrees; default 0, no search
+    [ed_invert_hand !E]                ' 1 fits the inverted structure; default 0
+    [ed_abs_symmetric !E]              ' 0 always uses the general solver; default 1
+    [r_f #]
+    [xdd_ed $file]...                  ' one virtual frame; xdd_ed = Get(ed_file); takes the file of its ed_crystal
+        [ed_frame_number !E]           ' the frame in the file; required
+        [ed_alpha !E]                  ' goniometer angle of the frame; not used in the calculation
+        [ed_thickness E]               ' crystal thickness in Å; default 500
+        [ed_absorption E]              ' absorptive potential as a fraction of the potential; default 0
+        [ed_frame_rotate_x E]          ' orientation correction in degrees; default 0
+        [ed_frame_rotate_y E]          ' orientation correction in degrees; default 0
+        [ed_data]                      ' electron scattering factors; implied by xdd_ed
+[f0_f1_f11_atom $atom]...              ' older keyword; for electron data, in the shared str_dets: f1 is the charge q, f11 the absorption fraction
+[#inp_from_cif_pets $file]             ' writes an ed_crystal and one xdd_ed for every frame
+' Reserved for equations
+    ed_num_beams                       ' the number of beams in a frame, for ed_sg_bethe equations
+```

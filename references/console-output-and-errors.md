@@ -1,6 +1,6 @@
 # Console Output and Real Error Messages
 
-This file documents what TOPAS actually prints to the console/log during a run, taken from a real captured session (`tc.exe`, TOPAS-64 Version 8.66) running several files from `references/examples/cf/`. Use this to recognize what normal startup/progress output looks like, and to recognize genuine error messages rather than guessing at their wording.
+This file documents what TOPAS actually prints to the console/log during a run, taken from a real captured session (`tc.exe`, TOPAS-64 Version 8.66) running several of the installation's `cf/` examples. Use this to recognize what normal startup/progress output looks like, and to recognize genuine error messages rather than guessing at their wording.
 
 Every `.inp` file also has a paired `.out` file alongside it (available for 205 of the 283 examples; resolve both via `python3 scripts/topas_install.py --example <path>`, once with the `.inp` extension and once with `.out` — see SKILL.md's "Locating your TOPAS installation") — the `.out` file is what TOPAS writes back into the INP file itself: placeholder `0`s and un-annotated starting values get replaced with refined values, each carrying its uncertainty via a trailing backtick, e.g. `beq @ 0.19987`_0.00463`. Compare an example's `.inp` against its `.out` to see exactly what refining it changed.
 
@@ -43,7 +43,7 @@ Charge flipping has its own distinct column layout, quite different from Rietvel
      0     0.0   1.159  35.19    0.00  49.97   0.050  0  1  0   0.406   0.189  29.901
 ```
 
-Columns: iteration, time, R-factor, Scale, Del, %Flip (percentage of charge flipped), al-sum, Shift, Sym-Err (three integers — symmetry-equivalent error counters), F000, and %ED > H (percentage of electron density above a threshold). A `Flip-R` column sometimes also appears at the end depending on the exact charge-flipping variant in use (compare `references/examples/cf/cf-ae5.inp` vs `references/examples/cf/cf-ae9-poor.inp`'s console output — the ae9-poor run includes it, ae5 doesn't).
+Columns: iteration, time, R-factor, Scale, Del, %Flip (percentage of charge flipped), al-sum, Shift, Sym-Err (three integers — symmetry-equivalent error counters), F000, and %ED > H (percentage of electron density above a threshold). A `Flip-R` column sometimes also appears at the end depending on the exact charge-flipping variant in use (compare the console output of the installation's `cf/cf-ae5.inp` and `cf/cf-ae9-poor.inp` — the ae9-poor run includes it, ae5 doesn't).
 
 On completion:
 ```
@@ -256,3 +256,20 @@ Prints mid-refinement once TOPAS has verified the sparsity assumption behind `ap
 ### Practical takeaway on "are the .out/console files helpful for learning?"
 
 Yes — very much so. The batch log confirms the manual-derived documentation was accurate for the common paths, but it also surfaced roughly a dozen genuinely new error/warning shapes (above) that don't appear anywhere in the Technical Reference text, plus a genuine dependency-ordering slip in the example set (`.fc`/data-file naming mismatch in stacking-faults) and a couple of `Unhandled exception` crashes worth flagging separately as possible TOPAS bugs rather than INP-writing mistakes — the macro-overload-not-found case turned out to be expected TOPAS behavior (same-named macros are resolved by argument count) rather than an example-set bug. Real execution logs catch exactly the class of error that reading the manual alone cannot: keyword typos, argument-count mismatches, and missing-file dependency ordering.
+
+## Version 9: modulated structures and electron diffraction
+
+Each of the two Version 9 chapters ends with a table of the messages a user will meet, taken from the Version 9 program: "Messages a user will meet" in `references/30-modulated-structures.md` and in `references/31-electron-diffraction.md`. Quote the user's message against those tables first.
+
+The electron diffraction load lines look like nothing else in TOPAS (`qtz-dyn-0.inp` with `iters 0`):
+
+```
+ED: 17557 hkls in half of reciprocal space to |g| 4.2 for the structure factors
+ED frame 1: 21 of 73 reflections (dropped: |g| > ed_g_max 0, D_Sg 49, S_g 0, R_Sg 3, |g| > 2.1 ed_g_max 0), 68 beams, 340 structure factors
+   negative intensities set to zero: 4
+...
+ED crystal 1: ed_num_integration_steps_auto 28
+  0  Time   1.79  Rwp   13.333    0.000 MC     0.00 0
+```
+
+`31-electron-diffraction.md` § "Beams and reflections, and what the console shows" explains each field.
