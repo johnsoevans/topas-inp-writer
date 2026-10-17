@@ -16,9 +16,9 @@ This does not validate or change TOPAS semantics beyond removing these
 suffixes -- run scripts/check_inp_syntax.py afterward as usual.
 
 Usage:
-    python3 remove_errors.py file.inp                 # rewrite in place, whole file
-    python3 remove_errors.py file.inp -o out.inp       # write elsewhere
-    python3 remove_errors.py file.inp --check          # print the result to stdout, don't write
+    python remove_errors.py file.inp                 # rewrite in place, whole file
+    python remove_errors.py file.inp -o out.inp       # write elsewhere
+    python remove_errors.py file.inp --check          # print the result to stdout, don't write
 """
 
 import argparse

@@ -45,11 +45,11 @@ comes last -- usually beq or the last u_ij) is left unpadded, since
 trailing whitespace after it serves no purpose.
 
 Usage:
-    python3 fix_columns.py file.inp                  # rewrite in place, whole file
-    python3 fix_columns.py file.inp -o out.inp        # write elsewhere
-    python3 fix_columns.py file.inp --check           # print result to stdout, don't write
-    python3 fix_columns.py file.inp --lines 26-31      # only touch lines 26-31 (1-indexed, inclusive)
-    python3 fix_columns.py file.inp --indent 4         # 4 spaces per indent level (default: 3)
+    python fix_columns.py file.inp                  # rewrite in place, whole file
+    python fix_columns.py file.inp -o out.inp        # write elsewhere
+    python fix_columns.py file.inp --check           # print result to stdout, don't write
+    python fix_columns.py file.inp --lines 26-31      # only touch lines 26-31 (1-indexed, inclusive)
+    python fix_columns.py file.inp --indent 4         # 4 spaces per indent level (default: 3)
 
 `--lines` is meant for "fix columns on the selected text": alignment
 groups/column widths are still computed from the FULL file (so a

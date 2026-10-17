@@ -92,8 +92,8 @@ def strip_output_only_columns(df):
 # =========================
 def main():
 
-    if len(sys.argv) < 2:
-        print("Usage: python toReel_v1.py <directory_name>")
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print("Usage: python to_Reel_v1.py <directory_of_.xyd_files>")
         return
 
     directory = sys.argv[1]

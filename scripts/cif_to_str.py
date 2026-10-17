@@ -93,9 +93,9 @@ Known limitations (be upfront about these, don't claim more than is true):
     standard CIF formatting may not parse correctly; verify the output.
 
 Usage:
-    python3 cif_to_str.py input.cif                  # print to stdout
-    python3 cif_to_str.py input.cif -o output.txt     # write to file
-    python3 cif_to_str.py input.cif --tolerance 0.002  # coordinate-match tolerance (default 0.0015)
+    python cif_to_str.py input.cif                  # print to stdout
+    python cif_to_str.py input.cif -o output.txt     # write to file
+    python cif_to_str.py input.cif --tolerance 0.002  # coordinate-match tolerance (default 0.0015)
 """
 
 import sys
@@ -105,7 +105,6 @@ import math
 import argparse
 import subprocess
 import shutil
-from fractions import Fraction
 
 import topas_install
 from symmetry_utils import (

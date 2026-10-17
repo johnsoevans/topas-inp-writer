@@ -24,9 +24,9 @@ PNG), confirmed against the user's own stacking convention.
 Usage: same flags as plot_xy.py's overlay/diff/phases/ticks/stats options,
 output is PNG (or .jpg by extension) instead of HTML.
 
-    python3 plot_xy_matplotlib.py obs.xy calc.xy --labels "Yobs,Ycalc" --diff "Yobs,Ycalc" -o fit.png
-    python3 plot_xy_matplotlib.py --phases "CeO2|obs.xy|calc.xy" --stats "Rwp=7.36%,GoF=2.40" -o fit.png
-    python3 plot_xy_matplotlib.py obs.xy calc.xy --diff "Yobs,Ycalc" --ticks "CeO2|ticks.txt" -o fit.png --dpi 200
+    python plot_xy_matplotlib.py obs.xy calc.xy --labels "Yobs,Ycalc" --diff "Yobs,Ycalc" -o fit.png
+    python plot_xy_matplotlib.py --phases "CeO2|obs.xy|calc.xy" --stats "Rwp=7.36%,GoF=2.40" -o fit.png
+    python plot_xy_matplotlib.py obs.xy calc.xy --diff "Yobs,Ycalc" --ticks "CeO2|ticks.txt" -o fit.png --dpi 200
 """
 
 import sys
@@ -39,7 +39,7 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(__file__))
 from plot_xy import (
-    parse_xy_file, parse_tick_reflection_file, compute_diff_series,
+    parse_xy_file, compute_diff_series,
     build_phase_series, build_tick_groups, parse_stats,
     DEFAULT_PALETTE, DEFAULT_DIFF_COLOR,
 )

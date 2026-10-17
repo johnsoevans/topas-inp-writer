@@ -273,12 +273,10 @@ def load_pattern(path):
     xy = os.path.splitext(path)[0] + "_yobs.xy"
     if not os.path.exists(xy):
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from topas_install import get_topas_dir
-        topas_dir, found = get_topas_dir()
-        if not found:
-            raise SystemExit(
-                f"{path} is a binary Bruker RAW file and TOPAS_DIR is not set, so it "
-                "cannot be converted. Set TOPAS_DIR, or supply a text .xy/.xye instead.")
+        import topas_install
+        tc = topas_install.find_tc(
+            f"{path} is a binary Bruker RAW file, which needs tc.exe to convert; "
+            "or supply a text .xy/.xye instead.")
         inp = os.path.join(tempfile.mkdtemp(), "conv.inp")
         with open(inp, "w") as fh:
             fh.write("\n".join([
@@ -288,8 +286,8 @@ def load_pattern(path):
                 '\tOut_X_Yobs("' + xy + '")',
                 "",
             ]))
-        r = subprocess.run([os.path.join(topas_dir, "tc.exe"), inp[:-4]],
-                           capture_output=True, text=True)
+        r = subprocess.run([tc, inp[:-4]], capture_output=True, text=True,
+                           env=topas_install.tc_env(tc))
         if not os.path.exists(xy):
             raise SystemExit("tc.exe could not convert " + path + ":\n"
                              + r.stdout + r.stderr)
@@ -318,14 +316,14 @@ def main(argv=None):
                          "Ka1/Ka2 data left unstripped.")
     ap.add_argument("--lam-ratio", type=float, default=CU_KA2_KA1,
                     help=f"satellite/main wavelength ratio for the doublet merge "
-                         f"(default {CU_KA2_KA1:.7f}, Cu Ka2/Ka1). Monochromated or "
-                         f"single-wavelength data should use --no-merge-doublet.")
+                         f"(default {CU_KA2_KA1:.7f}, Cu Ka2/Ka1). Ignored unless "
+                         f"--merge-doublet is given.")
     ap.add_argument("--area-half-width", type=float, default=0.25,
                     help="maximum half-width (deg) for area integration; automatically "
                          "reduced near neighbouring peaks (default 0.25)")
     ap.add_argument("--rachinger", action="store_true",
                     help="strip the Ka2 component before searching (Ka1/Ka2 data only). "
-                         "Implies --no-merge-doublet. Use the ORIGINAL data for every "
+                         "Turns --merge-doublet off. Use the ORIGINAL data for every "
                          "later fitting stage -- this is a search aid, not a correction.")
     ap.add_argument("--i-ratio", type=float, default=0.5,
                     help="Ka2/Ka1 integrated intensity ratio for --rachinger (default 0.5). "

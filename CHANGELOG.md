@@ -1,4 +1,15 @@
 # Changelog
+## 1.1.3 - 2026-10-17
+- SKILL.md slimmed; full script usage moved to references/scripts.md
+- new rigid_body_builder.py and 28-z-matrix-rigid-body-conventions.md; wizard option to generate rigid bodies
+- new group_cells.py; 29-indexing-workflow-conventions.md rewritten
+- scripts put TOPAS_DIR on PATH when running tc.exe (fixes sgcom6 / missing .sg failures)
+- wizard never generates .inp names containing dots (TOPAS truncates output names at the first dot)
+- 27 header simplified; console-output-and-errors.md condensed
+- system-files-index and vscode-integration no longer refer to bundled system files
+- new test examples: pdf_data, variable_temperature/indexing, incommensurate, pigments, zrw2o8_index_solve_refine
+- consistency fixes across script help text and docstrings
+
 ## 1.1.2 - 2026-10-02
 - sped up file open in several py routines (no wait for complete)
 - updated find_example.py so doesn't rely on old prewritten list 

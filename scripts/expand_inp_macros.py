@@ -70,9 +70,8 @@ limitations, stated up front rather than silently guessed around:
     reused consistently at every occurrence of that one @ argument) is
     meaningful, not the exact string.
   - Macro overload resolution matches purely by argument count, exactly
-    as documented -- except the one confirmed real-world edge case (see
-    the beq-2-create.inp discussion in SKILL.md / console-output-and-
-    errors.md) where a file-local macro colliding with a same-named,
+    as documented -- except the one confirmed real-world edge case (seen
+    with the install's pdf/beq-2-create.inp) where a file-local macro colliding with a same-named,
     different-arity system macro can fail to resolve at runtime even
     though this script will still happily expand it.
   - Output line numbers will NOT match TOPAS's own "at LINE N" numbering
@@ -92,9 +91,9 @@ limitations, stated up front rather than silently guessed around:
     resolved by this static tool.
 
 Usage:
-    python3 expand_inp_macros.py file.inp
-    python3 expand_inp_macros.py file.inp -o expanded.inp
-    python3 expand_inp_macros.py file.inp --run-number 1
+    python expand_inp_macros.py file.inp
+    python expand_inp_macros.py file.inp -o expanded.inp
+    python expand_inp_macros.py file.inp --run-number 1
 """
 
 import sys

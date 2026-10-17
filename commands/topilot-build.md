@@ -21,6 +21,15 @@ Do not re-derive any of that here.
 
 - Ground the file on the closest match in `example_inp_files/`; for a lab Rietveld job that is `tio2_lab_bragg_brentano_rietveld.inp`.
 - `str` blocks come from `scripts/cif_to_str.py`.
+- **`rigid_body: true` on a phase** — build it with `scripts/rigid_body_builder.py`, never by hand, following `references/28-z-matrix-rigid-body-conventions.md`. Four steps, in order:
+  1. `--analyse <cif> --exclude "<rigid_exclude>"`, and **read it**. It gives the asymmetric unit with symmetry duplicates collapsed, each site's multiplicity and stabilising operators, the fragments that remain after exclusions, and what each fragment's symmetry permits. `rigid_exclude` absent means propose the exclusions yourself from its flags.
+  2. Make the two calls it deliberately does not make: which fragments become rigid bodies, and each one's `free_rotation`/`free_translation`. `--build` on a spec missing those prints a template with every derivable field already filled and refuses to emit. Do not skip the read and guess — the DOF differed for every fragment in the set this was validated against.
+  3. `--build <spec>` emits the `rigid` block on stdout (diagnostics go to stderr, so it redirects cleanly).
+  4. `--verify <spec>` — **mandatory, not advisory.** It generates a plain-`site` control from the same CIF, matches everything non-structural, and fails on any disagreement in multiplicity, coordinates, calculated pattern, or whether a declared DOF is actually a rigid motion. A wrong rigid body still produces a plausible `.inp` and a clean convergence log; this is the only step that catches that.
+
+  This is distinct from `solve.structure: "molecular"`, which carries a user-supplied fragment (`fragment_file`/`fragment_text`) as the *input* to a simulated anneal. If a job has both, the solve stage's own z-matrix is already the fragment — **reuse it for the rietveld stage rather than re-deriving one**, and do not expect the phase's `path` to point at a CIF that exists before solving.
+
+  Site lines still come from `cif_to_str.py` — the rigid body supplies x/y/z, so those become placeholders. **Report the fragmentation**: which atoms ended up in which body and what was excluded. The user cannot otherwise tell whether the exclusion was right, and it is not decidable by element alone (a covalently bound heavy atom belongs in the body; the same element as a counter-ion does not).
 - An **absent key means you decide** — it is not "off". A key that is present is binding and used as given.
 - `variable_slits` absent: ask, per the skill's rule. Present: use it, and state which mode in the report. Absent because `radiation_kind` is `tof`, or because the instrument has no divergence slit: it does not apply — say so instead of asking.
 - **The folder `out` names is the whole job's home.** The `.inp`, its `_job.json`, `_start.inp`/`_prev.inp`/`_history.tsv`, tick files, plots and any workings/scratch folder all go there — the workings folder inside it, not beside it. Write nothing into the data folder.

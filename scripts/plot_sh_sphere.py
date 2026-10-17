@@ -34,10 +34,10 @@ direction, as per the skill's Rietveld workflow conventions; the plot is
 directions, not positions.
 
 Usage:
-    python3 plot_sh_sphere.py file.inp
-    python3 plot_sh_sphere.py file.inp --surface
-    python3 plot_sh_sphere.py file.inp --phase 2 -o texture.html
-    python3 plot_sh_sphere.py file.inp --surface --mesh-level 4
+    python plot_sh_sphere.py file.inp
+    python plot_sh_sphere.py file.inp --surface
+    python plot_sh_sphere.py file.inp --phase 2 -o texture.html
+    python plot_sh_sphere.py file.inp --surface --mesh-level 4
 """
 
 import sys
@@ -105,16 +105,8 @@ def find_sh_name(block_clean):
 # ---------------------------------------------------------------------------
 
 def _find_tc():
-    root, found = topas_install.get_topas_dir()
-    if found:
-        for exe in ("tc.exe", "TC.EXE", "tc"):
-            p = os.path.join(root, exe)
-            if os.path.exists(p):
-                return p
-    raise SystemExit(
-        "Could not locate tc.exe -- set TOPAS_DIR to your TOPAS install root. "
-        "This script needs a real TOPAS run to evaluate the harmonics series."
-    )
+    return topas_install.find_tc(
+        "This script needs a real TOPAS run to evaluate the harmonics series.")
 
 
 def _rewrite_xdd_paths(text, data_dir):
@@ -122,7 +114,7 @@ def _rewrite_xdd_paths(text, data_dir):
     temp directory still finds the pattern (TOPAS resolves a relative xdd
     path against the .inp's own directory)."""
     def repl(m):
-        kw, quote, path = m.group(1), m.group(2) or "", m.group(3)
+        kw, path = m.group(1), m.group(3)
         if os.path.isabs(path):
             return m.group(0)
         return f'{kw} "{os.path.join(data_dir, path)}"'
@@ -216,7 +208,8 @@ def run_topas_for_sh(inp_path, sh_name, phase_index, keep_scratch=False):
     with open(scratch, "w", encoding="utf-8") as f:
         f.write(text)
 
-    proc = subprocess.run([tc, scratch], capture_output=True, text=True)
+    proc = subprocess.run([tc, scratch], capture_output=True, text=True,
+                          env=topas_install.tc_env(tc))
     if not os.path.exists(out_txt):
         tail = [ln for ln in (proc.stdout or "").splitlines() if ln.strip()][-6:]
         detail = "\n    ".join(tail) if tail else "(tc.exe produced no output)"

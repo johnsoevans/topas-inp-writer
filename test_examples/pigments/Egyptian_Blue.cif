@@ -1,0 +1,103 @@
+
+#(C) 2016 by FIZ Karlsruhe - Leibniz Institute for Information Infrastructure.  All rights reserved.
+data_72612-ICSD
+_database_code_ICSD 72612
+_audit_creation_date 1994-01-19
+_audit_update_record 2015-02-01
+_chemical_name_systematic 'Calcium copper phyllo-tetrasilicate'
+_chemical_formula_structural 'Ca Cu (Si4 O10)'
+_chemical_formula_sum 'Ca1 Cu1 O10 Si4'
+_chemical_name_structure_type Gillespite
+_chemical_name_mineral Cuprorivaite
+_exptl_crystal_density_diffrn 3.1
+_cell_measurement_temperature 295.
+_publ_section_title
+
+;
+Refinement of the structures of the layer silicates M Cu Si4 O10 (M= Ca, Sr,
+Ba) by Rietveld analysis of neutron powder diffraction data
+;
+loop_
+_citation_id
+_citation_journal_full
+_citation_year
+_citation_journal_volume
+_citation_page_first
+_citation_page_last
+_citation_journal_id_ASTM
+primary 'Journal of Solid State Chemistry' 1993 103 105 113 JSSCBI
+loop_
+_publ_author_name
+'Chakoumakos, B.C.'
+'Fernandez-Baca, J.A.'
+'Boatner, L.A.'
+_cell_length_a 7.3017(3)
+_cell_length_b 7.3017(3)
+_cell_length_c 15.1303(6)
+_cell_angle_alpha 90.
+_cell_angle_beta 90.
+_cell_angle_gamma 90.
+_cell_volume 806.67
+_cell_formula_units_Z 4
+_symmetry_space_group_name_H-M 'P 4/n c c Z'
+_symmetry_Int_Tables_number 130
+_refine_ls_R_factor_all 0.045
+loop_
+_symmetry_equiv_pos_site_id
+_symmetry_equiv_pos_as_xyz
+1 'y+1/2, x+1/2, -z+1/2'
+2 '-y, x+1/2, -z'
+3 'y+1/2, -x, -z'
+4 '-y, -x, -z+1/2'
+5 'x+1/2, y+1/2, -z'
+6 '-x, y+1/2, -z+1/2'
+7 'x+1/2, -y, -z+1/2'
+8 '-x, -y, -z'
+9 '-y+1/2, -x+1/2, z+1/2'
+10 'y, -x+1/2, z'
+11 '-y+1/2, x, z'
+12 'y, x, z+1/2'
+13 '-x+1/2, -y+1/2, z'
+14 'x, -y+1/2, z+1/2'
+15 '-x+1/2, y, z+1/2'
+16 'x, y, z'
+loop_
+_atom_type_symbol
+_atom_type_oxidation_number
+Ca2+ 2
+Cu2+ 2
+Si4+ 4
+O2- -2
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_symmetry_multiplicity
+_atom_site_Wyckoff_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_B_iso_or_equiv
+_atom_site_occupancy
+_atom_site_attached_hydrogens
+Ca1 Ca2+ 4 b 0.25 0.75 0 . 1. 0
+Cu1 Cu2+ 4 c 0.25 0.25 0.0819(1) . 1. 0
+Si1 Si4+ 16 g 0.5036(3) 0.9267(2) 0.1475(1) . 1. 0
+O1 O2- 8 f 0.4608(2) 0.9608(2) 0.25 . 1. 0
+O2 O2- 16 g 0.7076(2) 0.0025(2) 0.1268(1) . 1. 0
+O3 O2- 16 g 0.3533(2) 0.0068(2) 0.0821(1) . 1. 0
+loop_
+_atom_site_aniso_label
+_atom_site_aniso_type_symbol
+_atom_site_aniso_U_11
+_atom_site_aniso_U_22
+_atom_site_aniso_U_33
+_atom_site_aniso_U_12
+_atom_site_aniso_U_13
+_atom_site_aniso_U_23
+Ca1 Ca2+ 0.003(1) 0.003(1) 0.023(3) 0 0 0
+Cu1 Cu2+ 0.0055(1) 0.0055(1) 0.006(1) 0 0 0
+Si1 Si4+ 0.004(1) 0.005(1) 0.006(1) -0.0002(9) -0.001(1) 0.0002(9)
+O1 O2- 0.028(1) 0.028(1) 0.002(1) -0.004(1) 0.0044(7) -0.0044(7)
+O2 O2- 0.0010(8) 0.0127(9) 0.017(1) -0.0019(6) 0.0016(7) 0.0043(9)
+O3 O2- 0.0059(8) 0.0058(9) 0.015(1) 0.0031(6) -0.0040(8) 0.000(1)
+#End of TTdata_72612-ICSD

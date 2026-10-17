@@ -15,7 +15,7 @@
 '   A: positions and areas fixed, widths fixed (!fwNNN) -- converge bkg/axial/plor.
 '   B: seed plor from A, then release areas and widths as shown here.
 '
-' FWHM min = Max(0.005, 2 * data step) in degrees; max a few degrees.  The floor
+' FWHM min = Max(0.005, 2 * data step) in degrees; max 2 degrees.  The floor
 ' stops collapse onto a noise spike -- it must NOT be the main-phase width, since
 ' an impurity can be sharper than the main phase (crystalline Si in a silicate).
 
@@ -39,13 +39,13 @@ xdd "DATAFILE.xye"
    xo_Is
       peak_type pv
       pv_lor = plor;
-      pv_fwhm fw000 0.05 min 0.006 max 5
+      pv_fwhm fw000 0.05 min 0.006 max 2
       load xo I { 15.13264  @ 176.48 }
 
    xo_Is
       peak_type pv
       pv_lor = plor;
-      pv_fwhm fw001 0.05 min 0.006 max 5
+      pv_fwhm fw001 0.05 min 0.006 max 2
       load xo I { 24.83374  @ 128.38 }
 
    ' ... one such block per peak ...

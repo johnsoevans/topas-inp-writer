@@ -42,17 +42,17 @@ outright and emits a structured verdict (+ a ready-to-apply text
 replacement) instead.
 
 Usage:
-    python3 symmetrize_str.py file.inp --lines 25-26
-    python3 symmetrize_str.py file.inp --lines 25-26 --json
-    python3 symmetrize_str.py file.inp --lines 25 -o report.json --json
-    python3 symmetrize_str.py file.inp --lines 25-26 --write
+    python symmetrize_str.py file.inp --lines 25-26
+    python symmetrize_str.py file.inp --lines 25-26 --json
+    python symmetrize_str.py file.inp --lines 25 -o report.json --json
+    python symmetrize_str.py file.inp --lines 25-26 --write
         (applies every 'fix' item directly, writing file_symmetrized.inp
         alongside file.inp -- CLI convenience only, see apply_fixes/--write)
-    python3 symmetrize_str.py file.inp --write
+    python symmetrize_str.py file.inp --write
         (--lines omitted defaults to the whole file -- only valid when the
         file contains a single str block; multi-phase files must pass an
         explicit --lines range)
-    python3 symmetrize_str.py file.inp --lines 25-26 --refineall --write
+    python symmetrize_str.py file.inp --lines 25-26 --refineall --write
         (every FREE cell parameter/coordinate/ADP in range gets named with
         NO sigil -- i.e. left free to actually refine -- instead of the
         default '!name'; see --refineall below)

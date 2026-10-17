@@ -85,11 +85,11 @@ Known limitations, stated plainly:
     silently dropped rather than shown as an unresolved reference.
 
 Usage:
-    python3 param_dependency_trees.py file.inp
-    python3 param_dependency_trees.py file.inp --tree independent
-    python3 param_dependency_trees.py file.inp -o report.txt
-    python3 param_dependency_trees.py file.inp -o report.txt --no-open
-    python3 param_dependency_trees.py file.inp -o report.html
+    python param_dependency_trees.py file.inp
+    python param_dependency_trees.py file.inp --tree independent
+    python param_dependency_trees.py file.inp -o report.txt
+    python param_dependency_trees.py file.inp -o report.txt --no-open
+    python param_dependency_trees.py file.inp -o report.html
 
 After writing the report (default in-place stdout redirect via -o, not
 plain stdout), it also opens/focuses that file in VS Code -- matching
@@ -1112,7 +1112,7 @@ def main():
     parser.add_argument("--tree", choices=["dependent", "independent", "both"], default="both")
     parser.add_argument("--run-number", type=int, default=0)
     parser.add_argument("--no-open", action="store_true",
-                         help="don't open/focus the report in VS Code afterward (default: do open it, only when -o is given)")
+                         help="don't open the report afterward (VS Code for text, browser for HTML) (default: do open it, only when -o is given)")
     args = parser.parse_args()
 
     all_nodes, warnings, clean = build_graph(args.inp_file, run_number=args.run_number)
@@ -1140,7 +1140,7 @@ def main():
 
     out = []
     if args.tree in ("dependent", "both"):
-        out.append(f"TREE 1 -- dependent parameters/keywords with independent (or fixed) children")
+        out.append("TREE 1 -- dependent parameters/keywords with independent (or fixed) children")
         out.append(f"({sum(1 for n in all_nodes.values() if n.kind == 'dependent')} dependent roots)")
         out.append("=" * 78)
         out.append("")
@@ -1151,7 +1151,7 @@ def main():
         out.append("")
 
     if args.tree in ("independent", "both"):
-        out.append(f"TREE 2 -- independent parameters with dependent children")
+        out.append("TREE 2 -- independent parameters with dependent children")
         out.append(f"({sum(1 for n in all_nodes.values() if n.kind == 'independent')} independent roots)")
         out.append("=" * 78)
         out.append("")

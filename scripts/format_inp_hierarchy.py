@@ -31,8 +31,7 @@ no braces at all. `xdd`/`hkl_Is`/`xdd_Is` phases and the `str` structures
 inside them are conventionally indented by every real example in this
 project's corpus, but none of that nesting is delimited by `{ }` -- a
 `str` block simply runs until the next `str`/phase keyword or the file
-ends (confirmed directly against real corpus files during this skill's
-own development; see SKILL.md's "Building a supercell" section). So this
+ends (confirmed against real corpus files). So this
 formatter tracks TWO things together:
 
   1. Genuine `{ }` brace depth (macro bodies, C_matrix_normalized,
@@ -103,10 +102,10 @@ is orthogonal to keyword hierarchy (it's about how TOPAS formats its own
 generated report output, not about which keywords nest under which).
 
 Usage:
-    python3 format_inp_hierarchy.py file.inp              # rewrite in place
-    python3 format_inp_hierarchy.py file.inp -o out.inp   # write elsewhere
-    python3 format_inp_hierarchy.py file.inp --check      # preview to stdout, don't write
-    python3 format_inp_hierarchy.py file.inp --indent 4   # 4 spaces per indent level (default: 3)
+    python format_inp_hierarchy.py file.inp              # rewrite in place
+    python format_inp_hierarchy.py file.inp -o out.inp   # write elsewhere
+    python format_inp_hierarchy.py file.inp --check      # preview to stdout, don't write
+    python format_inp_hierarchy.py file.inp --indent 4   # 4 spaces per indent level (default: 3)
 
 `--indent` also governs how deep fix_columns.py nests la/lo/lh/
 ymin_on_ymax lines under 'lam' (this script calls fix_columns() as its

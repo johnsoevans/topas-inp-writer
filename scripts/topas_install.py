@@ -39,12 +39,12 @@ Usable as a library:
     keyword_tree_html, found = topas_install.get_keyword_tree_html()
 
 Or as a CLI (handy for Claude to shell out to before reading a file):
-    python3 topas_install.py --inc-dir
-    python3 topas_install.py --example cf/alvo4a.inp
-    python3 topas_install.py --kernel-schema-html
-    python3 topas_install.py --macro-browser-html
-    python3 topas_install.py --technical-reference-pdf
-    python3 topas_install.py --keyword-tree-html
+    python topas_install.py --inc-dir
+    python topas_install.py --example cf/alvo4a.inp
+    python topas_install.py --kernel-schema-html
+    python topas_install.py --macro-browser-html
+    python topas_install.py --technical-reference-pdf
+    python topas_install.py --keyword-tree-html
 
 kernel_structure_tree.html (the "Show Schema" page, pre-rendered from
 TOPAS's internal kernel data-structure listing) is resolved the same
@@ -166,6 +166,33 @@ def get_topas_dir():
     return "", False
 
 
+def find_tc(why=""):
+    """Path to tc.exe under TOPAS_DIR. Raises SystemExit, with `why` appended
+    to the message, if it can't be found -- there is no fallback location."""
+    root, found = get_topas_dir()
+    if found:
+        for exe in ("tc.exe", "TC.EXE", "tc"):
+            p = os.path.join(root, exe)
+            if os.path.exists(p):
+                return p
+    raise SystemExit(("Could not locate tc.exe -- set TOPAS_DIR to your TOPAS install root. "
+                      + why).strip())
+
+
+def tc_env(tc_path=None):
+    """Environment for a tc.exe subprocess, with tc.exe's own directory on PATH.
+
+    tc.exe calls helper programs such as sgcom6 by bare name. Without its
+    install directory on PATH, any space group not already compiled to
+    sg/*.sg aborts the run ("Cannot open file ...\\sg\\<group>.sg"). TOPAS-GUI
+    sets PATH through its own batch files; a bare subprocess does not.
+    """
+    tc_dir = os.path.dirname(os.path.abspath(tc_path or find_tc()))
+    env = os.environ.copy()
+    env["PATH"] = tc_dir + os.pathsep + env.get("PATH", "")
+    return env
+
+
 def get_inc_dir():
     """
     Returns (path, found). If TOPAS_DIR is set and a real topas.inc was
@@ -269,99 +296,50 @@ def resolve_example(rel_path):
 
 
 def main():
+    # flag -> (lookup, help text, what to call it in a not-found message)
+    lookups = {
+        "inc_dir": (get_inc_dir, "Print the resolved .inc macro library directory.", "topas.inc"),
+        "kernel_schema_html": (get_kernel_schema_html,
+                               "Print the resolved kernel_structure_tree.html path (the pre-rendered "
+                               "'Show Schema' page shipped inside a real TOPAS install).",
+                               KERNEL_SCHEMA_HTML_BASENAME),
+        "macro_browser_html": (get_macro_browser_html, "Print the resolved macro_browser.html path.",
+                               MACRO_BROWSER_HTML_BASENAME),
+        "technical_reference_pdf": (get_technical_reference_pdf,
+                                    "Print the resolved Technical_Reference.pdf path.",
+                                    "Technical_Reference.pdf"),
+        "keyword_tree_html": (get_keyword_tree_html, "Print the resolved topas_keyword_tree.html path.",
+                              KEYWORD_TREE_HTML_BASENAME),
+    }
     parser = argparse.ArgumentParser(
         description="Resolve TOPAS install file paths via TOPAS_DIR (no bundled fallback -- set TOPAS_DIR)."
     )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--inc-dir", action="store_true",
-                        help="Print the resolved .inc macro library directory.")
+    for dest, (_, help_text, _) in lookups.items():
+        group.add_argument("--" + dest.replace("_", "-"), action="store_true", help=help_text)
     group.add_argument("--example", metavar="REL_PATH",
                         help='Resolve an example file, e.g. "cf/alvo4a.inp" (path style used in references/examples-index.md).')
-    group.add_argument("--kernel-schema-html", action="store_true",
-                        help="Print the resolved kernel_structure_tree.html path (the pre-rendered 'Show Schema' page shipped inside a real TOPAS install).")
-    group.add_argument("--macro-browser-html", action="store_true",
-                        help="Print the resolved macro_browser.html path.")
-    group.add_argument("--technical-reference-pdf", action="store_true",
-                        help="Print the resolved Technical_Reference.pdf path.")
-    group.add_argument("--keyword-tree-html", action="store_true",
-                        help="Print the resolved topas_keyword_tree.html path.")
     args = parser.parse_args()
 
-    topas_dir_set = bool(os.environ.get("TOPAS_DIR", "").strip())
-
-    if args.inc_dir:
-        path, found = get_inc_dir()
-        print(path)
-        if found:
-            print("(found via TOPAS_DIR)", file=sys.stderr)
-        elif topas_dir_set:
-            print(f"(NOT FOUND -- TOPAS_DIR={os.environ['TOPAS_DIR']!r} was searched but no topas.inc "
-                  f"turned up under it; check the path)", file=sys.stderr)
-        else:
-            print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy. "
-                  "Set TOPAS_DIR to your TOPAS install root.)", file=sys.stderr)
-    elif args.kernel_schema_html:
-        path, found = get_kernel_schema_html()
-        print(path)
-        if found:
-            print("(found via TOPAS_DIR)", file=sys.stderr)
-        elif topas_dir_set:
-            print(f"(NOT FOUND -- TOPAS_DIR={os.environ['TOPAS_DIR']!r} was searched but no "
-                  f"{KERNEL_SCHEMA_HTML_BASENAME} turned up under it; this skill has no bundled "
-                  f"fallback copy and does not generate this page itself)", file=sys.stderr)
-        else:
-            print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy and "
-                  "does not generate this page itself. Set TOPAS_DIR to find the copy shipped with "
-                  "your TOPAS install.)", file=sys.stderr)
-    elif args.macro_browser_html:
-        path, found = get_macro_browser_html()
-        print(path)
-        if found:
-            print("(found via TOPAS_DIR)", file=sys.stderr)
-        elif topas_dir_set:
-            print(f"(NOT FOUND -- TOPAS_DIR={os.environ['TOPAS_DIR']!r} was searched but no "
-                  f"{MACRO_BROWSER_HTML_BASENAME} turned up under it; this skill has no bundled "
-                  f"fallback copy)", file=sys.stderr)
-        else:
-            print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy. "
-                  "Set TOPAS_DIR to your TOPAS install root.)", file=sys.stderr)
-    elif args.technical_reference_pdf:
-        path, found = get_technical_reference_pdf()
-        print(path)
-        if found:
-            print("(found via TOPAS_DIR)", file=sys.stderr)
-        elif topas_dir_set:
-            print(f"(NOT FOUND -- TOPAS_DIR={os.environ['TOPAS_DIR']!r} was searched but no "
-                  f"Technical_Reference.pdf turned up under it; this skill has no bundled fallback copy)",
-                  file=sys.stderr)
-        else:
-            print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy. "
-                  "Set TOPAS_DIR to your TOPAS install root.)", file=sys.stderr)
-    elif args.keyword_tree_html:
-        path, found = get_keyword_tree_html()
-        print(path)
-        if found:
-            print("(found via TOPAS_DIR)", file=sys.stderr)
-        elif topas_dir_set:
-            print(f"(NOT FOUND -- TOPAS_DIR={os.environ['TOPAS_DIR']!r} was searched but no "
-                  f"{KEYWORD_TREE_HTML_BASENAME} turned up under it; this skill has no bundled "
-                  f"fallback copy)", file=sys.stderr)
-        else:
-            print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy. "
-                  "Set TOPAS_DIR to your TOPAS install root.)", file=sys.stderr)
-    else:
+    if args.example:
         path, found = resolve_example(args.example)
-        if found:
-            print(path)
-            print("(found via TOPAS_DIR)", file=sys.stderr)
-        elif topas_dir_set:
-            print(path)
-            print(f"(NOT FOUND -- TOPAS_DIR={os.environ['TOPAS_DIR']!r} was searched but "
-                  f"{args.example!r} wasn't found there, or matched ambiguously)", file=sys.stderr)
-        else:
-            print(path)
-            print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy. "
-                  "Set TOPAS_DIR to your TOPAS install root.)", file=sys.stderr)
+        what = repr(args.example)
+    else:
+        dest = next(d for d in lookups if getattr(args, d))
+        lookup, _, what = lookups[dest]
+        path, found = lookup()
+    print(path)
+
+    topas_dir = os.environ.get("TOPAS_DIR", "").strip()
+    if found:
+        print("(found via TOPAS_DIR)", file=sys.stderr)
+    elif topas_dir:
+        print(f"(NOT FOUND -- TOPAS_DIR={topas_dir!r} was searched but {what} wasn't found under it"
+              f"{' or matched ambiguously' if args.example else ''}; this skill has no bundled "
+              f"fallback copy)", file=sys.stderr)
+    else:
+        print("(NOT FOUND -- TOPAS_DIR is not set; this skill has no bundled fallback copy. "
+              "Set TOPAS_DIR to your TOPAS install root.)", file=sys.stderr)
 
 
 if __name__ == "__main__":

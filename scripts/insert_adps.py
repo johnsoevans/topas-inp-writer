@@ -30,11 +30,11 @@ columns -- and whatever's left of the old ones -- line up immediately,
 rather than leaving that as a separate "now go run fix columns" step.
 
 Usage:
-    python3 scripts/insert_adps.py file.inp --lines 26-28   # only site(s) touching these lines
-    python3 scripts/insert_adps.py file.inp                 # every site with a beq, whole file
-    python3 scripts/insert_adps.py file.inp -o out.inp
-    python3 scripts/insert_adps.py file.inp --check          # preview to stdout, don't write
-    python3 scripts/insert_adps.py file.inp --no-open
+    python scripts/insert_adps.py file.inp --lines 26-28   # only site(s) touching these lines
+    python scripts/insert_adps.py file.inp                 # every site with a beq, whole file
+    python scripts/insert_adps.py file.inp -o out.inp
+    python scripts/insert_adps.py file.inp --check          # preview to stdout, don't write
+    python scripts/insert_adps.py file.inp --no-open
 
 When the user has active IDE selection context naming a line range and
 asks to "insert adps" (or "replace beq with adps") on the selected
@@ -43,7 +43,6 @@ same convention fix_columns.py's own `--lines` flag already established.
 """
 
 import sys
-import os
 import re
 import math
 import argparse

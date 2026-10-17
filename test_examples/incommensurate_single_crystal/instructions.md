@@ -1,0 +1,3 @@
+# Na2CO3 Incommensurate single crystal
+
+Na2CO3.cif contains the published modulated structure of γ-Na2CO3 and its observed reflections. Set up a TOPAS v9 single crystal refinement of that model against those reflections. Hold the published amplitudes fixed at first and refine the scale and extinction; then refine the amplitudes with add_constraints, and report R(F) per satellite order against the published values.

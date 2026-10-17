@@ -33,7 +33,7 @@ Create (or add to) `.vscode/tasks.json` in the folder you have open in VS Code:
 }
 ```
 
-Replace `C:\\PATH\\TO\\topas-inp-writer` with the actual location of the *extracted* skill folder on that machine — the script needs its own `references/` folder alongside it (it locates `21-keyword-index.md`, every chapter `.md` file, and `system-files/inc/` relative to its own path), so point at the real `scripts/check_inp_syntax.py` inside the unzipped skill, not a copy made elsewhere.
+Replace `C:\\PATH\\TO\\topas-inp-writer` with the actual location of the *extracted* skill folder on that machine — the script needs its own `references/` folder alongside it (it locates `21-keyword-index.md` and every chapter `.md` file relative to its own path), so point at the real `scripts/check_inp_syntax.py` inside the unzipped skill, not a copy made elsewhere. The macro-library checks also need `TOPAS_DIR` set in the environment VS Code was started from.
 
 ## Running it
 
@@ -53,9 +53,9 @@ The `problemMatcher` block parses that same output and turns each `line N: ...` 
 - Ctrl+Shift+B is VS Code's normal "Run Build Task" shortcut. Setting `"isDefault": true` here makes this task the one that runs on that shortcut within this folder. If that shortcut is already used for something else in the same workspace, just trigger the task via the Command Palette instead of relying on the keybinding.
 - This wires up the *current* file only. To check a whole folder at once, just run the script directly from a terminal against a directory (`python check_inp_syntax.py some_directory/`) rather than through this task.
 
-# Opening a generated HTML file (e.g. Show Schema) from a portable task
+# Opening the Show Schema page from a portable task
 
-The kernel-schema viewer (`scripts/kernel_structure_tree.html`, see "Show Schema" in `SKILL.md`) and other generated HTML reports live inside the skill folder, which is per-user (`~/.claude/skills/topas-inp-writer/...`). Unlike the `check_inp_syntax.py` task above (which needs a hardcoded, per-machine path edit), a task that just *opens* a file can use VS Code's built-in `${userHome}` variable to stay portable across users with no editing required:
+The kernel-schema page ("Show Schema" in `SKILL.md`) ships inside the TOPAS install, not the skill, so the task asks `topas_install.py` where it is and opens that. The skill folder is per-user (`~/.claude/skills/topas-inp-writer/`), so VS Code's built-in `${userHome}` variable keeps the task portable with no per-machine edit:
 
 ```jsonc
 {
@@ -65,17 +65,17 @@ The kernel-schema viewer (`scripts/kernel_structure_tree.html`, see "Show Schema
   "args": [
     "-NoProfile",
     "-Command",
-    "Start-Process '${userHome}/.claude/skills/topas-inp-writer/scripts/kernel_structure_tree.html'"
+    "Start-Process (python '${userHome}/.claude/skills/topas-inp-writer/scripts/topas_install.py' --kernel-schema-html)"
   ],
   "presentation": { "reveal": "silent", "panel": "shared" },
   "problemMatcher": []
 }
 ```
 
-`${userHome}` resolves to the OS home directory (`C:\Users\<name>` on Windows) for whoever runs the task, so this same `tasks.json` entry works unmodified for any user with this skill installed. Run it via Command Palette → "Tasks: Run Task" → "TOPAS: Show Kernel Schema".
+The script prints only the path on stdout (its found/not-found note goes to stderr), and needs `TOPAS_DIR` set in the environment VS Code was started from. Run it via Command Palette → "Tasks: Run Task" → "TOPAS: Show Kernel Schema".
 
 To bind a keyboard shortcut to it, add to `keybindings.json`:
 ```jsonc
 { "key": "ctrl+alt+k", "command": "workbench.action.tasks.runTask", "args": "TOPAS: Show Kernel Schema" }
 ```
-Keybindings can't use `${userHome}`-style variable substitution directly in `"args"` (that substitution is specific to tasks/launch configs) — binding to the task's *label* and letting the task itself do the substitution is the portable way around that.
+Keybindings can't use `${userHome}`-style substitution in `"args"`; binding to the task's label lets the task do the substitution.

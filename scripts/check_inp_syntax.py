@@ -115,8 +115,8 @@ mismatches) -- see references/console-output-and-errors.md for the real
 error text TOPAS produces for each of these. One known blind spot: if a
 file-local macro reuses a name already defined with a different arity by
 a system #include, TOPAS can fail to resolve the file-local overload at
-runtime even though this checker considers the argument count valid (see
-the beq-2-create.inp case discussed in SKILL.md) -- a clean pass here
+runtime even though this checker considers the argument count valid (seen
+with the install's pdf/beq-2-create.inp) -- a clean pass here
 means "matches a documented arity/name," not an ironclad guarantee.
 
 Important caveat on line numbers: TOPAS's own error messages count each
@@ -130,8 +130,8 @@ the right neighborhood in your editor, not as an exact match to TOPAS's
 own error output.
 
 Usage:
-    python3 check_inp_syntax.py file1.inp [file2.inp ...]
-    python3 check_inp_syntax.py some_directory/          # recurses for *.inp
+    python check_inp_syntax.py file1.inp [file2.inp ...]
+    python check_inp_syntax.py some_directory/          # recurses for *.inp
 
 Exit code is 0 if no brace/paren/semicolon errors were found in any file
 (keyword-typo warnings never affect the exit code, since they are only
@@ -1673,6 +1673,7 @@ def check_prm_local_missing_min_max(clean_text, min_max_macro_names, issues):
         macro_call_re = re.compile(
             r"\b(" + "|".join(re.escape(n) for n in sorted(min_max_macro_names, key=len, reverse=True)) + r")\s*\("
         )
+    explained = False  # the why is printed with the first warning only
     for m in re.finditer(r"\b(prm|local)\b", clean_text):
         kw = m.group(1)
         after_kw = clean_text[m.end():]
@@ -1697,15 +1698,13 @@ def check_prm_local_missing_min_max(clean_text, min_max_macro_names, issues):
         if macro_call_re and macro_call_re.search(window):
             continue  # a min/max-setting macro (see harvest_macros_with_min_max_body) is called here
 
-        issues.append(
-            ("warning", line_of(clean_text, m.start()),
-             f"'{kw} {sigil}{name}' defines a refined parameter (no '!' prefix, so TOPAS "
-             f"will refine it) with a bare value but no 'min'/'max' attribute. Unlike "
-             f"subject-specific keywords (beq, CS_L, lattice parameters, ...), "
-             f"'{kw}'/'local' carry no default min/max limits (references/01-syntax-and-"
-             f"parameters.md, \"Try and use parameter attributes\") -- an unbounded "
-             f"refined parameter is bad practice; add explicit min/max.")
-        )
+        msg = f"'{kw} {sigil}{name}' is refined but has no 'min'/'max'; add explicit bounds."
+        if not explained:
+            msg += (" Unlike subject-specific keywords (beq, CS_L, lattice parameters, ...), "
+                    "'prm'/'local' carry no default limits (references/01-syntax-and-"
+                    "parameters.md, \"Try and use parameter attributes\").")
+            explained = True
+        issues.append(("warning", line_of(clean_text, m.start()), msg))
 
 
 Z_MATRIX_KW_RE = re.compile(r"\bz_matrix\b")
@@ -2461,8 +2460,8 @@ def harvest_fn_names(text):
 
 def load_library_macro_arities():
     """
-    Harvest macro arities (and bodiless macro names) from every bundled
-    .inc file under references/system-files/inc/ -- this is the standard
+    Harvest macro arities (and bodiless macro names) from every .inc file
+    in the install's macro directory (MACRO_LIB_DIR, via TOPAS_DIR) -- the standard
     macro library that's always in scope (topas.inc is auto-loaded every
     run, and it #includes the others), so calls to these macros are
     checked against this library merged with whatever the target file
@@ -3747,6 +3746,9 @@ def main():
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)
+    if sys.argv[1] in ("-h", "--help"):
+        print(__doc__)
+        sys.exit(0)
 
     keywords = load_keyword_set(KEYWORD_INDEX_PATH)
     if not keywords:

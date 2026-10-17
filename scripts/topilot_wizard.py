@@ -397,31 +397,45 @@ class CollapsibleGroup(ttk.Frame):
 
 class TriState(ttk.Combobox):
     """(not specified) / one / the other. A checkbox cannot express the
-    first, so it would silently assert the unticked value."""
+    first, so it would silently assert the unticked value.
 
-    def __init__(self, parent, options: list[tuple[str, str]], **kw):
+    unspecified=False drops the (not specified) choice and makes `default`
+    the resting value instead -- for a control whose off state is a real
+    answer the user should own, not one inferred from an untouched form.
+    Both arguments default to the tri-state behaviour, so a call site that
+    does not pass them is unaffected."""
+
+    def __init__(self, parent, options: list[tuple[str, str]],
+                 unspecified: bool = True, default=None, **kw):
         # options: [(label, stored_value), ...]
         super().__init__(parent, state="readonly", **kw)
+        self._unspecified = unspecified
+        self._default = default
         self.set_options(options)
 
     def set_options(self, options: list[tuple[str, str]]):
         """Replace the choices. Any current value that is no longer offered
-        falls back to (not specified) rather than lingering as a stale one."""
-        keep = self.value() if hasattr(self, "_map") else None
-        self._map = {NOT_SPECIFIED: None}
-        labels = [NOT_SPECIFIED]
+        falls back to the resting value rather than lingering as a stale one."""
+        keep = self.value() if hasattr(self, "_map") else self._default
+        self._map = {NOT_SPECIFIED: None} if self._unspecified else {}
+        labels = [NOT_SPECIFIED] if self._unspecified else []
         for label, value in options:
             self._map[label] = value
             labels.append(label)
         self._rev = {v: k for k, v in self._map.items()}
         self.configure(values=labels)
-        self.set_value(keep if keep in self._rev else None)
+        self.set_value(keep if keep in self._rev else self._default)
 
     def value(self):
         return self._map.get(self.get())
 
     def set_value(self, value):
-        self.set(self._rev.get(value, NOT_SPECIFIED))
+        # None is the stored form of "unset". With no (not specified) entry to
+        # land on it would otherwise select a label that is not offered,
+        # leaving the box blank, so it resolves to the resting value instead.
+        if value is None and not self._unspecified:
+            value = self._default
+        self.set(self._rev.get(value, self._rev.get(self._default, NOT_SPECIFIED)))
 
 
 def yes_no(parent, **kw) -> TriState:
@@ -624,6 +638,36 @@ class PhaseSettingsDialog(tk.Toplevel):
         self.beq_by_type.grid(row=r, column=1, sticky="w", padx=(6, 0), pady=(6, 0))
         r += 1
 
+        ttk.Label(frm, text="Generate rigid bodies").grid(row=r, column=0, sticky="w", pady=(6, 0))
+        self.rigid_body = TriState(frm, [("Yes", True), ("No", False)],
+                                   unspecified=False, default=False, width=22)
+        self.rigid_body.set_value(s.get("rigid_body"))
+        self.rigid_body.grid(row=r, column=1, sticky="w", padx=(6, 0), pady=(6, 0))
+        self.rigid_body.bind("<<ComboboxSelected>>", lambda *_: self._sync_rigid())
+        Tooltip(self.rigid_body,
+                "Refine molecular fragments as z-matrix rigid bodies, starting from "
+                "the known structure in this phase's file. Fragments are found from "
+                "the bond graph and reported back; atoms on symmetry elements are "
+                "placed exactly by construction. Not for structure solution.")
+        ttk.Label(frm, text="(known structure)", foreground="grey").grid(
+            row=r, column=2, columnspan=2, sticky="w", padx=(8, 0), pady=(6, 0))
+        r += 1
+
+        ttk.Label(frm, text="Exclude from bodies").grid(row=r, column=0, sticky="w",
+                                                        pady=(6, 0))
+        self.rigid_exclude = ttk.Entry(frm, width=24)
+        self.rigid_exclude.insert(0, s.get("rigid_exclude") or "")
+        self.rigid_exclude.grid(row=r, column=1, sticky="w", padx=(6, 0), pady=(6, 0))
+        self.rigid_exclude_note = ttk.Label(
+            frm, text="labels or elements; blank = propose", foreground="grey")
+        self.rigid_exclude_note.grid(row=r, column=2, columnspan=2, sticky="w",
+                                     padx=(8, 0), pady=(6, 0))
+        Tooltip(self.rigid_exclude,
+                "Comma-separated. A site label (H1) excludes that one site; a bare "
+                "element symbol (H) excludes every atom of it. Left blank, metals, "
+                "counter-ions and solvent are proposed automatically and reported. ")
+        r += 1
+
         self.pawley_note = ttk.Label(frm, foreground="grey", wraplength=430,
                                      justify="left", text="")
         self.pawley_note.grid(row=r, column=0, columnspan=4, sticky="w", pady=(8, 0))
@@ -635,6 +679,7 @@ class PhaseSettingsDialog(tk.Toplevel):
         ttk.Button(btns, text="Cancel", command=self.destroy).pack(side="right", padx=(0, 6))
 
         self._sync_po()
+        self._sync_rigid()
         self._sync_pawley_options()
         self.bind("<Return>", lambda _e: self._ok())
         self.bind("<Escape>", lambda _e: self.destroy())
@@ -648,17 +693,27 @@ class PhaseSettingsDialog(tk.Toplevel):
         if self.is_pawley:
             self.po_order.configure(state="disabled")
 
+    def _sync_rigid(self):
+        """The exclusion list only means anything once rigid bodies are on."""
+        if self.is_pawley:
+            return
+        on = self.rigid_body.value() is True
+        self.rigid_exclude.configure(state="normal" if on else "disabled")
+        self.rigid_exclude_note.configure(foreground="grey" if on else "#b0b0b0")
+
     def _sync_pawley_options(self):
         """Grey what a Pawley phase cannot use: PO (its intensities are already
-        free, so nothing is left to correct) and beq-by-type (no sites).
-        Anisotropic broadening stays -- it acts on widths, which stay fixed."""
+        free, so nothing is left to correct), beq-by-type (no sites) and rigid
+        bodies (no sites to group into one). Anisotropic broadening stays -- it
+        acts on widths, which stay fixed."""
         if not self.is_pawley:
             return
-        for widget in (self.po, self.po_order, self.beq_by_type):
+        for widget in (self.po, self.po_order, self.beq_by_type,
+                       self.rigid_body, self.rigid_exclude):
             widget.configure(state="disabled")
         self.pawley_note.configure(
-            text="Preferred orientation and beq-by-type do not apply to a Pawley "
-                 "phase — its intensities are free and it has no sites.")
+            text="Preferred orientation, beq-by-type and rigid bodies do not apply "
+                 "to a Pawley phase — its intensities are free and it has no sites.")
 
     def _ok(self):
         s = dict(self.row.settings)
@@ -667,11 +722,15 @@ class PhaseSettingsDialog(tk.Toplevel):
             s["refine_cell"] = self.refine_cell.get()
         if self.is_pawley:
             s["po"] = s["po_order"] = s["beq_by_type"] = None
+            s["rigid_body"] = s["rigid_exclude"] = None
         else:
             s["po"] = self.po.value()
             s["po_order"] = (int(self.po_order.get())
                              if self.po.value() == "spherical_harmonics" else None)
             s["beq_by_type"] = self.beq_by_type.value()
+            s["rigid_body"] = self.rigid_body.value()
+            excl = self.rigid_exclude.get().strip()
+            s["rigid_exclude"] = excl if (excl and s["rigid_body"] is True) else None
         s["anisotropic"] = self.aniso.value()
         self.row.settings = s
         self.row.refresh_summary()
@@ -685,7 +744,11 @@ class PhaseRow(ttk.Frame):
     def __init__(self, parent, owner):
         super().__init__(parent)
         self.owner = owner
-        self.settings: dict = {}
+        # Rigid bodies rest at off, not unspecified: enabling them changes the
+        # structural model, so it is the user's call to make rather than one
+        # inferred from a form nobody opened. Seeded here rather than left
+        # absent because an absent key means "you decide" downstream.
+        self.settings: dict = {"rigid_body": False}
 
         self.source_var = tk.StringVar(value="cif")
         box = ttk.Combobox(self, width=14, state="readonly",
@@ -721,7 +784,8 @@ class PhaseRow(ttk.Frame):
         self.more_btn = ttk.Button(self, text="Options…", width=14, command=self._more)
         self.more_btn.grid(row=0, column=5, padx=(6, 2))
         Tooltip(self.more_btn, "Per-phase settings: Pawley cell and space group, "
-                               "preferred orientation, anisotropic broadening, beq by type.")
+                               "preferred orientation, anisotropic broadening, "
+                               "beq by type, rigid bodies.")
 
         ttk.Button(self, text="✕", width=3,
                    command=lambda: owner.remove_row(self)).grid(row=0, column=6)
@@ -797,6 +861,11 @@ class PhaseRow(ttk.Frame):
             bits.append(s["anisotropic"])
         if s.get("beq_by_type") is not None:
             bits.append(f"beq by type: {'yes' if s['beq_by_type'] else 'no'}")
+        # Surfaced on the collapsed row, not just inside the dialog: the choice
+        # changes the structural model, so it should be visible without a click.
+        if s.get("rigid_body") is True:
+            excl = s.get("rigid_exclude")
+            bits.append("rigid bodies" + (f" (excl. {excl})" if excl else ""))
         text = ("      " + " · ".join(bits)) if bits else ""
         self.summary.configure(text=text)
         # A summary with nothing to say must not hold its line open: an empty
@@ -859,7 +928,8 @@ class PhaseRow(ttk.Frame):
             d["cell"] = s.get("cell")
             d["refine_cell"] = s.get("refine_cell", True)
         # Unset per-phase options are omitted, never written as null.
-        for key in ("po", "po_order", "anisotropic", "beq_by_type"):
+        for key in ("po", "po_order", "anisotropic", "beq_by_type",
+                    "rigid_body", "rigid_exclude"):
             if s.get(key) is not None:
                 d[key] = s[key]
         return d
@@ -871,9 +941,14 @@ class PhaseRow(ttk.Frame):
         self.path_var.set(d.get("path") or "")
         self.name_var.set(d.get("name") or "")
         self.definite.set(d.get("confidence", "definite") == "definite")
-        self.settings = {k: d[k] for k in
-                         ("space_group", "crystal_system", "cell", "refine_cell",
-                          "po", "po_order", "anisotropic", "beq_by_type") if k in d}
+        # Rebuilt, not updated, so a stale key cannot survive a load -- but
+        # the rigid-body resting value is re-seeded first, or a job file from
+        # before the key existed would come back as unspecified.
+        self.settings = {"rigid_body": False}
+        self.settings.update({k: d[k] for k in
+                              ("space_group", "crystal_system", "cell", "refine_cell",
+                               "po", "po_order", "anisotropic", "beq_by_type",
+                               "rigid_body", "rigid_exclude") if k in d})
         self.refresh_summary()
 
 
@@ -1152,9 +1227,9 @@ class Wizard(tk.Tk):
         self.data_mode = tk.StringVar(value="file")
         modes = ttk.Frame(f)
         modes.grid(row=0, column=1, columnspan=3, sticky="w", padx=6)
-        for label, value in (("One file", "file"),
-                             ("A folder of files", "dir"),
-                             ("A list of files", "list")):
+        for label, value in (("One dataset", "file"),
+                             ("A folder of sequential datasets", "dir"),
+                             ("A list of sequential datasets", "list")):
             rb = ttk.Radiobutton(modes, text=label, variable=self.data_mode,
                                  value=value, command=self._on_data_mode)
             rb.pack(side="left", padx=(0, 12))
@@ -2967,9 +3042,12 @@ def next_free_output(folder: Path, base: str, stages: list[str]) -> Path:
     The tag comes from the last stage that writes a fit, not from whichever tab
     is showing. A pipeline that ends at indexing gets _index_NN instead, and
     Solve never names the file.
+
+    Dots in the base become 'p': TOPAS cuts output names at the first dot, so
+    sample.1_fit_01.inp would write sample.out and collide with its siblings.
     """
     folder = folder if str(folder) else Path.cwd()
-    base = base or "refinement"
+    base = (base or "refinement").replace(".", "p")
     tag = "fit" if any(s in FIT_STAGES for s in stages) else "index"
     n = 1
     while (folder / f"{base}_{tag}_{n:02d}.inp").exists():

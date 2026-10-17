@@ -48,7 +48,7 @@ for the specific report):
 Usage from the command line (smoke test / regenerating the two example
 reports bundled with this skill's test examples):
 
-    python3 build_report_docx.py --demo out.docx
+    python build_report_docx.py --demo out.docx
 """
 
 import argparse

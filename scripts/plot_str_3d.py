@@ -83,11 +83,11 @@ Known limitations, stated plainly:
     (e.g. Ce-Ce in fluorite CeO2) rather than anything chemically useful.
 
 Usage:
-    python3 plot_str_3d.py file.inp                # writes file_str3d.html next to the input
-    python3 plot_str_3d.py file.inp -o out.html
-    python3 plot_str_3d.py file.inp --phase 2       # pick the Nth str block (1-indexed) if more than one
-    python3 plot_str_3d.py file.inp --no-bonds
-    python3 plot_str_3d.py file.inp --bond-tolerance 1.3
+    python plot_str_3d.py file.inp                # writes file_str3d.html next to the input
+    python plot_str_3d.py file.inp -o out.html
+    python plot_str_3d.py file.inp --phase 2       # pick the Nth str block (1-indexed) if more than one
+    python plot_str_3d.py file.inp --no-bonds
+    python plot_str_3d.py file.inp --bond-tolerance 1.3
 """
 
 import sys

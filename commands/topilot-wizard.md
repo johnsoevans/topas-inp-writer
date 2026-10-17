@@ -8,7 +8,7 @@ One Bash call, this exact command, **`run_in_background: true`**:
 python ~/.claude/skills/topas-inp-writer/scripts/topilot_wizard.py --from-claude
 ```
 
-Append `--workflow $ARGUMENTS` only if `$ARGUMENTS` is non-empty. No `;` chaining and no variable assignment — either misses the permission allowlist prefix and prompts every run.
+`python` is the launcher; if it isn't Python 3 here, substitute the one the skill's launcher rule settles on (`py`, `python3`). Append `--workflow $ARGUMENTS` only if `$ARGUMENTS` is non-empty. No `;` chaining and no variable assignment — either misses the permission allowlist prefix and prompts every run.
 
 **`--from-claude` is required.** It tells the wizard you are waiting on it, so the Go button prints the job file to stdout. Without it the wizard assumes it was started standalone and opens a *separate* Claude CLI session on the job instead — two sessions, and this one gets nothing.
 

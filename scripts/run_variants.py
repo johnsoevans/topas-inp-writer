@@ -117,16 +117,6 @@ def comment_out(text, pattern):
 
 # --------------------------------------------------------------------------
 
-def _find_tc():
-    root, found = topas_install.get_topas_dir()
-    if found:
-        for exe in ("tc.exe", "TC.EXE", "tc"):
-            p = os.path.join(root, exe)
-            if os.path.exists(p):
-                return p
-    raise SystemExit("Could not locate tc.exe -- set TOPAS_DIR to your TOPAS install root.")
-
-
 class VariantRunner:
     def __init__(self, base_inp, workdir=None, tc_path=None, data_dir=None,
                  keep_outputs=False):
@@ -149,7 +139,8 @@ class VariantRunner:
         self.workdir = os.path.abspath(workdir) if workdir else self.base_dir
         self.keep_outputs = keep_outputs
         os.makedirs(self.workdir, exist_ok=True)
-        self.tc = tc_path or _find_tc()
+        self.tc = tc_path or topas_install.find_tc()
+        self.env = topas_install.tc_env(self.tc)
         self.variants = []
         with open(self.base_inp, encoding="utf-8") as f:
             self.base_text = C_MATRIX_RE.sub("", f.read())
@@ -195,7 +186,8 @@ class VariantRunner:
 
     def _run_one(self, name, transform):
         path = self._prepare(name, transform)
-        proc = subprocess.run([self.tc, path], capture_output=True, text=True)
+        proc = subprocess.run([self.tc, path], capture_output=True, text=True,
+                              env=self.env)
         npar = NPAR_RE.search(proc.stdout or "")
         out_path = path[:-4] + ".out"
         if not os.path.exists(out_path):
@@ -232,8 +224,9 @@ class VariantRunner:
                 d = "%+.4f" % (r["rwp"] - base["rwp"])
             else:
                 d = "-"
-            lines.append("%-*s %9.4f %8s %8.4f %6s  %s" % (
-                w, r["name"], r["rwp"], d, r["gof"],
+            fmt = lambda v: "-" if v is None else "%.4f" % v  # no r_wp/gof line, e.g. a simulation
+            lines.append("%-*s %9s %8s %8s %6s  %s" % (
+                w, r["name"], fmt(r["rwp"]), d, fmt(r["gof"]),
                 r["npar"] if r["npar"] is not None else "?",
                 ", ".join(r["limits"]) if r["limits"] else "-"))
         return "\n".join(lines)

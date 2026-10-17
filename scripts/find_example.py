@@ -14,8 +14,8 @@ ranked in three tiers:
 Tier breaks ties on match score; it does not override it. Scratch files
 (0-byte, temp.inp/temp8.inp, "... - Copy.inp") are dropped.
 
---bat replaces the TOPAS_DIR walk with a tcinps-2.bat tc-list, if one is
-available. Not bundled with this skill; no default path.
+--bat replaces the TOPAS_DIR walk with a tc-list batch file, such as the
+tc-inps.bat that ships in the TOPAS install root. No default path.
 
 Trigger: **"<topic> template"** (or "<topic> example") -- run this
 whenever the user asks for a template/example/starting point for some
@@ -47,10 +47,10 @@ Matching, in order (stops at the first stage that finds anything):
      literally in the file.
 
 Usage:
-    python3 scripts/find_example.py tof
-    python3 scripts/find_example.py "tof template"        # trailing filler words are stripped
-    python3 scripts/find_example.py pawley -n 5             # show up to 5 matches (default 8)
-    python3 scripts/find_example.py "charge flipping" --open   # also open the top match in VS Code
+    python scripts/find_example.py tof
+    python scripts/find_example.py "tof template"        # trailing filler words are stripped
+    python scripts/find_example.py pawley -n 5             # show up to 5 matches (default 8)
+    python scripts/find_example.py "charge flipping" --open   # also open the top match in VS Code
 """
 
 import sys
@@ -115,13 +115,16 @@ TOPIC_SYNONYMS = {
 
 
 def parse_tcinps(bat_path):
-    """Resolved, deduplicated absolute .inp paths from a tcinps-2.bat-
-    style file -- same parsing convention used by this skill's own
+    """Resolved, deduplicated absolute .inp paths from a tc-list batch file
+    (e.g. the install's tc-inps.bat) -- same parsing convention used by this skill's own
     verification scripts: 'tc <path> ["extra text"]' lines, 'rem'-
-    prefixed lines skipped, '\\w\\' normalized to the real drive root,
+    prefixed lines skipped, relative paths resolved against the bat file's
+    own folder, drive-rooted ones ('\\w\\...') onto the bat file's drive,
     '.inp' appended if the path doesn't already end in it."""
     paths = []
     seen = set()
+    bat_dir = os.path.dirname(os.path.abspath(bat_path))
+    bat_drive = os.path.splitdrive(bat_dir)[0]
     with open(bat_path, encoding="utf-8", errors="replace") as f:
         for line in f:
             s = line.strip()
@@ -131,8 +134,10 @@ def parse_tcinps(bat_path):
             if not m:
                 continue
             p = m.group(1)
-            if p.startswith("\\w\\"):
-                p = "c:\\w\\" + p[3:]
+            if p.startswith("\\"):
+                p = bat_drive + p        # drive-rooted (e.g. \w\...): the bat file's own drive
+            elif not os.path.isabs(p):
+                p = os.path.join(bat_dir, p)   # TOPAS's tc-inps.bat lists install-relative paths
             if not p.lower().endswith(".inp"):
                 p += ".inp"
             key = p.lower()
@@ -311,7 +316,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("query", help='topic to search for, e.g. "tof", "tof template", "charge flipping"')
     parser.add_argument("-n", "--max-results", type=int, default=8, help="max matches to show (default 8)")
-    parser.add_argument("--bat", default=None, help="tcinps-2.bat tc-list to search instead of walking TOPAS_DIR")
+    parser.add_argument("--bat", default=None, help="tc-list batch file (e.g. the install's tc-inps.bat) to search instead of walking TOPAS_DIR")
     parser.add_argument("--open", action="store_true", help="also open the top match in VS Code")
     args = parser.parse_args()
 
@@ -325,7 +330,7 @@ def main():
     if stage == "no-corpus":
         print("No examples to search: TOPAS_DIR is not set to a real directory and "
               "example_inp_files/ holds no .inp files. Set TOPAS_DIR to your TOPAS "
-              "install root, or pass --bat <tcinps-2.bat>.", file=sys.stderr)
+              "install root, or pass --bat <tc-inps.bat>.", file=sys.stderr)
         sys.exit(1)
 
     if not matches:

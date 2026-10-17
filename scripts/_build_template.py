@@ -9,7 +9,7 @@ styles directly (Home tab -> right-click a style -> Modify) -- that's the intend
 way to change the look, and does not require touching this script or build_report_docx.py.
 
 Usage:
-    python3 _build_template.py
+    python _build_template.py
 """
 
 from docx import Document

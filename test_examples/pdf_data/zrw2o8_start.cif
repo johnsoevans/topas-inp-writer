@@ -1,0 +1,56 @@
+
+data_structure
+_chemical_name_mineral cubic-ZrW2O8
+_cell_length_a 9.155285
+_cell_length_b 9.155285
+_cell_length_c 9.155285
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 90
+_cell_volume 767.389
+_symmetry_space_group_name_H-M P213
+loop_
+	_symmetry_equiv_pos_as_xyz
+	 'x, y, z '
+	 '-x+1/2, -y, z+1/2 '
+	 '-y, z+1/2, -x+1/2 '
+	 '-y+1/2, -z, x+1/2 '
+	 '-z, x+1/2, -y+1/2 '
+	 '-z+1/2, -x, y+1/2 '
+	 'z, x, y '
+	 'z+1/2, -x+1/2, -y '
+	 'y, z, x '
+	 'y+1/2, -z+1/2, -x '
+	 '-x, y+1/2, -z+1/2 '
+	 'x+1/2, -y+1/2, -z '
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_site_symmetry_multiplicity
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+_atom_site_B_iso_or_equiv
+Zr1 Zr   4 0.00 0.00 0.00 1 0
+W1 W   4 0.34 0.34 0.34 1 0
+W2 W   4 0.60 0.60 0.60 1 0
+O1 O  12 0.21 0.44 0.45 1 0
+O2 O  12 0.79 0.57 0.56 1 0
+O3 O   4 0.49 0.49 0.49 1 0
+O4 O   4 0.23 0.23 0.23 1 0
+loop_
+_atom_site_aniso_label
+_atom_site_aniso_U_11
+_atom_site_aniso_U_22
+_atom_site_aniso_U_33
+_atom_site_aniso_U_12
+_atom_site_aniso_U_13
+_atom_site_aniso_U_23
+Zr1  0.0127 0.0127 0.0127 0.000 0.000 0.000
+W1   0.0127 0.0127 0.0127 0.000 0.000 0.000
+W2   0.0127 0.0127 0.0127 0.000 0.000 0.000
+O1   0.0127 0.0127 0.0127 0.000 0.000 0.000
+O2   0.0127 0.0127 0.0127 0.000 0.000 0.000
+O3   0.0127 0.0127 0.0127 0.000 0.000 0.000
+O4   0.0127 0.0127 0.0127 0.000 0.000 0.000

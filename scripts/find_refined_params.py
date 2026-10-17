@@ -131,8 +131,8 @@ Known limitations, stated plainly rather than overclaimed:
     expanded-text line shown for reference only.
 
 Usage:
-    python3 find_refined_params.py file.inp
-    python3 find_refined_params.py file.inp -o report.txt
+    python find_refined_params.py file.inp
+    python find_refined_params.py file.inp -o report.txt
 """
 
 import sys

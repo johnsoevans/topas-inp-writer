@@ -14,23 +14,23 @@ canvas line plot (no CDN, no charting library), so the output works
 offline or inside a strict-CSP viewer.
 
 Usage:
-    python3 plot_xy.py file.xy                        # -> file_xy_plot.html
-    python3 plot_xy.py file.xy -o out.html
-    python3 plot_xy.py file.xy --title "My pattern"
+    python plot_xy.py file.xy                        # -> file_xy_plot.html
+    python plot_xy.py file.xy -o out.html
+    python plot_xy.py file.xy --title "My pattern"
 
     # multiple series overlaid (e.g. observed vs. calculated):
-    python3 plot_xy.py obs.xy calc.xy --labels "Yobs,Ycalc" --colors "blue,red" -o out.html
+    python plot_xy.py obs.xy calc.xy --labels "Yobs,Ycalc" --colors "blue,red" -o out.html
 
     # add a difference curve (first label minus second label):
-    python3 plot_xy.py obs.xy calc.xy --labels "Yobs,Ycalc" --colors "blue,red" --diff "Yobs,Ycalc" -o out.html
+    python plot_xy.py obs.xy calc.xy --labels "Yobs,Ycalc" --colors "blue,red" --diff "Yobs,Ycalc" -o out.html
 
     # combine multiple xdd/phases (each with their own Yobs/Ycalc/diff) in one plot:
-    python3 plot_xy.py ceo2_obs.xy ceo2_calc.xy y2o3_obs.xy y2o3_calc.xy \\
+    python plot_xy.py ceo2_obs.xy ceo2_calc.xy y2o3_obs.xy y2o3_calc.xy \\
         --labels "CeO2 Yobs,CeO2 Ycalc,Y2O3 Yobs,Y2O3 Ycalc" \\
         --diff "CeO2 Yobs,CeO2 Ycalc" --diff "Y2O3 Yobs,Y2O3 Ycalc" -o out.html
 
     # same, with the standard Yobs/Ycalc/diff color scheme auto-assigned per phase:
-    python3 plot_xy.py --phases "CeO2|ceo2_obs.xy|ceo2_calc.xy,Y2O3|y2o3_obs.xy|y2o3_calc.xy" -o out.html
+    python plot_xy.py --phases "CeO2|ceo2_obs.xy|ceo2_calc.xy,Y2O3|y2o3_obs.xy|y2o3_calc.xy" -o out.html
 
 `--labels`/`--colors` are comma-separated, parallel to the file arguments.
 Labels default to each file's base name; colors default to a small
