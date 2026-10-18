@@ -11,7 +11,7 @@ Read the JSON, then invoke the **topas-inp-writer** skill and follow its convent
 - `peak_fitting` — `references/29-indexing-workflow-conventions.md`: peak search, single-phase screening, two-stage peak fitting, the unrestricted Bravais baseline, the Pawley check.
 - `solve` — structure solution from the `solve` key (`method` is `simulated_annealing` or `charge_flipping`; `cell_from: "peak_fitting"` means the cell comes from the stage before it).
 - `rietveld` — `references/27-rietveld-workflow-conventions.md`; the `rules` key (`rietveld` | `quantitative`) says which subset.
-- `pdf` — G(r) refinement.
+- `pdf` — G(r) refinement: `references/32-pdf-workflow-conventions.md`.
 
 `sequential`, when present, is a **modifier, not a stage**: it wraps the refinement (`mode` is `list`, `per_dataset` or `parametric`) over the datasets. `data_files` is present in folder mode only; in list mode the file named by `data` is the record — parse it.
 

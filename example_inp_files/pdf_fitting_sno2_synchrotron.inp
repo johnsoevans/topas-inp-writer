@@ -1,0 +1,44 @@
+'Small box PDF fit  
+'This file is from tutorial https://topas.webspace.durham.ac.uk/tutorial_pdf_sno2/
+'Original name sno2_dof_te_01.inp
+'You'll need to have Phil Chater's PDF.inc file in your TOPAS directory or to add #include PDF.inc to the top of this file if it's in this directory 
+ 
+'#include PDF.inc 'if file not already loaded by local.inc 
+'#include ROOT##PDF-adps.inc 'you may need this line for ADP_5 work 
+ 
+r_wp  13.9690469 r_exp  28.0578708 r_p  14.2627553 gof  0.497865535
+iters 10000 
+chi2_convergence_criteria 0.001 
+'continue_after_convergence 
+'do_errors  
+ 
+'Information on the datafile, typically in xy or xye format 
+'For PDFgetX3 you can just comment out any metadata with /*....*/ 
+xdd sno2_dofr.xye  
+	pdf_data  
+	'neutron_data 'uncomment this line for neutron data 
+	start_X   0.5 			  
+	finish_X 50.0 			  
+	'rebin_with_dx_of 0.02 ' rebin data if you need 
+	weighting = If(X < 1.5, 0, 1); 'calculate distances <1.5 A, but have them at zero weight in refinement 
+	dQ_damping(!dQ, 0.08) 'this is usually determined from an instrumental standard	 
+	convolute_SoperLorch(d_zero, 0.0249777522`) 'this should only be included if data were processed with Lorch function and is normally commented out
+ 
+	'Structural information from z:\data\topas_workshop\sno2_moo3_pdf_tutorial\sno2_baur.cif 
+	str 
+		phase_name "Cassiterite" 
+		a lpa  4.742519`
+		b lpa  4.742519`
+		c lpc  3.189986`
+		al 90.       
+		be 90.       
+		ga 90.       
+		volume  71.748`  
+		space_group "P42/mnm" 
+		site Sn1    x 0             y 0             z 0             occ Sn    1.  beq_spherical(beqloSn, 0.102158113`,beqhiSn, 0.335224738`,radius, 5.45878171`)     
+		site O1     x xO1  0.30520`     y xO1  0.30520`     z 0             occ O     1.  beq_spherical(beqloOx, 0.345400717`,beqhiOx, 2.14342128`,radius, 5.45878171`)     
+		scale @  1.00364366` 'fix if data normalised in Gudrun 
+		pdf_zero !zero -0.01 'this should normally be zero here it is fixed at -0.01 due to way data was processed
+ 
+ 
+  

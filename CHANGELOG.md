@@ -1,4 +1,10 @@
 # Changelog
+
+## 1.2.0 - 2026-10.18
+- changes to control infinite continue_after_convergence
+- minor rule inconsistencies corrected
+- simple PDF fitting rules and examples
+
 ## 1.1.3 - 2026-10-17
 - SKILL.md slimmed; full script usage moved to references/scripts.md
 - new rigid_body_builder.py and 28-z-matrix-rigid-body-conventions.md; wizard option to generate rigid bodies

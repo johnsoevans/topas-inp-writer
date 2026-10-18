@@ -103,7 +103,7 @@ Run: 1 -------------------
 ```
 and only `Total time: 0.1693116` marks the end of the whole multi-run file.
 
-`continue_after_convergence` is a different mechanism: it restarts refinement immediately after convergence within the *same* run, until `iters` (or `num_cycles`, one full convergence = one cycle) is reached — so an `.inp` with it and a large `iters`/`num_cycles` may run for a very long time by design.
+`continue_after_convergence` is a different mechanism: it restarts refinement immediately after convergence within the *same* run, until `iters` (or `num_cycles`, one full convergence = one cycle) is reached — so an `.inp` with it and a large `iters`/`num_cycles` may run for a very long time by design. Before setting one up, see the bounded-run rule under "Running `tc.exe`" in SKILL.md.
 
 ## Phase auto-management
 

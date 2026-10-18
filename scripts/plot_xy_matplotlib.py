@@ -49,7 +49,7 @@ OFFSET_FRACTION = 0.05  # each band (diff, then ticks) sits this fraction of the
                          # main-series Y-range below the band above it
 
 
-def render(series, title, out_path, ticks=None, stats=None, dpi=150):
+def render(series, title, out_path, ticks=None, stats=None, dpi=150, xlabel="2θ (°)"):
     fig, ax = plt.subplots(figsize=(10, 5.6))
 
     main_series = [s for s in series if s.get("kind") != "diff"]
@@ -81,7 +81,7 @@ def render(series, title, out_path, ticks=None, stats=None, dpi=150):
     if stats:
         subtitle = "  (" + ", ".join(f"{k}={v}" for k, v in stats) + ")"
     ax.set_title(title + subtitle, fontsize=11)
-    ax.set_xlabel("2θ (°)")
+    ax.set_xlabel(xlabel)
 
     # Tick marks: one row per group, stacked further below the diff band by
     # the same OFFSET_FRACTION-of-main-span rule, each row occupying a small
@@ -116,6 +116,8 @@ def main():
     parser.add_argument("--ticks", help="'NAME1|positions1.xy[|color1],...' -- see plot_xy.py's own --ticks docs")
     parser.add_argument("--stats", help="'Label1=value1,Label2=value2,...' shown in the title")
     parser.add_argument("--dpi", type=int, default=150, help="output resolution (default 150)")
+    parser.add_argument("--xlabel", default="2θ (°)",
+                        help="x-axis title (default '2θ (°)'); use 'r (Å)' for a PDF fit")
     args = parser.parse_args()
 
     ticks = build_tick_groups(args.ticks) if args.ticks else None
@@ -128,7 +130,7 @@ def main():
         series = build_phase_series(args.phases)
         title = args.title or "all phases"
         out_path = args.output or "combined_xy_plot.png"
-        render(series, title, out_path, ticks=ticks, stats=stats, dpi=args.dpi)
+        render(series, title, out_path, ticks=ticks, stats=stats, dpi=args.dpi, xlabel=args.xlabel)
         print(f"Written to {out_path}", file=sys.stderr)
         return
 
@@ -172,7 +174,7 @@ def main():
         base, _ = os.path.splitext(args.xy_files[0])
         out_path = base + "_xy_plot.png"
 
-    render(series, title, out_path, ticks=ticks, stats=stats, dpi=args.dpi)
+    render(series, title, out_path, ticks=ticks, stats=stats, dpi=args.dpi, xlabel=args.xlabel)
     print(f"Written to {out_path}", file=sys.stderr)
 
 

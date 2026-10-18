@@ -619,7 +619,7 @@ function draw() {{
   ctx.font = '13px -apple-system, Segoe UI, Helvetica, Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText('2θ (°)', MARGIN.left + plotWidth() / 2, MARGIN.top + plotHeight() + 34);
+  ctx.fillText({xlabel_json}, MARGIN.left + plotWidth() / 2, MARGIN.top + plotHeight() + 34);
 
   ctx.save();
   ctx.translate(16, MARGIN.top + curveHeight() / 2);
@@ -817,7 +817,7 @@ def build_stats_html(stats):
     return " &middot; " + " &middot; ".join(escaped)
 
 
-def build_html(series, title, ticks=None, stats=None):
+def build_html(series, title, ticks=None, stats=None, xlabel="2θ (°)"):
     ticks = ticks or []
     all_x = [x for s in series for x in s["x"]]
     xmin_disp = f"{min(all_x):.4g}" if all_x else "n/a"
@@ -831,6 +831,7 @@ def build_html(series, title, ticks=None, stats=None):
         stats_html=build_stats_html(stats),
         series_json=json.dumps(series),
         ticks_json=json.dumps(ticks),
+        xlabel_json=json.dumps(xlabel),
     )
 
 
@@ -986,6 +987,8 @@ def main():
         "Not a series/color -- a headline number, not an identity, so it's rendered in the same "
         "muted text-ink as the point-count/X-range meta text. Combinable with xy_files or --phases.",
     )
+    parser.add_argument("--xlabel", default="2θ (°)",
+                        help="x-axis title (default '2θ (°)'); use 'r (Å)' for a PDF fit")
     args = parser.parse_args()
 
     ticks = build_tick_groups(args.ticks) if args.ticks else None
@@ -998,7 +1001,7 @@ def main():
         series = build_phase_series(args.phases)
         title = args.title or "all phases"
         out_path = args.output or "combined_xy_plot.html"
-        html = build_html(series, title, ticks=ticks, stats=stats)
+        html = build_html(series, title, ticks=ticks, stats=stats, xlabel=args.xlabel)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(html)
         print(f"Written to {out_path}", file=sys.stderr)
@@ -1039,7 +1042,7 @@ def main():
             series.append(compute_diff_series(series_by_name, name_a, name_b, diff_label, diff_color))
 
     title = args.title or " / ".join(os.path.basename(p) for p in args.xy_files)
-    html = build_html(series, title, ticks=ticks, stats=stats)
+    html = build_html(series, title, ticks=ticks, stats=stats, xlabel=args.xlabel)
 
     out_path = args.output
     if not out_path:

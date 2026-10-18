@@ -1316,6 +1316,43 @@ def check_bkg_repeated_at_sigil(clean_text, issues):
             )
 
 
+# Above this, iters stops being a real limit for a continue_after_convergence
+# run (a single cycle is typically tens to hundreds of iterations).
+UNBOUNDED_ITERS = 1_000_000
+
+
+def check_unbounded_continue_after_convergence(clean_text, issues):
+    """
+    continue_after_convergence restarts refinement after every convergence
+    until iters or num_cycles is reached, so with no num_cycles and an iters
+    that is missing or huge (the manual's own 'iters 1000000000') the run is
+    effectively open-ended. Legitimate for structure solution, but it should
+    be a deliberate choice -- so warn, and point at num_cycles N for a fixed
+    number of refine/randomise cycles. A non-numeric iters (a #define'd
+    value or expression) is left alone.
+    """
+    cac = re.search(r"\bcontinue_after_convergence\b", clean_text)
+    if not cac or re.search(r"\bnum_cycles\b", clean_text):
+        return
+    iters = re.search(r"\biters\s+(\S+)", clean_text)
+    if iters:
+        try:
+            if float(iters.group(1)) <= UNBOUNDED_ITERS:
+                return
+        except ValueError:
+            return
+        detail = f"'iters {iters.group(1)}'"
+    else:
+        detail = "no 'iters'"
+    issues.append(
+        ("warning", line_of(clean_text, cac.start()),
+         f"'continue_after_convergence' with {detail} and no 'num_cycles' runs "
+         f"effectively without limit. For a fixed number of refine/randomise cycles "
+         f"use 'num_cycles N'; if an open-ended run is intended (e.g. structure "
+         f"solution), make sure that is deliberate.")
+    )
+
+
 XYZ_FRACTION_TARGETS = (("1/3", 1.0 / 3.0), ("2/3", 2.0 / 3.0))
 # 0.0015 catches CIF-rounded decimals from 3 to 5 places (0.333 .. 0.33333)
 # without reaching into territory a genuinely-refined general-position
@@ -3663,6 +3700,7 @@ def check_file(path, keywords, library_arities, library_bodiless, single_arg_key
     check_zero_arg_keywords(clean, zero_arg_keywords, issues)
     check_at_sigil_value(clean, issues)
     check_bkg_repeated_at_sigil(clean, issues)
+    check_unbounded_continue_after_convergence(clean, issues)
     check_xyz_near_one_third(clean, issues)
     min_max_macro_names = harvest_macros_with_min_max_body(clean)
     check_prm_local_missing_min_max(clean, min_max_macro_names, issues)
